@@ -1,0 +1,84 @@
+dataset_path: "/mnt/NASone"
+
+training_mode: "2d"
+
+epochs: 1
+batchsize: 15
+initial_learning_rate: 0.00067
+loss: "binary_crossentropy"
+track_metrics:
+    - "accuracy"
+    - "jaccard_index"
+    - "dice_coefficient"
+        
+model:
+    model_type: "unet2d"
+    crop_shape: "[64,64]"
+    unet_depth: 2
+    base_filters: 16
+    batch_normalization: true
+    transposed_convolutioN: false
+    residual_preactivation: true
+
+data_augmentation:
+    data_generator_debug_mode: false
+    single_thread:  false
+    threads: 24
+    data_augmentation_settings:
+        spatial_transform:
+            do_elastic_deform: true
+            deformation_scale: [0, 0.25, 0.25]
+            do_rotation: true
+            angle_x: [-0.314, 0.314]
+            angle_y: [0, 6.2832]
+            angle_z: [0, 6.2832]
+            do_scale: true
+            scale: [0.95, 1.05]
+            border_mode_data: "nearest"
+            random_crop: true
+            
+        brightness_transform:
+            multiplier_range: [0.9, 1.1]
+            per_channel: true
+            p_per_sample: 0.15
+        
+        gamma_transform:
+            gamma_range: [0.9, 1.1]
+            invert_image: false
+            per_channel: true
+            p_per_sample: 0.15
+            
+        gaussian_noise_transform:
+            noise_variance: [0, 0.05]
+            p_per_sample:  0.15
+            
+performance_evaluation:
+    prediction_batchsize:       15
+    prediction_chunksize:       20
+    classification_threshold:   0.5
+    add_empty_channel:          true
+    
+callbacks:
+    checkpoint:
+        monitor:        "val_loss"
+        verbose:        1
+        save_best_only: false
+        mode:           "min"    
+        
+    csvlogger:
+        append:     true
+        separator: ";"
+    
+    reducelronplateau:
+        factor:     0.1
+        patience:   5
+        min_lr:     0.00000000067
+        verbose:    1
+        
+    wandb:
+        monitor: "val_loss"
+        mode: "min"
+        save_weights_only: false
+        save_model: true
+        
+notes: ""
