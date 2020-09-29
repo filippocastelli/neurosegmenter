@@ -2,7 +2,7 @@ from pathlib import Path
 import yaml
 
 
-class TrainingConfig:
+class TrainConfig:
     
     def __init__(self,
                  yml_path):
@@ -17,11 +17,18 @@ class TrainingConfig:
         #Global vars
         self.training_mode = cfg_dict["training_mode"]
         self.dataset_path = self._decode_path(cfg_dict["dataset_path"])
+        self.output_path = self._decode_path(cfg_dict["output_path"])
+        self.descriptor_path = self._decode_path(cfg_dict["descriptor_path"])
+        
         self.epochs = cfg_dict["epochs"]
-        self.batchsize = cfg_dict["batchsize"]
+        self.batch_size = cfg_dict["batch_size"]
         self.initial_learning_rate = cfg_dict["initial_learning_rate"]
         self.loss = cfg_dict["loss"]
         self.track_metrics = cfg_dict["track_metrics"]
+        self.enable_wandb_tracking = cfg_dict["enable_wandb_tracking"]
+        
+        # path dict
+        self._gen_paths(self.dataset_path)
         
         # model parsing
         self.model_cfg = cfg_dict["model_cfg"]
@@ -81,14 +88,15 @@ class TrainingConfig:
         self.da_debug_mode = da_cfg["debug_mode"]
         self.da_single_thread = da_cfg["single_thread"]
         self.da_threads = da_cfg["threads"]
+        self.da_buffer_size = da_cfg["buffer_size"]
         
         self.da_transform_cfg = da_cfg["transform_cfg"]
         self.da_transforms = list(self.da_transform_cfg.keys())
         
     # > PERFORMANCE EVALUATION PARSING <
     def _parse_performance_evaluation_cfg(self, pe_cfg):
-        self.pe_batchsize = pe_cfg["batchsize"]
-        self.pe_chunksize = pe_cfg["chunksize"]
+        self.pe_batch_size = pe_cfg["batch_size"]
+        self.pe_chunk_size = pe_cfg["chunk_size"]
         self.pe_classification_threashold = pe_cfg["classification_threshold"]
         self.pe_add_empty_channel = pe_cfg["add_empty_channel"]
         
@@ -96,6 +104,46 @@ class TrainingConfig:
     # > CALLBACK PARSING <
     def _parse_callbacks_cfg(self, callbacks_cfg):
         self.callbacks = list(callbacks_cfg.keys())
+        
+        
+    def _gen_paths(self, dataset_path):
+        
+        path_dict = {}
+        if self.training_mode == "2d":
+            for partition in ["train", "val", "test"]:
+                partition_path = dataset_path.joinpath(partition)
+                partition_subdir_dict = {}
+                for subdir in ["frames", "masks"]:
+                    partition_subdir_dict[subdir] = partition_path.joinpath(subdir)
+                path_dict[partition] = partition_subdir_dict
+            
+            self.path_dict = path_dict
+            self.train_paths = path_dict["train"]
+            self.val_paths = path_dict["val"]
+            self.test_paths = path_dict["test"]
+                
+            # create output path structure
+            self.output_path.mkdir(exist_ok=True, parents=True)
+            self.temp_path = self._joinpath_mkdir(self.output_path, "tmp")
+            self.logs_path = self._joinpath_mkdir(self.output_path, "tmp")
+
+            if self.enable_wandb_tracking:
+                self.wandb_path = self._joinpath_mkdir(self.output_path, "wandb")
+                
+            self.logfile_path = self.logs_path.joinpath("train_log.log")
+            self.model_history_path = self.output_path.joinpath("model_history.pickle")
+            self.final_model_path = self.output_path.joinpath("final_model.hdf5")
+            self.csv_summary_path = self.output_path.joinpath("run_summary.csv")
+        else:
+            raise NotImplementedError(self.training_mode)
+            
+        
+    @staticmethod
+    def _joinpath_mkdir(base_path, name):
+        npath = base_path.joinpath(name)
+        npath.mkdir(exist_ok=True, parents=True)
+        
+        return npath
         
     def save(self):
         pass
@@ -140,4 +188,4 @@ if __name__ == "__main__":
         cfg_path = Path("C:/Users/filip/Documenti/GitHub/neuroseg/neuroseg/config/ex_cfg.yml")
     else:
         cfg_path = Path("/home/phil/repos/neuroseg/neuroseg/config/ex_cfg.yml")
-    config = TrainingConfig(cfg_path)
+    config = TrainConfig(cfg_path)
