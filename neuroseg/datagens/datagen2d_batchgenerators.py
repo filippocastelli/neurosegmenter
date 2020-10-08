@@ -1,15 +1,12 @@
 from functools import partial
 
 import tensorflow as tf
-import tensorflow_addons as tfa
-import tensorflow.keras.preprocessing.image as tfk_image
 from tensorflow.data import Dataset
 from skimage import io as skio
 import numpy as np
+import batchgenerators
 
 SUPPORTED_FORMATS = ["png", "tif", "tiff"]
-TFA_INTERPOLATION_MODES = {"nearest": "NEAREST",
-                           "bilinear": "BILINEAR"}
 
 class dataGen2D:
     def __init__(self,
@@ -38,11 +35,8 @@ class dataGen2D:
         self.single_thread = config.da_single_thread
         self.threads = 1 if config.da_single_thread == True else config.da_threads
         
-        self.data_augmentation = data_augmentation
-        self._def_transforms()
         self.transforms = config.da_transforms
         self.transform_cfg = config.da_transform_cfg
-
         
         # init sequence
         self._scan_dirs()
@@ -56,8 +50,7 @@ class dataGen2D:
             "gaussian_noise_transform": self._gaussian_noise_transform,
             "mirror_transform": self._mirror_transform,
             "rot90_transform": self._rot90_transform,
-            "brightness_multiplicative_transform": self._brightness_multiplicative_transform,
-            "spatial_transform": self._spatial_transform,
+            "brightness_multiplicative_transform": self._brightness_multiplicative_transform
             }
         
     def _transform_supported(self, transform):
@@ -101,11 +94,8 @@ class dataGen2D:
                     num_parallel_calls=self.threads)
         frame_shape, mask_shape = self._get_img_shape()
         ds = ds.map(map_func=lambda frame, mask: self._set_shapes(frame, mask, frame_shape, mask_shape))
-        ds = ds.map(map_func=lambda frame, mask: self._random_crop(frame, mask, crop_shape=self.crop_shape, batch_crops=True))
+        ds = ds.map(map_func=lambda frame, mask: self._random_crop(frame, mask, self.crop_shape))
         ds = ds.unbatch()
-        if self.data_augmentation:
-            ds = ds.map(map_func=lambda frame, mask: tf.py_function(func=self._augment, inp=[frame, mask], Tout=[tf.float32, tf.float32]),
-                        num_parallel_calls=self.threads)
         ds = ds.batch(self.batch_size)
         ds = ds.prefetch(self.buffer_size)
         return ds
@@ -140,18 +130,14 @@ class dataGen2D:
         mask.set_shape(mask_shape)
         return frame, mask
     
-    @staticmethod
-    def _random_crop(frame, mask, crop_shape, batch_crops=True):
+    def _random_crop(self, frame, mask, crop_shape):
         
         # counting needed crops
         frame_shape = frame.shape.as_list()[:-1]
         n_pix_frame = np.prod(frame_shape)
         n_pix_crop = np.prod(crop_shape)
         
-        if batch_crops:
-            n_crops = n_pix_frame // n_pix_crop
-        else:
-            n_crops = 1
+        n_crops = n_pix_frame // n_pix_crop
         
         #defining crop bounding boxes
         
@@ -192,7 +178,6 @@ class dataGen2D:
         mask_crops_stack = crops[..., -1]
         
         return frame_crop_stack, mask_crops_stack
-
     
     def _augment0(self, frame, mask,
                  p_rotate=0.5,
@@ -236,122 +221,68 @@ class dataGen2D:
                     prob = 1
                 else:
                     prob = transform_params["p_per_sample"]
-                    transform_params.pop("p_per_sample")
-                
-                if "per_channel" in transform_params:
-                    transform_params.pop("per_channel")
+                    transform_params.pop("p_per_sample") 
                     
                 if extracted_probs[idx] > prob:
                     frame, mask = transform_func(frame, mask, **transform_params)
-            else:
-                raise NotImplementedError(transform)
         
         
     @staticmethod
-    def _rot90_transform(frame, mask, num_rot=None):
-        # num_rot is not used
-        # maintained for consistency with batchgenerators syntax
+    def _rot90_transform(frame, mask):
         rot = tf.random.uniform(shape=[], minval=1, maxval=3, dtype=tf.int32)
         frame = tf.image.rot90(image=frame, k=rot)
         mask = tf.image.rot90(image=mask, k=rot)
         return frame, mask
     
     @staticmethod
-    def _mirror_transform(frame, mask, axes=(0,1)):
+    def _mirror_transform(frame, mask):
         flips = np.random.choice(a=[True, False], size=(2))
-        if flips[0] and (0 in axes):
+        if flips[0]:
             frame = tf.image.flip_left_right(frame)
             mask = tf.image.flip_left_right(mask)
-        if flips[1] and (1 in axes):
+        if flips[1]:
             frame = tf.image.flip_up_down(frame)
             mask = tf.image.flip_up_down(mask)
         return frame, mask
-    
+        
     @staticmethod
-    def _brightness_transform(frame, mask, mu=0, sigma=0.1):
-        brightness_shift = tf.random.normal(shape=[], mean=mu, stddev=sigma, dtype=tf.float32)
-        frame += brightness_shift
-        frame = tf.clip_by_value(frame, clip_value_min=0.0, clip_value_max=1.0)
-        return frame, mask
-    
-    @staticmethod
-    def _brightness_multiplicative_transform(frame, mask, multiplier_range=[0.8, 1.2]):
-        scale = tf.random.uniform(shape=[], minval=multiplier_range[0], maxval=multiplier_range[1], dtype=tf.float32)
+    def _brightness_multiplicative_transform(frame, mask, scale_range=0.2):
+        half_range = scale_range / 2
+        min_scale = 1.0 - half_range
+        max_scale = 1.0 + half_range
+        
+        scale = tf.random.uniform(shape=[], minval=min_scale, maxval=max_scale, dtype=tf.float32)
         
         frame = frame*scale
         frame = tf.clip_by_value(frame, clip_value_min=0.0, clip_value_max=1.0)
         return frame, mask
         
     @staticmethod
-    def _gaussian_noise_transform(frame, mask, noise_variance=[0, 0.05]):
-        
-        # noise_variance refers to the range of noise variance
-        # maintained for consistency with batchgenerators syntax
-        
-        if noise_variance[0] == noise_variance[1]:
-            variance = noise_variance[0]
-            
-        variance = tf.random.uniform(
-            shape=[], minval=noise_variance[0], maxval=noise_variance[1], dtype=tf.float32)
+    def _gaussian_noise_transform(frame, mask, std_min=1e-5, std_max=0.06):
+        noise_std = tf.random.uniform(
+            shape=[], minval=std_min, maxval=std_max, dtype=tf.float32)
         noise = tf.random.normal(
-            shape=tf.shape(frame), mean=0.0, stddev=np.sqrt(variance), dtype=tf.float32)
+            shape=tf.shape(frame), mean=0.0, stddev=noise_std, dtype=tf.float32)
         
         frame += noise
         frame = tf.clip_by_value(frame, clip_value_min=0.0, clip_value_max=1.0)
         return frame, mask
     
     @staticmethod
-    def _gamma_transform(frame, mask, gamma_range=[0.8, 1.2], invert_image=False):
-        
-        #invert_image is not used
-        # maintained for consistency with batchtgenerators syntax
-        
+    def _gamma_transform(frame, mask, gamma_range=0.2):
+        half_range = gamma_range/2
+        min_gamma = 1.0 - half_range
+        max_gamma = 1.0 + half_range
         gamma = tf.random.uniform(
-            shape=[], minval=gamma_range[0], maxval=gamma_range[1], dtype=tf.float32)
+            shape=[], minval=min_gamma, maxval=max_gamma, dtype=tf.float32)
         frame = tf.pow(frame, gamma)
         frame = tf.clip_by_value(frame, clip_value_min=0.0, clip_value_max=1.0)
         return frame, mask
-    
-    @classmethod
-    def _spatial_transform(cls, frame, mask,
-                           do_elastic_deform=False,
-                           deformation_scale=[0.25, 0.25],
-                           do_rotation=True,
-                           p_rot_per_sample=0.15,
-                           angle=[-0.314, 0.314],
-                           do_scale=True,
-                           scale=[0.95, 1.05],
-                           p_scale_per_sample=0.15,
-                           border_mode_data="nearest",
-                           random_crop=False):
         
-        if border_mode_data not in TFA_INTERPOLATION_MODES:
-            raise NotImplementedError(border_mode_data)
-        if do_rotation and np.random.uniform(0,1) > p_rot_per_sample:
-            rot_angle = np.random.uniform(low=angle[0], high=angle[1])
-            frame = tfa.image.rotate(frame, rot_angle, interpolation_mode=TFA_INTERPOLATION_MODES[border_mode_data])
-            mask = tfa.image.rotate(frame, rot_angle, interpolation_mode=TFA_INTERPOLATION_MODES[border_mode_data])
-            
-        if do_scale and np.random.uniform(0,1) > p_scale_per_sample:
-            # determine crop shape
-            tfk_image.random_zoom(frame, zoom_range=scale,
-                                  row_axis=0, col_axis=1, channel_axis=2,
-                                  fill_mode=border_mode_data,
-                                  interpolation_order=1)
-        if random_crop:
-            pass
-            # random cropping not implemented yet
-            
-        return frame, mask
-    
-    @staticmethod
-    def _clipped_zoom(img, zoom_factor, **kwargs):
-        #shamelessly copypasted from https://stackoverflow.com/questions/37119071/scipy-rotate-and-zoom-an-image-without-changing-its-dimensions/48097478
-        
-        #retrieving spatial dims
-        height, width = img.shape[:2]
-        
-        # don't apply zoom to the channel dim
-        zoom_tuple = (zoom_factor,) * 2 + (1,) * (img.ndim -2)
         
     
+    
+        
+        
+        
+        

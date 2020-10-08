@@ -4,6 +4,7 @@ import logging
 
 from config import TrainConfig
 from datagens import get_datagen
+from utils import BatchInspector2D
 
 def setup_logger(logfile_path):
     logger = logging.getLogger()
@@ -16,12 +17,18 @@ def main(cfg_path):
     
     config = TrainConfig(cfg_path)
     setup_logger(config.logfile_path)
-    datagen_obj = get_datagen(config, partition="train", normalize=True, verbose=False)
+    datagen_obj = get_datagen(config,
+                              partition="train",
+                              normalize_inputs=True,
+                              ignore_last_channel=True,
+                              verbose=False,
+                              data_augmentation=True)
     data = datagen_obj.data
     data_iterator = data.as_numpy_iterator()
     
     ex_list = list(data_iterator)
     
+    BatchInspector2D(ex_list[0])
     print("debug")
 
 if __name__ == "__main__":

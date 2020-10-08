@@ -33,16 +33,20 @@ data_augmentation_cfg:
             do_elastic_deform: true
             deformation_scale: [0, 0.25, 0.25]
             do_rotation: true
-            angle_x: [-0.314, 0.314]
-            angle_y: [0, 6.2832]
-            angle_z: [0, 6.2832]
+            angle: [-0.314, 0.314]
+            p_rot_per_sample: 0.15
             do_scale: true
             scale: [0.95, 1.05]
-            border_mode_data: "nearest"
+            border_mode_data: "reflect"
             random_crop: true
             
         brightness_transform:
-            multiplier_range: [0.9, 1.1]
+            mu: 0
+            sigma: 0.1
+            p_per_sample: 0.15
+        
+        brightness_multiplicative_transform:
+            multiplier_range: [0.6, 2]
             per_channel: true
             p_per_sample: 0.15
         
