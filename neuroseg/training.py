@@ -22,7 +22,7 @@ def main(cfg_path):
                               normalize_inputs=True,
                               ignore_last_channel=True,
                               verbose=False,
-                              data_augmentation=True)
+                              data_augmentation=False)
     data = datagen_obj.data
     data_iterator = data.as_numpy_iterator()
     
@@ -44,6 +44,3 @@ if __name__ == "__main__":
     cfg_path = Path(args.configuration_path_str)
     
     main(cfg_path)
-    
-
-    

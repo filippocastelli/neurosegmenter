@@ -1,0 +1,97 @@
+dataset_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds"
+output_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp"
+descriptor_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/descr"
+
+training_mode: "2d"
+enable_wandb_tracking: false
+
+epochs: 1
+batch_size: 15
+initial_learning_rate: 0.00067
+loss: "binary_crossentropy"
+track_metrics:
+    - "accuracy"
+    - "jaccard_index"
+    - "dice_coefficient"
+        
+model_cfg:
+    model: "unet2d"
+    crop_shape: [64, 64]
+    unet_depth: 2
+    base_filters: 16
+    batch_normalization: true
+    transposed_convolution: false
+    residual_preactivation: true
+    
+dataset_cfg:
+    mode: "single_images"
+    positive_class_value: 1
+    negative_class_value: 255
+    
+data_augmentation_cfg:
+    debug_mode: false
+    single_thread:  false
+    threads: 24
+    buffer_size : 10
+    transform_cfg:
+        spatial_transform:
+            do_elastic_deform: true
+            deformation_scale: [0, 0.25, 0.25]
+            do_rotation: true
+            angle: [-0.314, 0.314]
+            p_rot_per_sample: 0.15
+            do_scale: true
+            scale: [0.95, 1.05]
+            border_mode_data: "reflect"
+            random_crop: true
+            
+        brightness_transform:
+            mu: 0
+            sigma: 0.1
+            p_per_sample: 0.15
+        
+        brightness_multiplicative_transform:
+            multiplier_range: [0.6, 2]
+            per_channel: true
+            p_per_sample: 0.15
+        
+        gamma_transform:
+            gamma_range: [0.9, 1.1]
+            invert_image: false
+            per_channel: true
+            p_per_sample: 0.15
+            
+        gaussian_noise_transform:
+            noise_variance: [0, 0.05]
+            p_per_sample:  0.15
+            
+performance_evaluation_cfg:
+    batch_size:       15
+    chunk_size:       20
+    classification_threshold:   0.5
+    add_empty_channel:          true
+    
+callbacks_cfg:
+    checkpoint:
+        monitor:        "val_loss"
+        verbose:        1
+        save_best_only: false
+        mode:           "min"    
+        
+    csvlogger:
+        append:     true
+        separator: ";"
+    
+    reducelronplateau:
+        factor:     0.1
+        patience:   5
+        min_lr:     0.00000000067
+        verbose:    1
+        
+    wandb:
+        monitor: "val_loss"
+        mode: "min"
+        save_weights_only: false
+        save_model: true
+        
+notes: ""

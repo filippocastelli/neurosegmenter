@@ -2,6 +2,7 @@ dataset_path: "/mnt/ssd1/datasets/2pe_dataset/tmp"
 output_path: "/home/phil/tmp_out"
 descriptor_path: "/home/phil/tmp_out/descr"
 
+
 training_mode: "2d"
 enable_wandb_tracking: false
 
@@ -13,7 +14,12 @@ track_metrics:
     - "accuracy"
     - "jaccard_index"
     - "dice_coefficient"
-        
+
+dataset_cfg:
+    mode: "single_images"
+    positive_class_value: 1
+    negative_class_value: 255
+    
 model_cfg:
     model: "unet2d"
     crop_shape: [64, 64]

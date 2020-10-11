@@ -30,6 +30,10 @@ class TrainConfig:
         # path dict
         self._gen_paths(self.dataset_path)
         
+        # dataset cfg parsing
+        self.dataset_cfg = cfg_dict["dataset_cfg"]
+        self._parse_dataset_cfg(self.dataset_cfg)
+        
         # model parsing
         self.model_cfg = cfg_dict["model_cfg"]
         self._parse_model_cfg(self.model_cfg)
@@ -49,6 +53,11 @@ class TrainConfig:
         # notes parsing
         self.notes = cfg_dict["notes"]
     
+    # > DATASET PARSING
+    def _parse_dataset_cfg(self, dataset_cfg):
+        self.dataset_mode = dataset_cfg["mode"]
+        self.positive_class_value = dataset_cfg["positive_class_value"]
+        self.negative_class_value = dataset_cfg["negative_class_value"]
     
     # > MODEL PARSING <
     def _parse_model_cfg(self, model_cfg):
@@ -91,7 +100,7 @@ class TrainConfig:
         self.da_buffer_size = da_cfg["buffer_size"]
         
         self.da_transform_cfg = da_cfg["transform_cfg"]
-        self.da_transforms = list(self.da_transform_cfg.keys())
+        self.da_transforms = list(self.da_transform_cfg.keys()) if self.da_transform_cfg is not None else None
         
     # > PERFORMANCE EVALUATION PARSING <
     def _parse_performance_evaluation_cfg(self, pe_cfg):

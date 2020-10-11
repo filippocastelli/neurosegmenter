@@ -1,4 +1,5 @@
 from functools import partial
+import logging
 
 import tensorflow as tf
 import tensorflow_addons as tfa
@@ -6,6 +7,8 @@ import tensorflow.keras.preprocessing.image as tfk_image
 from tensorflow.data import Dataset
 from skimage import io as skio
 import numpy as np
+import pudb
+
 
 SUPPORTED_FORMATS = ["png", "tif", "tiff"]
 TFA_INTERPOLATION_MODES = {"nearest": "NEAREST",
@@ -23,6 +26,8 @@ class dataGen2D:
         self.config = config
         self.partition = partition
         self.data_path_dict = self.config.path_dict[partition]
+        
+        self.positive_class_value = self.config.positive_class_value
         
         self.verbose = verbose
         self._path_sanity_check()
@@ -91,7 +96,7 @@ class dataGen2D:
         frame_path = self.frames_paths[0]
         mask_path = self.masks_paths[0]
         frame = self._load_img(frame_path, ignore_last_channel=self.ignore_last_channel)
-        mask = self._load_img(mask_path)
+        mask = self._load_img(mask_path, is_binary_mask=True)
         return frame.shape, mask.shape
             
     def gen_dataset(self):
@@ -99,30 +104,63 @@ class dataGen2D:
         ds = ds.map(map_func=lambda frame_path, mask_path: self._load_example_wrapper(frame_path, mask_path),
                     deterministic=True,
                     num_parallel_calls=self.threads)
-        frame_shape, mask_shape = self._get_img_shape()
+        full_frame_shape, full_mask_shape = self._get_img_shape()
+        frame_channels = full_frame_shape[-1]
+        frame_shape = np.append(self.crop_shape, frame_channels)
+        mask_shape = np.append(self.crop_shape, 1)
         ds = ds.map(map_func=lambda frame, mask: self._set_shapes(frame, mask, frame_shape, mask_shape))
         ds = ds.map(map_func=lambda frame, mask: self._random_crop(frame, mask, crop_shape=self.crop_shape, batch_crops=True))
         ds = ds.unbatch()
         if self.data_augmentation:
+            if self.transform_cfg is None:
+                raise ValueError("There are no configured data augmentation transforms in configuration YAML")
             ds = ds.map(map_func=lambda frame, mask: tf.py_function(func=self._augment, inp=[frame, mask], Tout=[tf.float32, tf.float32]),
                         num_parallel_calls=self.threads)
+        # pudb.set_trace()
+        ds = ds.map(map_func=lambda frame, mask: self._set_shapes(frame, mask, frame_shape, mask_shape))
+        
         ds = ds.batch(self.batch_size)
+        # frame_batch_shape = np.append([self.batch_size], frame_shape)
+        # mask_batch_shape = np.append([self.batch_size], mask_shape)
+        # ds = ds.map(map_func=lambda frame, mask: self._set_shapes(frame, mask, frame_batch_shape, mask_batch_shape))
         ds = ds.prefetch(self.buffer_size)
         return ds
     
     @classmethod
-    def _load_example(cls, frame_path, mask_path, normalize_inputs=True, ignore_last_channel=False):
-        frame = cls._load_img(frame_path.numpy().decode("utf-8"), normalize_inputs=normalize_inputs, ignore_last_channel=ignore_last_channel)
-        mask = cls._load_img(mask_path.numpy().decode("utf-8"), normalize_inputs=normalize_inputs, ignore_last_channel=False)
+    def _load_example(cls, frame_path,mask_path,
+                      normalize_inputs=True,
+                      ignore_last_channel=False,
+                      positive_class_value=1):
+        
+        frame = cls._load_img(frame_path.numpy().decode("utf-8"),
+                              normalize_inputs=normalize_inputs,
+                              ignore_last_channel=ignore_last_channel)
+        mask = cls._load_img(mask_path.numpy().decode("utf-8"),
+                             normalize_inputs=normalize_inputs,
+                             ignore_last_channel=False,
+                             is_binary_mask=True,
+                             positive_class_value=positive_class_value)
         return frame, mask
     
     @staticmethod
-    def _load_img(img_to_load_path, normalize_inputs=True, ignore_last_channel=False):
+    def _load_img(img_to_load_path,
+                  normalize_inputs=True,
+                  ignore_last_channel=False,
+                  is_binary_mask=False,
+                  positive_class_value=1):
         try:
             img = skio.imread(img_to_load_path)
-            if normalize_inputs:
+            if normalize_inputs and (not is_binary_mask):
                 norm_constant = np.iinfo(img.dtype).max
                 img = img/norm_constant
+            if is_binary_mask:
+                values = np.unique(img)
+                # assert len(values) in [1, 2], "mask is not binary {}\n there are {} values".format(str(img_to_load_path), len(values))
+                if len(values) not in [1,2]:
+                    logging.warning("Mask is not binary {}\nthere are {} values\nautomatically converting to binary mask".format(str(img_to_load_path), len(values)))
+                img = np.where(img==positive_class_value, 1,0)
+                img = img.astype(np.float64)
+                img = np.expand_dims(img, axis=-1)
             if ignore_last_channel:
                 img = img[...,:-1]
             return img
@@ -130,7 +168,10 @@ class dataGen2D:
             raise ValueError("This image failed: {}, check for anomalies".format(str(img_to_load_path)))
     
     def _load_example_wrapper(self, frame_path, mask_path):
-        load_example_partial = partial(self._load_example, normalize_inputs=self.normalize_inputs, ignore_last_channel=self.ignore_last_channel)
+        load_example_partial = partial(self._load_example,
+                                       normalize_inputs=self.normalize_inputs,
+                                       ignore_last_channel=self.ignore_last_channel,
+                                       positive_class_value=self.positive_class_value)
         file = tf.py_function(load_example_partial, [frame_path, mask_path], (tf.float64, tf.float64))
         return file
     
@@ -140,59 +181,81 @@ class dataGen2D:
         mask.set_shape(mask_shape)
         return frame, mask
     
-    @staticmethod
-    def _random_crop(frame, mask, crop_shape, batch_crops=True):
+    @classmethod
+    def _random_crop(cls, frame, mask, crop_shape,
+                     batch_crops=True,
+                     keep_original_size=False
+                     ):
         
-        # counting needed crops
-        frame_shape = frame.shape.as_list()[:-1]
-        n_pix_frame = np.prod(frame_shape)
-        n_pix_crop = np.prod(crop_shape)
+        if len(frame.shape) < 4:
+            frame_shape = frame.shape.as_list()[:-1]
+        else:
+            frame_shape = frame.shape.as_list()[1:-1]
         
+        # print("frame.shape: {} \n mask.shape: {}".format(frame.shape, mask.shape))
         if batch_crops:
+            # counting needed crops
+            n_pix_frame = np.prod(frame_shape)
+            n_pix_crop = np.prod(crop_shape)
             n_crops = n_pix_frame // n_pix_crop
+            
+            crop_boxes = cls._get_bound_boxes(frame_shape, crop_shape, n_crops)
         else:
             n_crops = 1
+            crop_boxes = cls._get_bound_boxes(frame_shape, crop_shape, n_crops)
         
         #defining crop bounding boxes
-        
-        lower_x = np.random.uniform(
-            low=0, high=1 - (crop_shape[0] / frame_shape[0]), size=(n_crops)
-            )
-        
-        lower_y = np.random.uniform(
-            low=0, high=1 - (crop_shape[1] / frame_shape[1]), size=(n_crops)
-            )
-        
-        upper_x = lower_x + crop_shape[0] / frame_shape[0]
-        upper_y = lower_y + crop_shape[1] / frame_shape[1]
-        
-        crop_boxes = np.column_stack((lower_x, lower_y, upper_x, upper_y))
-        
+ 
         # concatenate frame and mask along channel
         # first expand dims for mask
-        mask = tf.expand_dims(mask, axis=-1, name="expand_mask_channel")
         concat = tf.concat([frame, mask], axis=-1)
         
-        # adding a batch dim
-        concat = tf.expand_dims(concat, axis=0)
+        # adding a batch dim if not already batched
+        if len(concat.shape) < 4:
+            concat = tf.expand_dims(concat, axis=0)
         
         # image cropping
         # cropped frames should be [n_crops, crop_height, crop_width, channels]
+        crop_size = frame_shape if keep_original_size else crop_shape
         
         crops = tf.image.crop_and_resize(
             image=concat,
             boxes=crop_boxes,
             box_indices=np.zeros(n_crops),
-            crop_size=crop_shape,
+            crop_size=crop_size,
             method="nearest",
             name="crop_stacked"
             )
         
         frame_crop_stack = crops[...,:-1]
-        mask_crops_stack = crops[..., -1]
+        mask_crop_stack = crops[..., -1]
         
-        return frame_crop_stack, mask_crops_stack
+        mask_crop_stack = tf.expand_dims(mask_crop_stack, axis=-1)
+        return frame_crop_stack, mask_crop_stack
 
+    @staticmethod
+    def _get_bound_boxes(frame_shape, crop_shape, n_crops):
+        if not (np.array(crop_shape) > np.array(frame_shape)).any():
+            x_low = 0
+            x_high = 1 - (crop_shape[0] / frame_shape[0])
+            
+            y_low = 0
+            y_high = 1 - (crop_shape[1] / frame_shape[1])
+        else:
+            x_low = - (crop_shape[0] / (2 * frame_shape[0]))
+            x_high = 1 - (crop_shape[0] / (2 * frame_shape[0]))
+            
+            y_low = - (crop_shape[1] / (2 * frame_shape[1]))
+            y_high = 1 - (crop_shape[1] / (2 * frame_shape[1]))
+            
+        lower_x = np.random.uniform(low=x_low, high=x_high, size=(n_crops))
+        lower_y = np.random.uniform(low=y_low, high=y_high, size=(n_crops))
+
+        upper_x = lower_x + crop_shape[0] / frame_shape[0]
+        upper_y = lower_y + crop_shape[1] / frame_shape[1]
+        crop_boxes = np.column_stack((lower_x, lower_y, upper_x, upper_y))
+        
+        return crop_boxes
     
     def _augment0(self, frame, mask,
                  p_rotate=0.5,
@@ -246,15 +309,18 @@ class dataGen2D:
             else:
                 raise NotImplementedError(transform)
         
-        
     @staticmethod
     def _rot90_transform(frame, mask, num_rot=None):
         # num_rot is not used
         # maintained for consistency with batchgenerators syntax
         rot = tf.random.uniform(shape=[], minval=1, maxval=3, dtype=tf.int32)
-        frame = tf.image.rot90(image=frame, k=rot)
-        mask = tf.image.rot90(image=mask, k=rot)
-        return frame, mask
+        rot_frame = tf.image.rot90(image=frame, k=rot)
+        rot_mask = tf.image.rot90(image=mask, k=rot)
+        
+        # if rot_mask.shape != tf.TensorShape([1,64,64]):
+        #     pudb.set_trace()
+            
+        return rot_frame, rot_mask
     
     @staticmethod
     def _mirror_transform(frame, mask, axes=(0,1)):
@@ -327,23 +393,36 @@ class dataGen2D:
         
         if border_mode_data not in TFA_INTERPOLATION_MODES:
             raise NotImplementedError(border_mode_data)
+            
         if do_rotation and np.random.uniform(0,1) > p_rot_per_sample:
             rot_angle = np.random.uniform(low=angle[0], high=angle[1])
-            frame = tfa.image.rotate(frame, rot_angle, interpolation_mode=TFA_INTERPOLATION_MODES[border_mode_data])
-            mask = tfa.image.rotate(frame, rot_angle, interpolation_mode=TFA_INTERPOLATION_MODES[border_mode_data])
+            frame = tfa.image.rotate(frame, rot_angle, interpolation=TFA_INTERPOLATION_MODES[border_mode_data])
+            mask = tfa.image.rotate(mask, rot_angle, interpolation="NEAREST")
             
         if do_scale and np.random.uniform(0,1) > p_scale_per_sample:
             # determine crop shape
-            tfk_image.random_zoom(frame, zoom_range=scale,
-                                  row_axis=0, col_axis=1, channel_axis=2,
-                                  fill_mode=border_mode_data,
-                                  interpolation_order=1)
+            crop_shape = cls._get_scaled_cropshape(frame.shape[1:-1], scale_range=scale)
+            frame, mask = cls._random_crop(frame, mask, crop_shape, batch_crops=False, keep_original_size=True)
+            # tfk_image.random_zoom(frame, zoom_range=scale,
+            #                       row_axis=0, col_axis=1, channel_axis=2,
+            #                       fill_mode=border_mode_data,
+            #                       interpolation_order=1)
         if random_crop:
             pass
             # random cropping not implemented yet
             
         return frame, mask
     
+    
+    @staticmethod
+    def _get_scaled_cropshape(frame_shape_trimmed, scale_range):
+        #frame_shape is a TensorShape
+        crop_scale = tf.random.uniform(shape=[], minval=scale_range[0], maxval=scale_range[1],dtype=tf.float32)
+        
+        frame_shape_array = np.array(frame_shape_trimmed.as_list())
+        crop_shape = np.array(frame_shape_array*crop_scale)
+
+        return crop_shape
     @staticmethod
     def _clipped_zoom(img, zoom_factor, **kwargs):
         #shamelessly copypasted from https://stackoverflow.com/questions/37119071/scipy-rotate-and-zoom-an-image-without-changing-its-dimensions/48097478
