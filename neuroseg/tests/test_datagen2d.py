@@ -24,8 +24,7 @@ class Datagen2DTest(unittest.TestCase):
         self.currentdir = Path(currentdir)
         self.config_path = self.currentdir.joinpath("test_cfg.yml")
         self.config = TrainConfig(self.config_path)
-        self.datagen_noaugment = self._setup_datagen_noaugment()
-        # self.datagen_augment = self._setup_datagen_augment()
+
         self.dataset_path = self.config.dataset_path
         
         self.train_paths = self.config.train_paths
@@ -40,7 +39,9 @@ class Datagen2DTest(unittest.TestCase):
         
         self.tmp_path = self.config.temp_path
         self.logs_path = self.config.logs_path
-    
+        
+        self.transform_cfg = self.config.da_transform_cfg
+        
     def tearDown(self):
         self._rm_tree(self.tmp_path)
         
@@ -62,12 +63,20 @@ class Datagen2DTest(unittest.TestCase):
         return datagen
     
     def _setup_datagen_augment(self):
-        datagen = dataGen2D(self.config, data_augmentation=True)
+        datagen = dataGen2D(self.config, data_augmentation=True,
+                            ignore_last_channel=True)
         return datagen
     
-    def test_setup_datagen_no_augmentation(self):
-        data_iterator = self.datagen_noaugment.data.as_numpy_iterator()
-        ex_list = list(data_iterator)
+    # def test_setup_datagen_no_augmentation(self):
+    #     self.datagen_noaugment = self._setup_datagen_noaugment()
+    #     data_iterator = self.datagen_noaugment.data.as_numpy_iterator()
+    #     ex_list = list(data_iterator)
+        
+    # def test_setup_datagen_augment(self):
+    #     pudb.set_trace()
+    #     self.datagen_augment = self._setup_datagen_augment()
+    #     data_iterator = self.datagen_augment.data.as_numpy_iterator()
+    #     ex_list = list(data_iterator)
         
     def test_load_img(self):
         frame, mask = self._load_frame_mask()
@@ -132,6 +141,13 @@ class Datagen2DTest(unittest.TestCase):
         # pudb.set_trace()
         frame, mask = dataGen2D._spatial_transform(frame, mask)
         self._assertshapes(frame, mask)
+        
+    def test_augment(self):
+        crop_shape = (64,64)
+        frame, mask = self._get_single_crop(crop_shape)
+        # pudb.set_trace()
+        frame, mask = dataGen2D._augment(frame, mask, self.transform_cfg)
+        
         
     
     def _load_frame_mask(self):

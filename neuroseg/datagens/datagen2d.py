@@ -44,7 +44,7 @@ class dataGen2D:
         self.threads = 1 if config.da_single_thread == True else config.da_threads
         
         self.data_augmentation = data_augmentation
-        self._def_transforms()
+        # self._def_transforms()
         self.transforms = config.da_transforms
         self.transform_cfg = config.da_transform_cfg
 
@@ -54,19 +54,29 @@ class dataGen2D:
         self.data = self.gen_dataset()
         
         
-    def _def_transforms(self):
-        self.SUPPORTED_TRANSFORMS = {
-            "brightness_transform": self._brightness_transform,
-            "gamma_transform": self._gamma_transform,
-            "gaussian_noise_transform": self._gaussian_noise_transform,
-            "mirror_transform": self._mirror_transform,
-            "rot90_transform": self._rot90_transform,
-            "brightness_multiplicative_transform": self._brightness_multiplicative_transform,
-            "spatial_transform": self._spatial_transform,
-            }
+    # def _def_transforms(self):
+    #     self.SUPPORTED_TRANSFORMS = {
+    #         "brightness_transform": self._brightness_transform,
+    #         "gamma_transform": self._gamma_transform,
+    #         "gaussian_noise_transform": self._gaussian_noise_transform,
+    #         "mirror_transform": self._mirror_transform,
+    #         "rot90_transform": self._rot90_transform,
+    #         "brightness_multiplicative_transform": self._brightness_multiplicative_transform,
+    #         "spatial_transform": self._spatial_transform,
+    #         }
         
-    def _transform_supported(self, transform):
-        return True if transform in self.SUPPORTED_TRANSFORMS else False
+    @classmethod
+    def _get_transform(cls, transform):
+        SUPPORTED_TRANSFORMS = {
+            "brightness_transform": cls._brightness_transform,
+            "gamma_transform": cls._gamma_transform,
+            "gaussian_noise_transform": cls._gaussian_noise_transform,
+            "mirror_transform": cls._mirror_transform,
+            "rot90_transform": cls._rot90_transform,
+            "brightness_multiplicative_transform": cls._brightness_multiplicative_transform,
+            "spatial_transform": cls._spatial_transform,
+            }
+        return SUPPORTED_TRANSFORMS[transform] if transform in SUPPORTED_TRANSFORMS else None
     
     def _scan_dirs(self):
         self.frames_paths = self._glob_subdirs("frames")
@@ -111,8 +121,13 @@ class dataGen2D:
         if self.data_augmentation:
             if self.transform_cfg is None:
                 raise ValueError("There are no configured data augmentation transforms in configuration YAML")
-            ds = ds.map(map_func=lambda frame, mask: tf.py_function(func=self._augment, inp=[frame, mask], Tout=[tf.float32, tf.float32]),
+                
+                
+            augment_partial = partial(self._augment, transform_cfg=self.transform_cfg)
+            ds = ds.map(map_func=lambda frame, mask: tf.py_function(func=augment_partial, inp=[frame, mask], Tout=[tf.float32, tf.float32]),
                         num_parallel_calls=self.threads)
+            # ds = ds.map(map_func=lambda frame, mask: tf.py_function(func=self._augment, inp=[frame, mask], Tout=[tf.float32, tf.float32]),
+            #             num_parallel_calls=self.threads)
         # pudb.set_trace()
         
         frame_channels = full_frame_shape[-1]
@@ -284,17 +299,21 @@ class dataGen2D:
             self._random_gamma_transform(frame, mask, gamma_range=gamma_range)
         
 
-    def _augment(self, frame, mask):
+    @classmethod
+    def _augment(cls, frame, mask, transform_cfg):
         # transforms = list(transform_cfg.keys())
-        transforms = self.transforms[:]
+        # pudb.set_trace()
+        transforms = list(transform_cfg.keys())
+        # transforms = self.transforms[:]
         np.random.shuffle(transforms)
         extracted_probs = np.random.uniform(low=0, high=1, size=(len(transforms)))
         
         for idx, transform in enumerate(transforms):
-            if self._transform_supported(transform):
-                transform_func = self.SUPPORTED_TRANSFORMS[transform]
+            transform_func = cls._get_transform(transform)
+            if transform_func is not None:
+                transform_func = cls._get_transform(transform)
                 # the dict() constructor creates a shallow copy
-                transform_params = dict(self.transform_cfg[transform])
+                transform_params = dict(transform_cfg[transform])
                 
                 if "p_per_sample" not in transform_params:
                     prob = 1
@@ -309,6 +328,8 @@ class dataGen2D:
                     frame, mask = transform_func(frame, mask, **transform_params)
             else:
                 raise NotImplementedError(transform)
+                
+        return frame, mask
         
     @staticmethod
     def _rot90_transform(frame, mask, num_rot=None):
@@ -430,5 +451,6 @@ class dataGen2D:
         
         # don't apply zoom to the channel dim
         zoom_tuple = (zoom_factor,) * 2 + (1,) * (img.ndim -2)
+        
         
     

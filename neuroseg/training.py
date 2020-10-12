@@ -22,13 +22,13 @@ def main(cfg_path):
                               normalize_inputs=True,
                               ignore_last_channel=True,
                               verbose=False,
-                              data_augmentation=False)
+                              data_augmentation=True)
     data = datagen_obj.data
     data_iterator = data.as_numpy_iterator()
     
     ex_list = list(data_iterator)
     
-    BatchInspector2D(ex_list[0])
+    # BatchInspector2D(ex_list[0])
     print("debug")
 
 if __name__ == "__main__":
