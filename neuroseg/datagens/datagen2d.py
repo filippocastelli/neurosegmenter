@@ -105,10 +105,7 @@ class dataGen2D:
                     deterministic=True,
                     num_parallel_calls=self.threads)
         full_frame_shape, full_mask_shape = self._get_img_shape()
-        frame_channels = full_frame_shape[-1]
-        frame_shape = np.append(self.crop_shape, frame_channels)
-        mask_shape = np.append(self.crop_shape, 1)
-        ds = ds.map(map_func=lambda frame, mask: self._set_shapes(frame, mask, frame_shape, mask_shape))
+        ds = ds.map(map_func=lambda frame, mask: self._set_shapes(frame, mask, full_frame_shape, full_mask_shape))
         ds = ds.map(map_func=lambda frame, mask: self._random_crop(frame, mask, crop_shape=self.crop_shape, batch_crops=True))
         ds = ds.unbatch()
         if self.data_augmentation:
@@ -117,6 +114,10 @@ class dataGen2D:
             ds = ds.map(map_func=lambda frame, mask: tf.py_function(func=self._augment, inp=[frame, mask], Tout=[tf.float32, tf.float32]),
                         num_parallel_calls=self.threads)
         # pudb.set_trace()
+        
+        frame_channels = full_frame_shape[-1]
+        frame_shape = np.append(self.crop_shape, frame_channels)
+        mask_shape = np.append(self.crop_shape, 1)
         ds = ds.map(map_func=lambda frame, mask: self._set_shapes(frame, mask, frame_shape, mask_shape))
         
         ds = ds.batch(self.batch_size)
@@ -316,9 +317,6 @@ class dataGen2D:
         rot = tf.random.uniform(shape=[], minval=1, maxval=3, dtype=tf.int32)
         rot_frame = tf.image.rot90(image=frame, k=rot)
         rot_mask = tf.image.rot90(image=mask, k=rot)
-        
-        # if rot_mask.shape != tf.TensorShape([1,64,64]):
-        #     pudb.set_trace()
             
         return rot_frame, rot_mask
     

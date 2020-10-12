@@ -15,6 +15,7 @@ import tensorflow as tf
 import tensorflow.debugging as tfdebug
 
 from datagens.datagen2d import dataGen2D
+from utils import BatchInspector2D
 from config import TrainConfig
 
 class Datagen2DTest(unittest.TestCase):
@@ -65,7 +66,6 @@ class Datagen2DTest(unittest.TestCase):
         return datagen
     
     def test_setup_datagen_no_augmentation(self):
-        # pudb.set_trace()
         data_iterator = self.datagen_noaugment.data.as_numpy_iterator()
         ex_list = list(data_iterator)
         
@@ -81,6 +81,9 @@ class Datagen2DTest(unittest.TestCase):
         frame_crop_stack, mask_crop_stack = self._load_crop_stack(crop_shape)
         frame_stack_shape = frame_crop_stack.shape.as_list()
         mask_stack_shape = mask_crop_stack.shape.as_list()
+        
+        # pudb.set_trace()
+        # BatchInspector2D([frame_crop_stack, mask_crop_stack])
         
         nptest.assert_equal((64, 64, 64, 2), frame_stack_shape)
         nptest.assert_equal((64, 64, 64, 1), mask_stack_shape)
@@ -147,6 +150,7 @@ class Datagen2DTest(unittest.TestCase):
         frame, mask = self._load_frame_mask()
         frame = tf.convert_to_tensor(frame)
         mask = tf.convert_to_tensor(mask)
+        # pudb.set_trace()
         return dataGen2D._random_crop(frame, mask,
                                       crop_shape,
                                       batch_crops=True)

@@ -36,7 +36,7 @@ if __name__ == "__main__":
     
     parser.add_argument("-c","--conf", action="store", type=str,
                         dest="configuration_path_str",
-                        default="/home/phil/repos/neuroseg/neuroseg/config/ex_cfg.yml",
+                        default="/home/phil/repos/neuroseg/neuroseg/tests/test_cfg.yml",
                         help="Configuration file path")
     
     args, unknown = parser.parse_known_args()
