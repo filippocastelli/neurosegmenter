@@ -53,18 +53,7 @@ class dataGen2D:
         self._scan_dirs()
         self.data = self.gen_dataset()
         
-        
-    # def _def_transforms(self):
-    #     self.SUPPORTED_TRANSFORMS = {
-    #         "brightness_transform": self._brightness_transform,
-    #         "gamma_transform": self._gamma_transform,
-    #         "gaussian_noise_transform": self._gaussian_noise_transform,
-    #         "mirror_transform": self._mirror_transform,
-    #         "rot90_transform": self._rot90_transform,
-    #         "brightness_multiplicative_transform": self._brightness_multiplicative_transform,
-    #         "spatial_transform": self._spatial_transform,
-    #         }
-        
+
     @classmethod
     def _get_transform(cls, transform):
         SUPPORTED_TRANSFORMS = {
@@ -126,9 +115,6 @@ class dataGen2D:
             augment_partial = partial(self._augment, transform_cfg=self.transform_cfg)
             ds = ds.map(map_func=lambda frame, mask: tf.py_function(func=augment_partial, inp=[frame, mask], Tout=[tf.float32, tf.float32]),
                         num_parallel_calls=self.threads)
-            # ds = ds.map(map_func=lambda frame, mask: tf.py_function(func=self._augment, inp=[frame, mask], Tout=[tf.float32, tf.float32]),
-            #             num_parallel_calls=self.threads)
-        # pudb.set_trace()
         
         frame_channels = full_frame_shape[-1]
         frame_shape = np.append(self.crop_shape, frame_channels)
@@ -136,9 +122,6 @@ class dataGen2D:
         ds = ds.map(map_func=lambda frame, mask: self._set_shapes(frame, mask, frame_shape, mask_shape))
         
         ds = ds.batch(self.batch_size)
-        # frame_batch_shape = np.append([self.batch_size], frame_shape)
-        # mask_batch_shape = np.append([self.batch_size], mask_shape)
-        # ds = ds.map(map_func=lambda frame, mask: self._set_shapes(frame, mask, frame_batch_shape, mask_batch_shape))
         ds = ds.prefetch(self.buffer_size)
         return ds
     

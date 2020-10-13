@@ -8,8 +8,17 @@ enable_wandb_tracking: false
 
 epochs: 1
 batch_size: 15
-initial_learning_rate: 0.00067
 loss: "binary_crossentropy"
+
+optimizer_cfg:
+    # args in tf.KERAS.OPTIMIZERS api docs
+    optimizer: "adam"
+    learning_rate: 0.00067
+    beta_1: 0.9
+    beta_2: 0.999
+    epsilon: 1e-07
+    amsgrad: false
+    
 track_metrics:
     - "accuracy"
     - "jaccard_index"
@@ -21,7 +30,7 @@ dataset_cfg:
     negative_class_value: 255
     
 model_cfg:
-    model: "unet2d"
+    model: "resunet2d"
     crop_shape: [64, 64]
     unet_depth: 2
     base_filters: 16

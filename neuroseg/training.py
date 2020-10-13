@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 import logging
 
-from config import TrainConfig
+from config import TrainConfig, CallbackConfigurator, ModelConfigurator
 from datagens import get_datagen
 from utils import BatchInspector2D
 
@@ -17,19 +17,34 @@ def main(cfg_path):
     
     config = TrainConfig(cfg_path)
     setup_logger(config.logfile_path)
-    datagen_obj = get_datagen(config,
+    train_datagen = get_datagen(config,
                               partition="train",
                               normalize_inputs=True,
                               ignore_last_channel=True,
                               verbose=False,
                               data_augmentation=True)
-    data = datagen_obj.data
-    data_iterator = data.as_numpy_iterator()
     
-    ex_list = list(data_iterator)
+    val_datagen = get_datagen(config,
+                              partition="val",
+                              normalize_inputs=True,
+                              ignore_last_channel=True,
+                              verbose=False,
+                              data_augmentation=False)
     
-    # BatchInspector2D(ex_list[0])
-    print("debug")
+    callback_cfg = CallbackConfigurator(config)
+    callbacks = callback_cfg.callbacks
+    
+    model_cfg = ModelConfigurator(config, compile_model=True)
+    model = model_cfg.model
+    print("ciao")
+    # val_data_debug = val_datagen.data
+    # val_iterator = val_data_debug.as_numpy_iterator()
+    
+    # test_batch = next(val_iterator)
+    
+    # BatchInspector2D(test_batch)
+    
+    
 
 if __name__ == "__main__":
     parser = ArgumentParser()

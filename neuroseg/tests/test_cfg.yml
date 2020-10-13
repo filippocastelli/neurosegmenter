@@ -7,15 +7,23 @@ enable_wandb_tracking: false
 
 epochs: 1
 batch_size: 15
-initial_learning_rate: 0.00067
 loss: "binary_crossentropy"
 track_metrics:
     - "accuracy"
     - "jaccard_index"
     - "dice_coefficient"
         
+optimizer_cfg:
+    # args in tf.KERAS.OPTIMIZERS api docs
+    optimizer: "adam"
+    learning_rate: 0.00067
+    beta_1: 0.9
+    beta_2: 0.999
+    epsilon: 1e-07
+    amsgrad: false
+    
 model_cfg:
-    model: "unet2d"
+    model: "resunet2d"
     crop_shape: [64, 64]
     unet_depth: 2
     base_filters: 16
@@ -94,10 +102,10 @@ callbacks_cfg:
         min_lr:     0.00000000067
         verbose:    1
         
-    wandb:
-        monitor: "val_loss"
-        mode: "min"
-        save_weights_only: false
-        save_model: true
+    # wandb:
+    #     monitor: "val_loss"
+    #     mode: "min"
+    #     save_weights_only: false
+    #     save_model: true
         
 notes: ""

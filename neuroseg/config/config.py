@@ -22,10 +22,12 @@ class TrainConfig:
         
         self.epochs = cfg_dict["epochs"]
         self.batch_size = cfg_dict["batch_size"]
-        self.initial_learning_rate = cfg_dict["initial_learning_rate"]
         self.loss = cfg_dict["loss"]
         self.track_metrics = cfg_dict["track_metrics"]
         self.enable_wandb_tracking = cfg_dict["enable_wandb_tracking"]
+        
+        # optimizer cfg parsing
+        self.optimizer_cfg = cfg_dict["optimizer_cfg"]
         
         # path dict
         self._gen_paths(self.dataset_path)
@@ -62,7 +64,7 @@ class TrainConfig:
     # > MODEL PARSING <
     def _parse_model_cfg(self, model_cfg):
         if self.training_mode == "2d":
-            if model_cfg["model"] == "unet2d":
+            if model_cfg["model"] == "resunet2d":
                 self._parse_unet2d_cfg(model_cfg)
             elif model_cfg["model"] == "unet3d":
                 self._parse_unet3d_cfg(model_cfg)
