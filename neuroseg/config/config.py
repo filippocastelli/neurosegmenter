@@ -58,6 +58,7 @@ class TrainConfig:
     # > DATASET PARSING
     def _parse_dataset_cfg(self, dataset_cfg):
         self.dataset_mode = dataset_cfg["mode"]
+        self.n_channels = dataset_cfg["n_channels"]
         self.positive_class_value = dataset_cfg["positive_class_value"]
         self.negative_class_value = dataset_cfg["negative_class_value"]
     
