@@ -19,7 +19,7 @@ optimizer_cfg:
     learning_rate: 0.00067
     beta_1: 0.9
     beta_2: 0.999
-    epsilon: 1e-07
+    epsilon: 0.0000001
     amsgrad: false
     
 model_cfg:
@@ -33,6 +33,7 @@ model_cfg:
     
 dataset_cfg:
     mode: "single_images"
+    n_channels: 2
     positive_class_value: 1
     negative_class_value: 255
     

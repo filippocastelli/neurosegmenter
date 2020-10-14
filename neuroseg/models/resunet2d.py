@@ -12,6 +12,8 @@ from tensorflow.keras.layers import (
 from tensorflow.keras.models import Model
 from tensorflow.keras.activations import get as get_activation
 
+import numpy as np
+
 class ResUNET2D:
     def __init__(self,
                  config):
@@ -23,14 +25,22 @@ class ResUNET2D:
         self.batch_normalization = self.config.batch_normalization
         self.pre_activation = self.config.residual_preactivation
         self.transposed_convolution = self.config.transposed_convolution
-        self.model = self._get_model(input_shape=self.crop_shape,
+        self.n_channels = self.config.n_channels
+        
+        self.input_shape = self._get_input_shape()
+        self.model = self._get_model(input_shape=self.input_shape,
                                      base_filters=self.base_filters,
                                      depth=self.depth,
                                      batch_normalization=self.batch_normalization,
                                      pre_activation=self.pre_activation,
                                      transposed_convolution=self.transposed_convolution)
 
-
+    
+    def _get_input_shape(self):
+        input_shape = self.crop_shape.copy()
+        input_shape.append(self.n_channels)
+        return input_shape
+    
     @classmethod
     def _get_convolution_block(
             cls,

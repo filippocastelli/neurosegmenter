@@ -2,7 +2,13 @@ from argparse import ArgumentParser
 from pathlib import Path
 import logging
 
-from config import TrainConfig, CallbackConfigurator, ModelConfigurator
+from config import (
+    TrainConfig,
+    CallbackConfigurator,
+    ModelConfigurator,
+    OptimizerConfigurator,
+    MetricsConfigurator)
+
 from datagens import get_datagen
 from utils import BatchInspector2D
 
@@ -34,8 +40,24 @@ def main(cfg_path):
     callback_cfg = CallbackConfigurator(config)
     callbacks = callback_cfg.callbacks
     
-    model_cfg = ModelConfigurator(config, compile_model=True)
+    model_cfg = ModelConfigurator(config)
     model = model_cfg.model
+    
+    optimizer_cfg = OptimizerConfigurator(config)
+
+    metrics_cfg = MetricsConfigurator(config)
+    
+    model.compile(optimizer=optimizer_cfg.optimizer,
+                  loss=metrics_cfg.loss,
+                  metrics=metrics_cfg.track_metrics)
+    
+    model_history = model.fit(
+        x=train_datagen.data,
+        validation_data=val_datagen.data,
+        epochs=config.epochs,
+        callbacks=callbacks)
+    
+    
     print("ciao")
     # val_data_debug = val_datagen.data
     # val_iterator = val_data_debug.as_numpy_iterator()
