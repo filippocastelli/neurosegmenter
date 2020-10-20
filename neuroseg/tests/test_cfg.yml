@@ -5,8 +5,8 @@ descriptor_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/descr"
 training_mode: "2d"
 enable_wandb_tracking: false
 
-epochs: 1
-batch_size: 15
+epochs: 2
+batch_size: 60
 loss: "binary_crossentropy"
 track_metrics:
     - "accuracy"
@@ -24,7 +24,7 @@ optimizer_cfg:
     
 model_cfg:
     model: "resunet2d"
-    crop_shape: [64, 64]
+    crop_shape: [128, 128]
     unet_depth: 2
     base_filters: 16
     batch_normalization: true
@@ -43,26 +43,26 @@ data_augmentation_cfg:
     threads: 24
     buffer_size : 10
     transform_cfg:
-        spatial_transform:
-            do_elastic_deform: true
-            deformation_scale: [0, 0.25, 0.25]
-            do_rotation: true
-            angle: [-0.314, 0.314]
-            p_rot_per_sample: 0.15
-            do_scale: true
-            scale: [0.95, 1.05]
-            border_mode_data: "reflect"
-            random_crop: true
+        # spatial_transform:
+        #     do_elastic_deform: true
+        #     deformation_scale: [0, 0.25, 0.25]
+        #     do_rotation: true
+        #     angle: [-0.314, 0.314]
+        #     p_rot_per_sample: 0.15
+        #     do_scale: true
+        #     scale: [0.95, 1.05]
+        #     border_mode_data: "reflect"
+        #     random_crop: true
             
-        brightness_transform:
-            mu: 0
-            sigma: 0.01
-            p_per_sample: 0.15
+        # brightness_transform:
+        #     mu: 0
+        #     sigma: 0.01
+        #     p_per_sample: 0.15
         
-        brightness_multiplicative_transform:
-            multiplier_range: [0.9, 1.1]
-            per_channel: true
-            p_per_sample: 0.15
+        # brightness_multiplicative_transform:
+        #     multiplier_range: [0.9, 1.1]
+        #     per_channel: true
+        #     p_per_sample: 0.15
             
         rot90_transform:
             p_per_sample: 0.15
@@ -70,15 +70,15 @@ data_augmentation_cfg:
         mirror_transform:
             p_per_sample: 0.15
         
-        gamma_transform:
-            gamma_range: [0.9, 1.1]
-            invert_image: false
-            per_channel: true
-            p_per_sample: 0.15
+        # gamma_transform:
+        #     gamma_range: [0.9, 1.1]
+        #     invert_image: false
+        #     per_channel: true
+        #     p_per_sample: 0.15
             
-        gaussian_noise_transform:
-            noise_variance: [0, 0.00005]
-            p_per_sample:  0.15
+        # gaussian_noise_transform:
+        #     noise_variance: [0, 0.00005]
+        #     p_per_sample:  0.15
             
 performance_evaluation_cfg:
     batch_size:       15
@@ -102,6 +102,10 @@ callbacks_cfg:
         patience:   5
         min_lr:     0.00000000067
         verbose:    1
+        
+    tensorboard:
+        write_graph: true
+        histogram_freq: 1
         
     # wandb:
     #     monitor: "val_loss"

@@ -103,6 +103,8 @@ class dataGen2D:
         ds = ds.map(map_func=lambda frame_path, mask_path: self._load_example_wrapper(frame_path, mask_path),
                     deterministic=True,
                     num_parallel_calls=self.threads)
+        ds = ds.prefetch(buffer_size=1)
+        ds = ds.cache()
         full_frame_shape, full_mask_shape = self._get_img_shape()
         ds = ds.map(map_func=lambda frame, mask: self._set_shapes(frame, mask, full_frame_shape, full_mask_shape))
         ds = ds.map(map_func=lambda frame, mask: self._random_crop(frame, mask, crop_shape=self.crop_shape, batch_crops=True))
@@ -122,7 +124,7 @@ class dataGen2D:
         ds = ds.map(map_func=lambda frame, mask: self._set_shapes(frame, mask, frame_shape, mask_shape))
         
         ds = ds.batch(self.batch_size)
-        ds = ds.prefetch(self.buffer_size)
+        # ds = ds.prefetch(self.buffer_size)
         return ds
     
     @classmethod

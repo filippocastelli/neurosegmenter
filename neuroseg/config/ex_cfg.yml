@@ -42,7 +42,7 @@ data_augmentation_cfg:
     debug_mode: false
     single_thread:  false
     threads: 24
-    buffer_size : 10
+    buffer_size : 100
     transform_cfg:
         spatial_transform:
             do_elastic_deform: true
