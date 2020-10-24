@@ -47,7 +47,9 @@ class dataGen2D:
         # self._def_transforms()
         self.transforms = config.da_transforms
         self.transform_cfg = config.da_transform_cfg
-
+        
+        
+        self.prefetch_volume = True
         
         # init sequence
         self._scan_dirs()
@@ -97,14 +99,33 @@ class dataGen2D:
         frame = self._load_img(frame_path, ignore_last_channel=self.ignore_last_channel)
         mask = self._load_img(mask_path, is_binary_mask=True)
         return frame.shape, mask.shape
+    
+    def _load_volumes(self):
+        example_path_list = zip(self.frames_paths, self.masks_paths)
+        frame_list = []
+        mask_list = []
+        for example_path in example_path_list:
+            frame, mask = self._load_example(example_path[0], example_path[1],
+                                           self.normalize_inputs,
+                                           self.ignore_last_channel,
+                                           self.positive_class_value)
+            frame_list.append(frame)
+            mask_list.append(mask)
+        
+        
+        self.frames_volume = np.array(frame_list)
+        self.masks_volume = np.array(mask_list)
+        
             
     def gen_dataset(self):
-        ds = Dataset.from_tensor_slices((self.frames_paths, self.masks_paths))
-        ds = ds.map(map_func=lambda frame_path, mask_path: self._load_example_wrapper(frame_path, mask_path),
-                    deterministic=True,
-                    num_parallel_calls=self.threads)
-        ds = ds.prefetch(buffer_size=1)
-        ds = ds.cache()
+        if self.prefetch_volume:
+            self._load_volumes()
+            ds = Dataset.from_tensor_slices((self.frames_volume, self.masks_volume))
+        else:
+            ds = Dataset.from_tensor_slices((self.frames_paths, self.masks_paths))
+            ds = ds.map(map_func=lambda frame_path, mask_path: self._load_example_wrapper(frame_path, mask_path),
+                        deterministic=True,
+                        num_parallel_calls=self.threads)
         full_frame_shape, full_mask_shape = self._get_img_shape()
         ds = ds.map(map_func=lambda frame, mask: self._set_shapes(frame, mask, full_frame_shape, full_mask_shape))
         ds = ds.map(map_func=lambda frame, mask: self._random_crop(frame, mask, crop_shape=self.crop_shape, batch_crops=True))
