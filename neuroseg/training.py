@@ -28,7 +28,7 @@ def main(cfg_path):
                               normalize_inputs=True,
                               ignore_last_channel=True,
                               verbose=False,
-                              data_augmentation=False)
+                              data_augmentation=True)
     
     val_datagen = get_datagen(config,
                               partition="val",

@@ -3,17 +3,19 @@ import logging
 
 import tensorflow as tf
 import tensorflow_addons as tfa
+from tensorflow.python import debug as tf_debug
 import tensorflow.keras.preprocessing.image as tfk_image
 from tensorflow.data import Dataset
 from skimage import io as skio
 import numpy as np
 import pudb
 
+# tf.compat.v1.keras.backend.set_session(
+#     tf_debug.TensorBoardDebugWrapperSession(tf.Session(), "shelob:6006"))
 
 SUPPORTED_FORMATS = ["png", "tif", "tiff"]
 TFA_INTERPOLATION_MODES = {"nearest": "NEAREST",
                            "bilinear": "BILINEAR"}
-
 class dataGen2D:
     def __init__(self,
                  config,
@@ -49,10 +51,14 @@ class dataGen2D:
         self.transform_cfg = config.da_transform_cfg
         
         
-        self.prefetch_volume = True
-        
+
+            
         # init sequence
         self._scan_dirs()
+        
+        self.prefetch_volume = True
+        if self.prefetch_volume == True:
+            self._load_volumes()
         self.data = self.gen_dataset()
         
 
@@ -118,8 +124,9 @@ class dataGen2D:
         
             
     def gen_dataset(self):
+        
         if self.prefetch_volume:
-            self._load_volumes()
+            # self._load_volumes()
             ds = Dataset.from_tensor_slices((self.frames_volume, self.masks_volume))
         else:
             ds = Dataset.from_tensor_slices((self.frames_paths, self.masks_paths))
@@ -154,10 +161,17 @@ class dataGen2D:
                       ignore_last_channel=False,
                       positive_class_value=1):
         
-        frame = cls._load_img(frame_path.numpy().decode("utf-8"),
+        if type(frame_path) is not str:
+            frame_path_str = frame_path.numpy().decode("utf-8")
+            mask_path_str = mask_path.numpy().decode("utf-8")
+        else:
+            frame_path_str = frame_path
+            mask_path_str = mask_path
+            
+        frame = cls._load_img(frame_path_str,
                               normalize_inputs=normalize_inputs,
                               ignore_last_channel=ignore_last_channel)
-        mask = cls._load_img(mask_path.numpy().decode("utf-8"),
+        mask = cls._load_img(mask_path_str,
                              normalize_inputs=normalize_inputs,
                              ignore_last_channel=False,
                              is_binary_mask=True,

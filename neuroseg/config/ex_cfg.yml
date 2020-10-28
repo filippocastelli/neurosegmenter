@@ -41,7 +41,7 @@ model_cfg:
 data_augmentation_cfg:
     debug_mode: false
     single_thread:  false
-    threads: 24
+    threads: 6
     buffer_size : 100
     transform_cfg:
         spatial_transform:
