@@ -6,7 +6,7 @@ def get_datagen(config, partition="train",
                 verbose=False,
                 data_augmentation=False):
     
-    if config.training_mode == "2d":
+    if config.mode == "2d":
         return dataGen2D(config=config,
                          partition=partition,
                          normalize_inputs=normalize_inputs,
@@ -14,4 +14,4 @@ def get_datagen(config, partition="train",
                          verbose=verbose,
                          data_augmentation=data_augmentation)
     else:
-        raise NotImplementedError(config.training_mode)
+        raise NotImplementedError(config.mode)

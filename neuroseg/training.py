@@ -57,6 +57,8 @@ def main(cfg_path):
         epochs=config.epochs,
         callbacks=callbacks)
     
+    model.save(str(config.final_model_path))
+    
     
     print("ciao")
     # val_data_debug = val_datagen.data
@@ -73,7 +75,7 @@ if __name__ == "__main__":
     
     parser.add_argument("-c","--conf", action="store", type=str,
                         dest="configuration_path_str",
-                        default="/home/phil/repos/neuroseg/neuroseg/tests/test_cfg.yml",
+                        default="/home/phil/repos/neuroseg/neuroseg/tests/test_train_cfg.yml",
                         help="Configuration file path")
     
     args, unknown = parser.parse_known_args()

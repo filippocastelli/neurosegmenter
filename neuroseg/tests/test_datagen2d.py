@@ -22,7 +22,7 @@ class Datagen2DTest(unittest.TestCase):
     
     def setUp(self):
         self.currentdir = Path(currentdir)
-        self.config_path = self.currentdir.joinpath("test_cfg.yml")
+        self.config_path = self.currentdir.joinpath("test_train_cfg.yml")
         self.config = TrainConfig(self.config_path)
 
         self.dataset_path = self.config.dataset_path

@@ -2,7 +2,7 @@ dataset_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds"
 output_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp"
 descriptor_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/descr"
 
-training_mode: "2d"
+mode: "2d"
 enable_wandb_tracking: false
 
 epochs: 2
@@ -81,6 +81,7 @@ data_augmentation_cfg:
         #     p_per_sample:  0.15
             
 performance_evaluation_cfg:
+    window_size: [128, 128]
     batch_size:       15
     chunk_size:       20
     classification_threshold:   0.5
@@ -103,10 +104,10 @@ callbacks_cfg:
         min_lr:     0.00000000067
         verbose:    1
         
-    tensorboard:
+    # tensorboard:
         
-        write_graph: true
-        histogram_freq: 1
+    #     write_graph: true
+    #     histogram_freq: 1
         
     # wandb:
     #     monitor: "val_loss"
