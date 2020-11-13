@@ -10,9 +10,8 @@ class Config:
         self.cfg_dict = {}
         self.cfg_dict = self.load_yml(yml_path)
         
-        #Global vars
-        self.output_path = self._decode_path(self.cfg_dict["output_path"])
-        self.descriptor_path = self._decode_path(self.cfg_dict["descriptor_path"])
+        self.output_cfg = self.cfg_dict["output_cfg"]
+        self._parse_output_cfg(self.output_cfg)
         
         # performance evaluation parsing
         self.pe_cfg = self.cfg_dict["performance_evaluation_cfg"]
@@ -20,6 +19,12 @@ class Config:
         
         # notes parsing
         self.notes = self.cfg_dict["notes"]
+        
+        
+    def _parse_output_cfg(self, out_cfg):
+        self.output_path = self._decode_path(out_cfg["output_path"])
+        self.descriptor_path = self._decode_path(out_cfg["descriptor_path"])
+        self.enable_wandb_tracking = out_cfg["enable_wandb_tracking"]
             
     # > PERFORMANCE EVALUATION PARSING <
     def _parse_performance_evaluation_cfg(self, pe_cfg):
@@ -75,14 +80,8 @@ class TrainConfig(Config):
     def __init__(self, yml_path):
         super().__init__(yml_path)
         
-        self.mode = self.cfg_dict["mode"]
-        self.dataset_path = self._decode_path(self.cfg_dict["dataset_path"])
-        
-        self.epochs = self.cfg_dict["epochs"]
-        self.batch_size = self.cfg_dict["batch_size"]
-        self.loss = self.cfg_dict["loss"]
-        self.track_metrics = self.cfg_dict["track_metrics"]
-        self.enable_wandb_tracking = self.cfg_dict["enable_wandb_tracking"] 
+        self.training_cfg = self.cfg_dict["training_cfg"]
+        self._parse_training_cfg(self.training_cfg)
         
         # optimizer cfg parsing
         self.optimizer_cfg = self.cfg_dict["optimizer_cfg"]
@@ -105,7 +104,15 @@ class TrainConfig(Config):
         self.callbacks_cfg = self.cfg_dict["callbacks_cfg"]
         self._parse_callbacks_cfg(self.callbacks_cfg)
         
+    def _parse_training_cfg(self, training_cfg):
+        self.training_mode = training_cfg["mode"]
+        self.epochs = training_cfg["epochs"]
+        self.loss = training_cfg["loss"]
+        self.batch_size = training_cfg["batch_size"]
+        self.track_metrics = training_cfg["track_metrics"]
+        
     def _parse_dataset_cfg(self, dataset_cfg):
+        self.dataset_path = self._decode_path(dataset_cfg["dataset_path"])
         self.dataset_mode = dataset_cfg["mode"]
         self.n_channels = dataset_cfg["n_channels"]
         self.positive_class_value = dataset_cfg["positive_class_value"]
@@ -113,7 +120,7 @@ class TrainConfig(Config):
     
     # > MODEL PARSING <
     def _parse_model_cfg(self, model_cfg):
-        if self.mode == "2d":
+        if self.training_mode == "2d":
             if model_cfg["model"] == "resunet2d":
                 self._parse_unet2d_cfg(model_cfg)
             elif model_cfg["model"] == "unet3d":
@@ -121,7 +128,7 @@ class TrainConfig(Config):
             else:
                 raise NotImplementedError(model_cfg["model"])
         else:
-            raise NotImplementedError(self.mode)
+            raise NotImplementedError(self.training_mode)
               
     def _parse_unet_base(self, model_cfg):
         self.model = model_cfg["model"]
@@ -140,10 +147,10 @@ class TrainConfig(Config):
         
     # > DATA AUGMENTATION PARSING <
     def _parse_data_augmentation_cfg(self, da_cfg):
-        if self.mode == "2d":
+        if self.training_mode == "2d":
             self._parse_data_augmentation_cfg_2d(da_cfg)
         else:
-            raise NotImplementedError(self.mode)
+            raise NotImplementedError(self.training_mode)
     
     def _parse_data_augmentation_cfg_2d(self, da_cfg):
         self.da_debug_mode = da_cfg["debug_mode"]
@@ -160,7 +167,7 @@ class TrainConfig(Config):
         
     def _gen_paths(self, dataset_path):
         path_dict = {}
-        if self.mode == "2d":
+        if self.training_mode == "2d":
             for partition in ["train", "val", "test"]:
                 partition_path = dataset_path.joinpath(partition)
                 partition_subdir_dict = {}
@@ -186,13 +193,49 @@ class TrainConfig(Config):
             self.final_model_path = self.output_path.joinpath("final_model.hdf5")
             self.csv_summary_path = self.output_path.joinpath("run_summary.csv")
         else:
-            raise NotImplementedError(self.mode)
+            raise NotImplementedError(self.training_mode)
             
 class PredictConfig(Config):
     def __init__(self, yml_path):
         super().__init__(yml_path)
-        self.input_data = self._decode_path(self.cfg_dict["image_path"])
-        self.model_path = self._decode_path(self.cfg_dict["model_path"])
+        
+        self.data_cfg = self.cfg_dict["data_cfg"]
+        self._parse_input_data_cfg(self.data_cfg)
+        
+        self.prediction_cfg = self.cfg_dict["prediction_cfg"]
+        self._parse_prediction_cfg(self.prediction_cfg)
+        
+        self.output_mode = self.output_cfg["output_mode"]
+        
+        self._gen_paths()
+    
+    def _parse_input_data_cfg(self, data_cfg):
+        self.data_path = self._decode_path(data_cfg["image_path"])
+        SUPPORTED_DATA_MODES = ["single_images", "stack"]
+        self.data_mode = data_cfg["mode"]
+        self.normalize_data = data_cfg["normalize_data"]
+        
+        if self.data_mode not in SUPPORTED_DATA_MODES:  
+            raise NotImplementedError(self.data_mode)
+        
+        self.n_channels = data_cfg["n_channels"]
+        self.positive_class_value = data_cfg["positive_class_value"]
+        self.negative_class_value = data_cfg["negative_class_value"]
+        
+    def _parse_prediction_cfg(self, prediction_cfg):
+        self.n_output_classes = prediction_cfg["n_output_classes"]
+        self.model_path = self._decode_path(prediction_cfg["model_path"])
+        self.prediction_mode = prediction_cfg["mode"]
+        self.window_size = prediction_cfg["window_size"]
+        self.batch_size = prediction_cfg["batch_size"]
+        self.chunk_size = prediction_cfg["chunk_size"]
+        self.padding_mode = prediction_cfg["padding_mode"]
+        self.keep_tmp = prediction_cfg["keep_tmp"]        
+        
+    def _gen_paths(self):
+        self.output_path.mkdir(exist_ok=True, parents=True)
+        self.temp_path = self._joinpath_mkdir(self.output_path, "tmp")
+        self.logs_path = self._joinpath_mkdir(self.output_path, "logs")
         
 if __name__ == "__main__":
     import platform

@@ -7,8 +7,72 @@ import numpy as np
 import scipy.signal as signal
 from tqdm import tqdm
 
-from utils import load_volume
+from utils import load_volume, save_volume
+from tensorflow.python.keras.models import load_model
 
+    
+class DataPredictor2D:
+    def __init__(self,
+                 config):
+        self.config = config
+        self.data_mode = config.data_mode
+        self.normalize_data = config.normalize_data
+        self.output_mode = config.output_mode
+        self.data_path = config.data_path
+        self.temp_path = config.temp_path
+        self.output_path = config.output_path
+        self.model_path = config.model_path
+        self.n_channels = config.n_channels
+        self.batch_size = config.batch_size
+        self.chunk_size = config.chunk_size
+        self.window_size = config.window_size
+        self.padding_mode = config.padding_mode
+        self.keep_tmp = config.keep_tmp
+        self.n_output_classes = config.n_output_classes
+        self._load_volume()
+        self._load_model()
+        self.predict()
+        self._save_volume()
+        
+    
+    def _load_volume(self):
+        if self.data_mode == "stack":
+            
+            drop_last_channel = True if (self.n_channels == 2) else False
+            vol = load_volume(self.data_path,
+                              drop_last_channel,
+                              expand_last_dim=False)
+            
+            if self.normalize_data:
+                max_norm = np.iinfo(vol.dtype).max
+                vol = vol / max_norm
+                
+            self.input_data = vol
+        else:
+            return NotImplementedError(self.data_mode)
+        
+    def _load_model(self):
+        self.prediction_model = load_model(filepath=str(self.model_path), compile=False)
+    
+    def predict(self):
+        self.tiledpredictor = TiledPredictor2D(
+            input_volume=self.input_data,
+            batch_size=self.batch_size,
+            window_size=self.window_size,
+            model=self.prediction_model,
+            padding_mode=self.padding_mode,
+            chunk_size=self.chunk_size,
+            tmp_folder=self.temp_path,
+            keep_tmp=self.keep_tmp,
+            n_output_classes=self.n_output_classes)
+        
+        self.predicted_data = self.tiledpredictor.output_volume
+        return self.predicted_data
+    
+    def _save_volume(self):
+        if self.output_mode == "stack":
+            save_volume(self.predicted_data, self.output_path, save_tiff=True, save_pickle=True)
+        
 class TiledPredictor2D:
     def __init__(
             self,
@@ -19,7 +83,8 @@ class TiledPredictor2D:
             padding_mode="reflect",
             chunk_size=100,
             tmp_folder="tmp",
-            keep_tmp=False
+            keep_tmp=False,
+            n_output_classes=1
             ):
         
         self.input_volume = input_volume
@@ -27,6 +92,7 @@ class TiledPredictor2D:
         self.window_size = window_size
         self.model = model
         self.padding_mode = padding_mode
+        self.n_output_classes = n_output_classes
         
         
         self.apply_padding(self.padding_mode)
@@ -34,7 +100,8 @@ class TiledPredictor2D:
         self.chunk_size = chunk_size
         self.tmp_folder = Path(tmp_folder)
         #TMP
-        self.inference_volume = np.zeros_like(self.padded_volume).astype("float32")
+        # self.inference_volume = np.zeros_like(self.padded_volume).astype("float32")
+        self.inference_volume = np.zeros(shape=self._get_spatial_dims()).astype("float32")
         self.weighting_window = self.get_weighting_window(self.window_size)
         self.generate_batches()
         self.generate_chunks()
@@ -44,6 +111,11 @@ class TiledPredictor2D:
         if not keep_tmp:
             self.empty_tmp()
         
+        
+    def _get_spatial_dims(self):
+        
+        return np.append(self.padded_volume.shape[:-1], (self.n_output_classes))
+    
     @staticmethod
     def get_paddings(input_volume, window_size):
         """
@@ -174,7 +246,7 @@ class TiledPredictor2D:
                 extracted_window = padded_volume[z,
                                              y:y+window_size[0],
                                              x:x+window_size[1],
-                                             :]
+                                             ...]
                 batch_list.append((pivot, extracted_window))
             yield batch_list
     
@@ -225,7 +297,7 @@ class TiledPredictor2D:
                 self.inference_volume[z,
                                    y:y+self.window_size[0],
                                    x:x+self.window_size[1],
-                                   :] += patch   
+                                   ...] += patch   
             #distribute to predictions
     
     def weight_chunk(self, prediction_chunk):

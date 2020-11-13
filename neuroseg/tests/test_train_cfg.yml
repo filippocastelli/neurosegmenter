@@ -1,18 +1,13 @@
-dataset_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds"
-output_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp"
-descriptor_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/descr"
-
-mode: "2d"
-enable_wandb_tracking: false
-
-epochs: 2
-batch_size: 60
-loss: "binary_crossentropy"
-track_metrics:
-    - "accuracy"
-    - "jaccard_index"
-    - "dice_coefficient"
-        
+training_cfg:
+    mode: "2d"
+    epochs: 2
+    batch_size: 60
+    loss: "binary_crossentropy"
+    track_metrics:
+        - "accuracy"
+        - "jaccard_index"
+        - "dice_coefficient"
+            
 optimizer_cfg:
     # args in tf.KERAS.OPTIMIZERS api docs
     optimizer: "adam"
@@ -32,10 +27,16 @@ model_cfg:
     residual_preactivation: true
     
 dataset_cfg:
+    dataset_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds"
     mode: "single_images"
     n_channels: 2
     positive_class_value: 1
     negative_class_value: 255
+    
+output_cfg:
+    output_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp"
+    descriptor_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/descr"
+    enable_wandb_tracking: false
     
 data_augmentation_cfg:
     debug_mode: false

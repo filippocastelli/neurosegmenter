@@ -4,12 +4,19 @@ import logging
 
 
 from config import PredictConfig
+from utils import load_volume, save_volume
+from tiledpredict import DataPredictor2D
 
 
 def main(cfg_path):
     
     config = PredictConfig(cfg_path)
     # setup_logger(config.logfile_path)
+    dp = DataPredictor2D(config)
+    
+    
+    
+    print("ciao")
 
 if __name__ == "__main__":
     parser = ArgumentParser()

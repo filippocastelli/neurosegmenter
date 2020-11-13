@@ -1,1 +1,2 @@
 from tiledpredict.tp2d import TiledPredictor2D
+from tiledpredict.tp2d import DataPredictor2D
