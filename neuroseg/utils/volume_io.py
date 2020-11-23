@@ -9,7 +9,8 @@ SUPPORTED_FORMATS = ["tif"]
 
 def load_volume(imgpath,
                 drop_last_dim=True,
-                expand_last_dim=False):
+                expand_last_dim=False,
+                squeeze=False):
     
     if not is_supported_ext(imgpath):
         raise ValueError(imgpath, "unsupported image format")
@@ -19,6 +20,9 @@ def load_volume(imgpath,
         vol = vol[...,:2]
     if expand_last_dim:
         vol = np.expand_dims(vol, axis=-1)
+        
+    if squeeze:
+        vol = np.squeeze(vol)
         
     return vol
 

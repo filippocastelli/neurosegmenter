@@ -6,6 +6,9 @@ import logging
 from config import PredictConfig
 from utils import load_volume, save_volume
 from tiledpredict import DataPredictor2D
+from performance_eval import PerformanceEvaluator
+
+from descriptor import RunDescriptorLight
 
 
 def main(cfg_path):
@@ -14,9 +17,10 @@ def main(cfg_path):
     # setup_logger(config.logfile_path)
     dp = DataPredictor2D(config)
     
+    ev = PerformanceEvaluator(config, dp.predicted_data)
+    performance_dict = ev.measure_dict
     
-    
-    print("ciao")
+    descr = RunDescriptorLight(config, performance_metrics_dict=performance_dict)
 
 if __name__ == "__main__":
     parser = ArgumentParser()

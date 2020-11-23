@@ -26,6 +26,7 @@ output_cfg:
     enable_wandb_tracking: false
     
 performance_evaluation_cfg:
+    ground_truth_path: "/mnt/ssd1/datasets/2pe_dataset/test_masks.tif"
     window_size: [128, 128]
     batch_size:       15
     chunk_size:       20

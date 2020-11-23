@@ -14,7 +14,7 @@ class Config:
         self._parse_output_cfg(self.output_cfg)
         
         # performance evaluation parsing
-        self.pe_cfg = self.cfg_dict["performance_evaluation_cfg"]
+        self.pe_cfg = self.cfg_dict["performance_evaluation_cfg"] if "performance_evaluation_cfg" in self.cfg_dict else None
         self._parse_performance_evaluation_cfg(self.pe_cfg)
         
         # notes parsing
@@ -28,11 +28,13 @@ class Config:
             
     # > PERFORMANCE EVALUATION PARSING <
     def _parse_performance_evaluation_cfg(self, pe_cfg):
-        self.pe_window_size = pe_cfg["window_size"]
-        self.pe_batch_size = pe_cfg["batch_size"]
-        self.pe_chunk_size = pe_cfg["chunk_size"]
-        self.pe_classification_threashold = pe_cfg["classification_threshold"]
-        self.pe_add_empty_channel = pe_cfg["add_empty_channel"]
+        if pe_cfg is not None:
+            self.ground_truth_path = self._decode_path(pe_cfg["ground_truth_path"])
+            self.pe_window_size = pe_cfg["window_size"]
+            self.pe_batch_size = pe_cfg["batch_size"]
+            self.pe_chunk_size = pe_cfg["chunk_size"]
+            self.pe_classification_threshold = pe_cfg["classification_threshold"]
+            self.pe_add_empty_channel = pe_cfg["add_empty_channel"]
         
     @staticmethod
     def _joinpath_mkdir(base_path, name):
@@ -79,6 +81,8 @@ class Config:
 class TrainConfig(Config):
     def __init__(self, yml_path):
         super().__init__(yml_path)
+        
+        self.config_type = "training"
         
         self.training_cfg = self.cfg_dict["training_cfg"]
         self._parse_training_cfg(self.training_cfg)
@@ -199,6 +203,7 @@ class PredictConfig(Config):
     def __init__(self, yml_path):
         super().__init__(yml_path)
         
+        self.config_type = "predict"
         self.data_cfg = self.cfg_dict["data_cfg"]
         self._parse_input_data_cfg(self.data_cfg)
         

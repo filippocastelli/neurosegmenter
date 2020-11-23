@@ -8,6 +8,7 @@ import scipy.signal as signal
 from tqdm import tqdm
 
 from utils import load_volume, save_volume
+from performance_eval import PerformanceMetrics
 from tensorflow.python.keras.models import load_model
 
     
@@ -15,20 +16,24 @@ class DataPredictor2D:
     def __init__(self,
                  config):
         self.config = config
+        
+        self.data_path = config.data_path
+        self.model_path = config.model_path
+        self.temp_path = config.temp_path
+        self.output_path = config.output_path
+        self.keep_tmp = config.keep_tmp
+        
         self.data_mode = config.data_mode
         self.normalize_data = config.normalize_data
         self.output_mode = config.output_mode
-        self.data_path = config.data_path
-        self.temp_path = config.temp_path
-        self.output_path = config.output_path
-        self.model_path = config.model_path
+        
         self.n_channels = config.n_channels
         self.batch_size = config.batch_size
         self.chunk_size = config.chunk_size
         self.window_size = config.window_size
         self.padding_mode = config.padding_mode
-        self.keep_tmp = config.keep_tmp
         self.n_output_classes = config.n_output_classes
+        
         self._load_volume()
         self._load_model()
         self.predict()
@@ -49,7 +54,7 @@ class DataPredictor2D:
                 
             self.input_data = vol
         else:
-            return NotImplementedError(self.data_mode)
+            raise NotImplementedError(self.data_mode)
         
     def _load_model(self):
         self.prediction_model = load_model(filepath=str(self.model_path), compile=False)
@@ -68,7 +73,7 @@ class DataPredictor2D:
         
         self.predicted_data = self.tiledpredictor.output_volume
         return self.predicted_data
-    
+   
     def _save_volume(self):
         if self.output_mode == "stack":
             save_volume(self.predicted_data, self.output_path, save_tiff=True, save_pickle=True)
@@ -285,7 +290,7 @@ class TiledPredictor2D:
         
     def predict(self):
         for idx, chunk_fpath in enumerate(self.chunk_fpath_list):
-            print("inferencing chunk {} / {}".format(idx, len(self.chunk_fpath_list)))
+            print("inferencing chunk {} / {}".format(idx +1, len(self.chunk_fpath_list)))
             chunk_pivots, chunk_inputs = self.chunk_path_to_inputs(chunk_fpath)
             chunk_predictions = self.model.predict(chunk_inputs)
             
