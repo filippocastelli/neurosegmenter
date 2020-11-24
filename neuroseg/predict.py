@@ -10,9 +10,11 @@ from performance_eval import PerformanceEvaluator
 
 from descriptor import RunDescriptorLight
 
+from utils import NameGenerator
+
 
 def main(cfg_path):
-    
+
     config = PredictConfig(cfg_path)
     # setup_logger(config.logfile_path)
     dp = DataPredictor2D(config)

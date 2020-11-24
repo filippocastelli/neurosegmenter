@@ -6,9 +6,10 @@ from utils import load_volume
 
 class PerformanceEvaluator:
     
-    def __init__(self, config, pred_array):
+    def __init__(self, config,pred_array):
         self.config = config
         self.ground_truth_path = config.ground_truth_path
+        self.ground_truth_mode = config.ground_truth_mode
         self._load_gt()
         self._load_predictions(pred_array)
         self.classification_threshold = config.pe_classification_threshold
@@ -28,7 +29,8 @@ class PerformanceEvaluator:
         gt_vol = (load_volume(self.ground_truth_path,
                              drop_last_dim=False,
                              expand_last_dim=False,
-                             squeeze=True) / 255).astype(np.uint8)
+                             squeeze=True,
+                             data_mode=self.ground_truth_mode) / 255).astype(np.uint8)
         self.ground_truth = gt_vol
         
     def _calc_metrics(self):

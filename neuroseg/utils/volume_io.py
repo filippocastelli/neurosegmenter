@@ -5,17 +5,27 @@ from skimage import io as skio
 # import skimage.external.tifffile as tifffile
 import tifffile
 
-SUPPORTED_FORMATS = ["tif"]
+SUPPORTED_FORMATS = ["tif", "png"]
 
 def load_volume(imgpath,
                 drop_last_dim=True,
                 expand_last_dim=False,
-                squeeze=False):
+                squeeze=False,
+                data_mode="stack"):
     
-    if not is_supported_ext(imgpath):
-        raise ValueError(imgpath, "unsupported image format")
-    
-    vol = skio.imread(imgpath, plugin="pil")
+    # if not is_supported_ext(imgpath):
+    #     raise ValueError(imgpath, "unsupported image format")
+        
+    if data_mode == "stack":
+        vol = skio.imread(imgpath, plugin="pil")
+    elif data_mode == "single_images":
+        img_paths = [fpath for fpath in imgpath.glob("*.*") if is_supported_ext(fpath)]
+        vol_list = []
+        for slice_path in img_paths:
+            img = skio.imread(slice_path, plugin="pil")
+            vol_list.append(img)
+        
+        vol = np.array(vol_list)
     if drop_last_dim:
         vol = vol[...,:2]
     if expand_last_dim:

@@ -11,12 +11,15 @@ class RunDescriptorLight:
     def __init__(self,
                  config=None,
                  load_from_archive=None,
-                 performance_metrics_dict=None):
+                 performance_metrics_dict=None,
+                 model_history_dict=None):
         
         self.load_from_archive = load_from_archive
         
         self.performance_metrics_dict = performance_metrics_dict
+        self.model_history_dict = model_history_dict
         self.config = config
+        self.run_name = config.run_name
         self.config_type = config.config_type
         self._dump_descriptor()
         
@@ -32,7 +35,7 @@ class RunDescriptorLight:
         """create main paths"""
         self.yml_path = self.config.yml_path
         self.descriptor_path = self.config.descriptor_path
-        self.descriptor_local_path = self.descriptor_path.joinpath("tmp")        
+        self.descriptor_local_path = self.descriptor_path.joinpath(self.run_name)        
         self.descriptor_local_path.mkdir(parents=True, exist_ok=True)
         self.original_logs_path = self.config.logs_path
     
@@ -40,14 +43,14 @@ class RunDescriptorLight:
         """copy final model"""
         if self.config_type == "training":
             self.final_model_original_path = self.config.final_model_path
-            self.final_model_local_path = self.descriptor_òpcaò_path.joinpath("logs")
+            self.final_model_local_path = self.descriptor_local_path.joinpath("final_model.hdf5")
             
             shutil.copy(str(self.final_model_original_path), str(self.final_model_local_path))
     
     def _copy_logs(self):
         """copy logs path"""
         self.log_dir_local_path = self.descriptor_local_path.joinpath("logs")
-        shutil.copytree(str(self.original_logs_path), str(self.log_dir_local_path))
+        shutil.copytree(str(self.original_logs_path), str(self.log_dir_local_path), dirs_exist_ok=True)
         
     def _copy_config(self):
         """copy yml config""" 
@@ -60,6 +63,11 @@ class RunDescriptorLight:
             self.performance_metrics_local_pickle_path = self.descriptor_local_path.joinpath("performance.pickle")
             self._to_pickle(self.performance_metrics_dict, self.performance_metrics_local_pickle_path)
     
+    def _serialize_metrics_dict(self):
+        """serialize model history"""
+        if self.model_history_dict is not None:
+            self.model_history_local_pickle_path = self.descriptor_local_path.joinpath("model_history.pickle")
+            self._to_pickle(self.model_history_dict, self.model_history_local_pickle_path)
     @staticmethod
     def _to_pickle(obj, fpath):
         """Save obj to picklable file in fpath"""
@@ -67,7 +75,7 @@ class RunDescriptorLight:
             pickle.dump(obj, pickle_out)
             
     def _create_archive(self):
-        self.archive_path = self.descriptor_path.joinpath("archive.zip")
+        self.archive_path = self.descriptor_path.joinpath("{}.zip".format(self.run_name))
         
         previous_path = Path.cwd()
         os.chdir(str(self.descriptor_local_path))

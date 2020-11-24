@@ -11,6 +11,9 @@ from config import (
 
 from datagens import get_datagen
 from utils import BatchInspector2D
+from tiledpredict import DataPredictor2D
+from performance_eval import PerformanceEvaluator
+from descriptor import RunDescriptorLight
 
 def setup_logger(logfile_path):
     logger = logging.getLogger()
@@ -59,7 +62,18 @@ def main(cfg_path):
     
     model.save(str(config.final_model_path))
     
-    
+    if config.evaluate_performance:
+        dp = DataPredictor2D(config, model)
+        ev = PerformanceEvaluator(config, dp.predicted_data)
+        performance_dict = ev.measure_dict
+    else:
+        performance_dict = None
+        
+    descr = RunDescriptorLight(config,
+                               performance_metrics_dict=performance_dict,
+                               model_history_dict=model_history)
+        
+        
     print("ciao")
     # val_data_debug = val_datagen.data
     # val_iterator = val_data_debug.as_numpy_iterator()

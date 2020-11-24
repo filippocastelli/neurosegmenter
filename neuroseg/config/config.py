@@ -1,6 +1,8 @@
 from pathlib import Path
 import yaml
 
+from utils import NameGenerator
+
 class Config:
     
     def __init__(self,
@@ -9,6 +11,7 @@ class Config:
         self.yml_path = Path(yml_path)
         self.cfg_dict = {}
         self.cfg_dict = self.load_yml(yml_path)
+        self._parse_run_name()
         
         self.output_cfg = self.cfg_dict["output_cfg"]
         self._parse_output_cfg(self.output_cfg)
@@ -22,19 +25,32 @@ class Config:
         
         
     def _parse_output_cfg(self, out_cfg):
-        self.output_path = self._decode_path(out_cfg["output_path"])
+        self.output_root_path = self._decode_path(out_cfg["output_path"])
+        self.output_path = self.output_root_path.joinpath(self.run_name)
         self.descriptor_path = self._decode_path(out_cfg["descriptor_path"])
         self.enable_wandb_tracking = out_cfg["enable_wandb_tracking"]
             
     # > PERFORMANCE EVALUATION PARSING <
     def _parse_performance_evaluation_cfg(self, pe_cfg):
         if pe_cfg is not None:
+            self.evaluate_performance = True
+            self.ground_truth_mode = pe_cfg["data_mode"]
             self.ground_truth_path = self._decode_path(pe_cfg["ground_truth_path"])
             self.pe_window_size = pe_cfg["window_size"]
             self.pe_batch_size = pe_cfg["batch_size"]
             self.pe_chunk_size = pe_cfg["chunk_size"]
             self.pe_classification_threshold = pe_cfg["classification_threshold"]
             self.pe_add_empty_channel = pe_cfg["add_empty_channel"]
+        else:
+            self.evaluate_performance = False
+            
+    def _parse_run_name(self):
+        try:
+            run_name = self.cfg_dict["run_name"]
+        except KeyError:
+            run_name = NameGenerator().name
+        
+        self.run_name = run_name if run_name is not None else NameGenerator().name
         
     @staticmethod
     def _joinpath_mkdir(base_path, name):
@@ -187,7 +203,7 @@ class TrainConfig(Config):
             # create output path structure
             self.output_path.mkdir(exist_ok=True, parents=True)
             self.temp_path = self._joinpath_mkdir(self.output_path, "tmp")
-            self.logs_path = self._joinpath_mkdir(self.output_path, "tmp")
+            self.logs_path = self._joinpath_mkdir(self.output_path, "logs")
 
             if self.enable_wandb_tracking:
                 self.wandb_path = self._joinpath_mkdir(self.output_path, "wandb")

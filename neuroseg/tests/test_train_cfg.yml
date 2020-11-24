@@ -1,6 +1,6 @@
 training_cfg:
     mode: "2d"
-    epochs: 2
+    epochs: 1
     batch_size: 60
     loss: "binary_crossentropy"
     track_metrics:
@@ -34,7 +34,7 @@ dataset_cfg:
     negative_class_value: 255
     
 output_cfg:
-    output_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp"
+    output_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/train"
     descriptor_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/descr"
     enable_wandb_tracking: false
     
@@ -82,6 +82,8 @@ data_augmentation_cfg:
         #     p_per_sample:  0.15
             
 performance_evaluation_cfg:
+    ground_truth_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds/test/masks"
+    data_mode: "single_images"
     window_size: [128, 128]
     batch_size:       15
     chunk_size:       20
