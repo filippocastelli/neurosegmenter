@@ -46,6 +46,7 @@ class DataPredictor2D:
             self.chunk_size = self.config.chunk_size
             self.padding_mode = self.config.padding_mode
             self.n_output_classes = self.config.n_output_classes
+            self.keep_tmp = self.config.keep_tmp
         elif self.mode == "training":
             self.data_mode = self.config.ground_truth_mode
             self.normalize_data = True
@@ -72,7 +73,7 @@ class DataPredictor2D:
         self.input_data = vol
         
     def _load_model(self):
-        self.prediction_model = load_model(filepath=str(self.model_path), compile=False)
+        return load_model(filepath=str(self.model_path), compile=False)
     
     def predict(self):
         self.tiledpredictor = TiledPredictor2D(

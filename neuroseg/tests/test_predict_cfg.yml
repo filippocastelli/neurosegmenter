@@ -1,6 +1,6 @@
 prediction_cfg:
     mode: "2d"
-    model_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/train/weights.02.hdf5"
+    model_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/train/each-piglet-1124/weights.01.hdf5"
     n_output_classes: 1
     window_size: [128, 128]
     batch_size: 5
@@ -9,9 +9,9 @@ prediction_cfg:
     keep_tmp: false
     
 data_cfg:
-    image_path: "/mnt/ssd1/datasets/2pe_dataset/test_frames.tif"
+    image_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds/test/frames"
     #PREDICTION DATA CONFIG
-    mode: "stack"
+    mode: "single_images"
     normalize_data: true
     n_channels: 2
     

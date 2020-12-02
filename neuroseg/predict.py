@@ -1,16 +1,13 @@
 from argparse import ArgumentParser
 from pathlib import Path
-import logging 
 
 
 from config import PredictConfig
-from utils import load_volume, save_volume
 from tiledpredict import DataPredictor2D
 from performance_eval import PerformanceEvaluator
 
 from descriptor import RunDescriptorLight
 
-from utils import NameGenerator
 
 
 def main(cfg_path):
@@ -22,7 +19,7 @@ def main(cfg_path):
     ev = PerformanceEvaluator(config, dp.predicted_data)
     performance_dict = ev.measure_dict
     
-    descr = RunDescriptorLight(config, performance_metrics_dict=performance_dict)
+    _ = RunDescriptorLight(config, performance_metrics_dict=performance_dict)
 
 if __name__ == "__main__":
     parser = ArgumentParser()

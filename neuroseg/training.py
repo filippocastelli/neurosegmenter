@@ -10,7 +10,7 @@ from config import (
     MetricsConfigurator)
 
 from datagens import get_datagen
-from utils import BatchInspector2D
+# from utils import BatchInspector2D
 from tiledpredict import DataPredictor2D
 from performance_eval import PerformanceEvaluator
 from descriptor import RunDescriptorLight
@@ -69,18 +69,9 @@ def main(cfg_path):
     else:
         performance_dict = None
         
-    descr = RunDescriptorLight(config,
+    _ = RunDescriptorLight(config,
                                performance_metrics_dict=performance_dict,
                                model_history_dict=model_history)
-        
-        
-    print("ciao")
-    # val_data_debug = val_datagen.data
-    # val_iterator = val_data_debug.as_numpy_iterator()
-    
-    # test_batch = next(val_iterator)
-    
-    # BatchInspector2D(test_batch)
     
     
 
