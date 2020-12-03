@@ -13,5 +13,10 @@ def get_datagen(config, partition="train",
                          ignore_last_channel=ignore_last_channel,
                          verbose=verbose,
                          data_augmentation=data_augmentation)
+    elif config.training_mode == "3d":
+        raise NotImplementedError("3d")
+        # single images
+        # single stack
+        # multi stack
     else:
-        raise NotImplementedError(config.mode)
+        raise NotImplementedError(config.training_mode)

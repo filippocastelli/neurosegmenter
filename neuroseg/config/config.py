@@ -143,7 +143,10 @@ class TrainConfig(Config):
         if self.training_mode == "2d":
             if model_cfg["model"] == "resunet2d":
                 self._parse_unet2d_cfg(model_cfg)
-            elif model_cfg["model"] == "unet3d":
+            else:
+                raise NotImplementedError(model_cfg["model"])
+        elif self.training_mode == "3d":
+            if model_cfg["model"] == "resunet3d":
                 self._parse_unet3d_cfg(model_cfg)
             else:
                 raise NotImplementedError(model_cfg["model"])
@@ -169,15 +172,32 @@ class TrainConfig(Config):
     def _parse_data_augmentation_cfg(self, da_cfg):
         if self.training_mode == "2d":
             self._parse_data_augmentation_cfg_2d(da_cfg)
+        elif self.training_mode == "3d":
+            self._parse_data_augmentation_cfg_3d(da_cfg)
         else:
             raise NotImplementedError(self.training_mode)
     
     def _parse_data_augmentation_cfg_2d(self, da_cfg):
+        self._parse_data_augmentation_common(da_cfg)
         self.da_debug_mode = da_cfg["debug_mode"]
+        self.da_buffer_size = da_cfg["buffer_size"]
+    
+    def _parse_data_augmentation_cfg_3d(self, da_cfg):
+        self._parse_data_augmentation_common(da_cfg)
+        self.da_shuffle = da_cfg["shuffle"]
+        if "seed" in da_cfg:
+            self.da_seed = da_cfg["seed"]
+        else:
+            self.da_seed = None
+            
+        if "pre_crop_scales" in da_cfg:
+            self.da_pre_crop_scales = da_cfg["pre_crop_scales"]
+        else:
+            self.da_pre_crop_scales = None
+        
+    def _parse_data_augmentation_common(self, da_cfg):
         self.da_single_thread = da_cfg["single_thread"]
         self.da_threads = da_cfg["threads"]
-        self.da_buffer_size = da_cfg["buffer_size"]
-        
         self.da_transform_cfg = da_cfg["transform_cfg"]
         self.da_transforms = list(self.da_transform_cfg.keys()) if self.da_transform_cfg is not None else None
         
@@ -187,7 +207,7 @@ class TrainConfig(Config):
         
     def _gen_paths(self, dataset_path):
         path_dict = {}
-        if self.training_mode == "2d":
+        if self.training_mode in ["2d", "3d"]:
             for partition in ["train", "val", "test"]:
                 partition_path = dataset_path.joinpath(partition)
                 partition_subdir_dict = {}
@@ -232,7 +252,7 @@ class PredictConfig(Config):
     
     def _parse_input_data_cfg(self, data_cfg):
         self.data_path = self._decode_path(data_cfg["image_path"])
-        SUPPORTED_DATA_MODES = ["single_images", "stack"]
+        SUPPORTED_DATA_MODES = ["single_images", "stack", "multi_stack"]
         self.data_mode = data_cfg["mode"]
         self.normalize_data = data_cfg["normalize_data"]
         

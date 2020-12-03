@@ -3,20 +3,22 @@ import logging
 
 import tensorflow as tf
 import tensorflow_addons as tfa
-from tensorflow.python import debug as tf_debug
-import tensorflow.keras.preprocessing.image as tfk_image
+# from tensorflow.python import debug as tf_debug
+# import tensorflow.keras.preprocessing.image as tfk_image
 from tensorflow.data import Dataset
 from skimage import io as skio
 import numpy as np
-import pudb
+# import pudb
 
 # tf.compat.v1.keras.backend.set_session(
 #     tf_debug.TensorBoardDebugWrapperSession(tf.Session(), "shelob:6006"))
 
-SUPPORTED_FORMATS = ["png", "tif", "tiff"]
+from datagens.datagenbase import dataGenBase
+
 TFA_INTERPOLATION_MODES = {"nearest": "NEAREST",
                            "bilinear": "BILINEAR"}
-class dataGen2D:
+    
+class dataGen2D(dataGenBase):
     def __init__(self,
                  config,
                  partition="train",
@@ -25,43 +27,18 @@ class dataGen2D:
                  ignore_last_channel=False,
                  verbose=False):
         
-        self.config = config
-        self.partition = partition
-        self.data_path_dict = self.config.path_dict[partition]
+        super().__init__(config=config,
+                         partition=partition,
+                         data_augmentation=data_augmentation,
+                         normalize_inputs=normalize_inputs,
+                         verbose=verbose)
         
-        self.positive_class_value = self.config.positive_class_value
-        
-        self.verbose = verbose
-        self._path_sanity_check()
-        
-        self.crop_shape = config.crop_shape
-        self.batch_size = config.batch_size
-        
-        self.normalize_inputs = normalize_inputs
         self.ignore_last_channel = ignore_last_channel
-        
-        self.buffer_size = config.da_buffer_size
-        self.debug_mode = config.da_debug_mode
-        self.single_thread = config.da_single_thread
-        self.threads = 1 if config.da_single_thread == True else config.da_threads
-        
-        self.data_augmentation = data_augmentation
-        # self._def_transforms()
-        self.transforms = config.da_transforms
-        self.transform_cfg = config.da_transform_cfg
-        
-        
-
-            
-        # init sequence
-        self._scan_dirs()
-        
         self.prefetch_volume = True
         if self.prefetch_volume == True:
             self._load_volumes()
         self.data = self.gen_dataset()
         
-
     @classmethod
     def _get_transform(cls, transform):
         SUPPORTED_TRANSFORMS = {
@@ -74,31 +51,7 @@ class dataGen2D:
             "spatial_transform": cls._spatial_transform,
             }
         return SUPPORTED_TRANSFORMS[transform] if transform in SUPPORTED_TRANSFORMS else None
-    
-    def _scan_dirs(self):
-        self.frames_paths = self._glob_subdirs("frames")
-        self.masks_paths = self._glob_subdirs("masks")
-        
-    def _glob_subdirs(self, subdir):
-        subdir_paths = [str(imgpath) for imgpath in
-                        sorted(self.data_path_dict[subdir].glob("*.*"))
-                        if self._is_supported_format(imgpath)]
-        
-        if self.verbose:
-            print("there are {} {} imgs".format(len(subdir_paths), subdir))
-            
-        return subdir_paths
-    
-    @staticmethod
-    def _is_supported_format(fpath):
-        extension = fpath.suffix.split(".")[1]
-        return extension in SUPPORTED_FORMATS
-        
-    def _path_sanity_check(self):
-        if not (self.data_path_dict["frames"].is_dir()
-                and self.data_path_dict["masks"].is_dir()):
-            raise ValueError("dataset paths are not actual dirs")
-            
+
     def _get_img_shape(self):
         frame_path = self.frames_paths[0]
         mask_path = self.masks_paths[0]
@@ -122,7 +75,63 @@ class dataGen2D:
         self.frames_volume = np.array(frame_list)
         self.masks_volume = np.array(mask_list)
         
+    @staticmethod
+    def _load_img(img_to_load_path,
+                  normalize_inputs=True,
+                  ignore_last_channel=False,
+                  is_binary_mask=False,
+                  positive_class_value=1):
+        try:
+            img = skio.imread(img_to_load_path)
+            if normalize_inputs and (not is_binary_mask):
+                norm_constant = np.iinfo(img.dtype).max
+                img = img/norm_constant
+            if is_binary_mask:
+                values = np.unique(img)
+                # assert len(values) in [1, 2], "mask is not binary {}\n there are {} values".format(str(img_to_load_path), len(values))
+                if len(values) not in [1,2]:
+                    logging.warning("Mask is not binary {}\nthere are {} values\nautomatically converting to binary mask".format(str(img_to_load_path), len(values)))
+                img = np.where(img==positive_class_value, 1,0)
+                img = img.astype(np.float64)
+                img = np.expand_dims(img, axis=-1)
+            if ignore_last_channel:
+                img = img[...,:-1]
+            return img
+        except ValueError:
+            raise ValueError("This image failed: {}, check for anomalies".format(str(img_to_load_path)))
+
+    @classmethod
+    def _load_example(cls, frame_path,mask_path,
+                      normalize_inputs=True,
+                      ignore_last_channel=False,
+                      positive_class_value=1):
+        
+        if type(frame_path) is not str:
+            frame_path_str = frame_path.numpy().decode("utf-8")
+            mask_path_str = mask_path.numpy().decode("utf-8")
+        else:
+            frame_path_str = frame_path
+            mask_path_str = mask_path
             
+        frame = cls._load_img(frame_path_str,
+                              normalize_inputs=normalize_inputs,
+                              ignore_last_channel=ignore_last_channel)
+        mask = cls._load_img(mask_path_str,
+                             normalize_inputs=normalize_inputs,
+                             ignore_last_channel=False,
+                             is_binary_mask=True,
+                             positive_class_value=positive_class_value)
+        return frame, mask
+    
+    
+    def _load_example_wrapper(self, frame_path, mask_path):
+        load_example_partial = partial(self._load_example,
+                                       normalize_inputs=self.normalize_inputs,
+                                       ignore_last_channel=self.ignore_last_channel,
+                                       positive_class_value=self.positive_class_value)
+        file = tf.py_function(load_example_partial, [frame_path, mask_path], (tf.float64, tf.float64))
+        return file
+    
     def gen_dataset(self):
         
         if self.prefetch_volume:
@@ -154,62 +163,6 @@ class dataGen2D:
         ds = ds.batch(self.batch_size)
         # ds = ds.prefetch(self.buffer_size)
         return ds
-    
-    @classmethod
-    def _load_example(cls, frame_path,mask_path,
-                      normalize_inputs=True,
-                      ignore_last_channel=False,
-                      positive_class_value=1):
-        
-        if type(frame_path) is not str:
-            frame_path_str = frame_path.numpy().decode("utf-8")
-            mask_path_str = mask_path.numpy().decode("utf-8")
-        else:
-            frame_path_str = frame_path
-            mask_path_str = mask_path
-            
-        frame = cls._load_img(frame_path_str,
-                              normalize_inputs=normalize_inputs,
-                              ignore_last_channel=ignore_last_channel)
-        mask = cls._load_img(mask_path_str,
-                             normalize_inputs=normalize_inputs,
-                             ignore_last_channel=False,
-                             is_binary_mask=True,
-                             positive_class_value=positive_class_value)
-        return frame, mask
-    
-    @staticmethod
-    def _load_img(img_to_load_path,
-                  normalize_inputs=True,
-                  ignore_last_channel=False,
-                  is_binary_mask=False,
-                  positive_class_value=1):
-        try:
-            img = skio.imread(img_to_load_path)
-            if normalize_inputs and (not is_binary_mask):
-                norm_constant = np.iinfo(img.dtype).max
-                img = img/norm_constant
-            if is_binary_mask:
-                values = np.unique(img)
-                # assert len(values) in [1, 2], "mask is not binary {}\n there are {} values".format(str(img_to_load_path), len(values))
-                if len(values) not in [1,2]:
-                    logging.warning("Mask is not binary {}\nthere are {} values\nautomatically converting to binary mask".format(str(img_to_load_path), len(values)))
-                img = np.where(img==positive_class_value, 1,0)
-                img = img.astype(np.float64)
-                img = np.expand_dims(img, axis=-1)
-            if ignore_last_channel:
-                img = img[...,:-1]
-            return img
-        except ValueError:
-            raise ValueError("This image failed: {}, check for anomalies".format(str(img_to_load_path)))
-    
-    def _load_example_wrapper(self, frame_path, mask_path):
-        load_example_partial = partial(self._load_example,
-                                       normalize_inputs=self.normalize_inputs,
-                                       ignore_last_channel=self.ignore_last_channel,
-                                       positive_class_value=self.positive_class_value)
-        file = tf.py_function(load_example_partial, [frame_path, mask_path], (tf.float64, tf.float64))
-        return file
     
     @staticmethod
     def _set_shapes(frame, mask, frame_shape, mask_shape):
@@ -462,6 +415,7 @@ class dataGen2D:
         crop_shape = np.array(frame_shape_array*crop_scale)
 
         return crop_shape
+    
     @staticmethod
     def _clipped_zoom(img, zoom_factor, **kwargs):
         #shamelessly copypasted from https://stackoverflow.com/questions/37119071/scipy-rotate-and-zoom-an-image-without-changing-its-dimensions/48097478
@@ -471,6 +425,8 @@ class dataGen2D:
         
         # don't apply zoom to the channel dim
         zoom_tuple = (zoom_factor,) * 2 + (1,) * (img.ndim -2)
+        
+        return
         
         
     
