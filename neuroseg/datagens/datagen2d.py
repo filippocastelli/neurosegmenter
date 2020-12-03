@@ -33,6 +33,7 @@ class dataGen2D(dataGenBase):
                          normalize_inputs=normalize_inputs,
                          verbose=verbose)
         
+        self.steps_per_epoch = None
         self.ignore_last_channel = ignore_last_channel
         self.prefetch_volume = True
         if self.prefetch_volume == True:

@@ -56,7 +56,9 @@ def main(cfg_path):
     
     model_history = model.fit(
         x=train_datagen.data,
+        steps_per_epoch = train_datagen.steps_per_epoch,
         validation_data=val_datagen.data,
+        validation_steps=val_datagen.steps_per_epoch,
         epochs=config.epochs,
         callbacks=callbacks)
     

@@ -50,7 +50,9 @@ class datagen3DSingle(dataGenBase):
         self.shuffle = self.config.da_shuffle
         self.seed = self.config.da_seed
         self.pre_crop_scales = self.config.da_pre_crop_scales
-
+        
+        self.data = self._setup_gen()
+        self.steps_per_epoch = self._get_steps_per_epoch(self.volume_shape, self.crop_shape, self.batch_size)
 
     def _parse_single_stack_paths(self):
         self.frames_path = self.frames_paths[0]
@@ -275,13 +277,24 @@ class datagen3DSingle(dataGenBase):
             self.gen = MultiThreadedAugmenter(self.dataLoader,
                                          self.composed_transform,
                                          self.threads)
-    @staticmethod
-    def _get_keras_gen():
-        
-        pass
             
+        return self._get_keras_gen(self.gen)
         
-        
+    @staticmethod
+    def _get_steps_per_epoch(frame_shape, crop_shape, batch_size):
+        frame_px = np.prod(frame_shape)
+        crop_px = np.prod(crop_shape)
+        return int( np.ceil( (frame_px / crop_px) / float(batch_size)))
+    
+    @staticmethod
+    def _get_keras_gen(batchgen):
+        while True:
+            batch_dict = next(batchgen)
+            frames = batch_dict["data"]
+            masks = batch_dict["seg"]
+            
+            yield frames, masks
+
 
 class CroppedDataLoaderBG(DataLoader):
     
@@ -327,10 +340,10 @@ class CroppedDataLoaderBG(DataLoader):
         scaled_crop_shape = np.ceil(scaled_crop_shape).astype(np.uint8)
         return tuple(scaled_crop_shape)
     
-    def get_len(self):
-        img_pixels = np.prod(self.volume_shape)
-        crop_pixels = np.prod(self.crop_shape)
-        return int(np.ceil((img_pixels/crop_pixels)/float(self.batch_size)))
+    # def get_len(self):
+    #     img_pixels = np.prod(self.volume_shape)
+    #     crop_pixels = np.prod(self.crop_shape)
+    #     return int(np.ceil((img_pixels/crop_pixels)/float(self.batch_size)))
     
     def generate_train_batch(self):
         
