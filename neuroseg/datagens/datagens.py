@@ -1,7 +1,7 @@
 from datagens.datagen2d import dataGen2D
 from datagens.datagen3d import datagen3DSingle
 
-def get_datagen(config, partition="train",
+def Datagen(config, partition="train",
                 normalize_inputs=True,
                 ignore_last_channel=False,
                 verbose=False,

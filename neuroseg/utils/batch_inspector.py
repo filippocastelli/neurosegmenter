@@ -3,6 +3,15 @@ from matplotlib.widgets import Slider, Button
 from skimage import exposure
 import numpy as np
 
+
+def BatchInspector(config, batch):
+    if config.training_mode == "2d":
+        return BatchInspector2D(batch)
+    elif config.training_mode == "3d":
+        return BatchInspector3D(batch)
+    else:
+        raise NotImplementedError(config.training_mode)
+        
 class BatchInspectorBase:
     def __init__(self,
                  batch,
@@ -139,9 +148,6 @@ class BatchInspector3D(BatchInspectorBase):
             self._next_elem()
         elif event.key == "i":
             self._prev_elem()
-            
-        self._update_titles()
-        self.fig.canvas.draw()
         
     def _next_elem(self, event=None):
         self.frame3d_idx = (self.frame3d_idx + 1) % self.n_3d_frames
@@ -156,7 +162,10 @@ class BatchInspector3D(BatchInspectorBase):
         self.frames_batch = self.frames[idx]
         self.masks_batch = self.masks[idx]
         self.masks_ax.images[0].set_array(self.masks_batch[idx])
+        self.fig.canvas.draw()
+        self._update_titles()
         self._update_widgets(self.gamma_slider.val)
+
         
     def _create_btns3d(self):
         self.axprev_new = plt.axes([0.45, 0.005, 0.1, 0.07])

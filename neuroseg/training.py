@@ -9,8 +9,8 @@ from config import (
     OptimizerConfigurator,
     MetricsConfigurator)
 
-from datagens import get_datagen
-from utils import BatchInspector2D, BatchInspector3D
+from datagens import Datagen
+from utils import BatchInspector
 from tiledpredict import DataPredictor2D
 from performance_eval import PerformanceEvaluator
 from descriptor import RunDescriptorLight
@@ -26,14 +26,14 @@ def main(cfg_path):
     
     config = TrainConfig(cfg_path)
     setup_logger(config.logfile_path)
-    train_datagen = get_datagen(config,
+    train_datagen = Datagen(config,
                               partition="train",
                               normalize_inputs=True,
                               ignore_last_channel=True,
                               verbose=False,
                               data_augmentation=True)
     
-    val_datagen = get_datagen(config,
+    val_datagen = Datagen(config,
                               partition="val",
                               normalize_inputs=True,
                               ignore_last_channel=True,
@@ -43,7 +43,7 @@ def main(cfg_path):
     
     val_batch = next(val_datagen.data.__iter__()) 
     
-    bi = BatchInspector3D(val_batch)
+    bi = BatchInspector(config, val_batch)
     
     callback_cfg = CallbackConfigurator(config)
     callbacks = callback_cfg.callbacks
