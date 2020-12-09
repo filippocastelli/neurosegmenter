@@ -1,4 +1,5 @@
 from datagens.datagen2d import dataGen2D
+from datagens.datagen3d import datagen3DSingle
 
 def get_datagen(config, partition="train",
                 normalize_inputs=True,
@@ -14,6 +15,13 @@ def get_datagen(config, partition="train",
                          verbose=verbose,
                          data_augmentation=data_augmentation)
     elif config.training_mode == "3d":
+        
+        return datagen3DSingle(config=config,
+                               partition=partition,
+                               data_augmentation=data_augmentation,
+                               verbose=verbose,
+                               normalize_inputs=normalize_inputs)
+    
         raise NotImplementedError("3d")
         # single images
         # single stack

@@ -36,9 +36,12 @@ class dataGen2D(dataGenBase):
         self.steps_per_epoch = None
         self.ignore_last_channel = ignore_last_channel
         self.prefetch_volume = True
+        self.buffer_size = config.da_buffer_size
+        self.debug_mode = config.da_debug_mode
         if self.prefetch_volume == True:
             self._load_volumes()
         self.data = self.gen_dataset()
+        self.iter = self.data.__iter__
         
     @classmethod
     def _get_transform(cls, transform):

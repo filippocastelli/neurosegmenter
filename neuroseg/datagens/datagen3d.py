@@ -52,6 +52,7 @@ class datagen3DSingle(dataGenBase):
         self.pre_crop_scales = self.config.da_pre_crop_scales
         
         self.data = self._setup_gen()
+        self.iter = self.data.__iter__
         self.steps_per_epoch = self._get_steps_per_epoch(self.volume_shape, self.crop_shape, self.batch_size)
 
     def _parse_single_stack_paths(self):
@@ -70,11 +71,11 @@ class datagen3DSingle(dataGenBase):
         
         if self.normalize_inputs:
             self.frames_volume = self._normalize_stack(self.frames_volume, norm=255)
-            self.masks_volume = self._normalzie_stack(self.masks_volume, norm=255)
+            self.masks_volume = self._normalize_stack(self.masks_volume, norm=255)
             
         self._adjust_stack_dims()
         
-        self.data_dict = {
+        self.data = {
             "img" : self.frames_volume,
             "label": self.masks_volume }
         # self.frames_volume and self.masks_volume are redundant at this point
@@ -177,11 +178,12 @@ class datagen3DSingle(dataGenBase):
             }
         
         mirror_transform_cfg.update(self.transform_cfg["mirror_transform"])
+        return mirror_transform_cfg
         
     def _gamma_transform_cfg(self):
         gamma_transform_cfg = {
             "p_per_sample" : 0.15,
-            "per_cahnnel" : True,
+            "per_channel" : True,
             "invert_image" : False,
             "retain_stats": True,
             "gamma_range": (0.9, 1.1)
@@ -215,7 +217,7 @@ class datagen3DSingle(dataGenBase):
         
         TRANSFORM_FNS = {
             "brightness_transform" : BrightnessTransform,
-            "brigthness_multiplicative_transform" : BrightnessMultiplicativeTransform,
+            "brightness_multiplicative_transform" : BrightnessMultiplicativeTransform,
             "gamma_transform" : GammaTransform,
             "gaussian_noise_transform" : GaussianNoiseTransform,
             "gaussian_blur_transform" : GaussianBlurTransform,
@@ -223,20 +225,24 @@ class datagen3DSingle(dataGenBase):
             "rot90_transform" : Rot90Transform,
             "spatial_transform" : SpatialTransform_2
             }
+        
+        if transform not in TRANSFORM_FNS:
+            print("cazzso")
         return TRANSFORM_FNS[transform] if transform in TRANSFORM_FNS else None
     
-    @classmethod
-    def _get_transform_cfg(cls, transform):
+    def _get_transform_cfg(self, transform):
         TRANSFORM_CFGS = {
-            "brightness_transform" : cls._brightness_transform_cfg,
-            "brigthness_multiplicative_transform" : cls._brightness_multiplicative_transform_cfg,
-            "gamma_transform" : cls._gamma_transform_cfg, 
-            "gaussian_noise_transform" : cls._gaussian_noise_transform_cfg,
-            "gaussian_blur_transform" : cls._gaussian_blur_transform_cfg,
-            "mirror_transform" : cls._mirror_transform_cfg,
-            "rot90_transform" : cls._rot90_transform_cfg,
-            "spatial_transform" : cls._spatial_transform_cfg
+            "brightness_transform" : self._brightness_transform_cfg(),
+            "brightness_multiplicative_transform" : self._brightness_multiplicative_transform_cfg(),
+            "gamma_transform" : self._gamma_transform_cfg(), 
+            "gaussian_noise_transform" : self._gaussian_noise_transform_cfg(),
+            "gaussian_blur_transform" : self._gaussian_blur_transform_cfg(),
+            "mirror_transform" : self._mirror_transform_cfg(),
+            "rot90_transform" : self._rot90_transform_cfg(),
+            "spatial_transform" : self._spatial_transform_cfg()
             }
+        if transform not in TRANSFORM_CFGS:
+            print("sticazzi")
         return TRANSFORM_CFGS[transform] if transform in TRANSFORM_CFGS else None
         
     def _get_augment_transforms(self):
@@ -258,7 +264,7 @@ class datagen3DSingle(dataGenBase):
         return Compose(transforms)
     
     def _setup_gen(self):
-        self.dataloader = CroppedDataLoaderBG(
+        self.dataLoader = CroppedDataLoaderBG(
             data=self.data,
             batch_size=self.batch_size,
             crop_shape=self.crop_shape,
@@ -278,7 +284,7 @@ class datagen3DSingle(dataGenBase):
                                          self.composed_transform,
                                          self.threads)
             
-        return self._get_keras_gen(self.gen)
+        return self._get_keras_gen(self.gen, channel_last=True)
         
     @staticmethod
     def _get_steps_per_epoch(frame_shape, crop_shape, batch_size):
@@ -286,14 +292,22 @@ class datagen3DSingle(dataGenBase):
         crop_px = np.prod(crop_shape)
         return int( np.ceil( (frame_px / crop_px) / float(batch_size)))
     
-    @staticmethod
-    def _get_keras_gen(batchgen):
+    @classmethod
+    def _get_keras_gen(cls, batchgen, channel_last=True):
         while True:
             batch_dict = next(batchgen)
             frames = batch_dict["data"]
             masks = batch_dict["seg"]
             
+            if channel_last:
+                frames = cls._to_channel_last(frames)
+                masks = cls._to_channel_last(masks)
+            
             yield frames, masks
+            
+    @staticmethod
+    def _to_channel_last(input_tensor):
+        return np.moveaxis(input_tensor, source=1, destination=-1)
 
 
 class CroppedDataLoaderBG(DataLoader):
@@ -328,6 +342,9 @@ class CroppedDataLoaderBG(DataLoader):
         self.pre_crop_scales = pre_crop_scales
         self.rng_seed = seed_for_shuffle
         
+        if self.rng_seed is not None:
+            np.random.seed(self.rng_seed)
+        
         self.scaled_crop_shape = self._get_scaled_crop_shape(self.crop_shape,
                                                              self.pre_crop_scales)
         
@@ -354,11 +371,14 @@ class CroppedDataLoaderBG(DataLoader):
             crop_img, crop_label = self._get_random_crop()
             img_batch.append(crop_img)
             label_batch.append(crop_label)
+        
+        stack_img = np.stack(img_batch, axis=0)
+        stack_label = np.stack(label_batch, axis=0)
+        
+        return {"data": stack_img, "seg": stack_label}
      
     def _get_random_crop(self):
         z_shape, y_shape, x_shape = self.volume_shape
-        if self.rng_seed is not None:
-            np.random.seed(self.rng_seed)
         
         z_0 = np.random.randint(low=0, high=z_shape - self.crop_shape[0])
         y_0 = np.random.randint(low=0, high=y_shape - self.crop_shape[1])
@@ -366,16 +386,16 @@ class CroppedDataLoaderBG(DataLoader):
         
         crop_img = self.frames_volume[
             :,
-            z_0, z_0 + self.crop_shape[0],
-            y_0, y_0 + self.crop_shape[1],
-            x_0, x_0 + self.crop_shape[2]
+            z_0 : z_0 + self.crop_shape[0],
+            y_0 : y_0 + self.crop_shape[1],
+            x_0 : x_0 + self.crop_shape[2]
             ]
         
         crop_label = self.masks_volume[
             :,
-            z_0, z_0 + self.crop_shape[0],
-            y_0, y_0 + self.crop_shape[1],
-            x_0, x_0 + self.crop_shape[2]
+            z_0 : z_0 + self.crop_shape[0],
+            y_0 : y_0 + self.crop_shape[1],
+            x_0 : x_0 + self.crop_shape[2]
             ]
         
         return crop_img, crop_label

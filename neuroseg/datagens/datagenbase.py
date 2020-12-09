@@ -22,8 +22,7 @@ class dataGenBase:
         
         self.normalize_inputs = normalize_inputs
         
-        self.buffer_size = config.da_buffer_size
-        self.debug_mode = config.da_debug_mode
+        
         self.single_thread = config.da_single_thread
         self.threads = 1 if config.da_single_thread == True else config.da_threads
         
