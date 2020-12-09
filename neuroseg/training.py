@@ -10,7 +10,7 @@ from config import (
     MetricsConfigurator)
 
 from datagens import get_datagen
-# from utils import BatchInspector2D
+from utils import BatchInspector2D, BatchInspector3D
 from tiledpredict import DataPredictor2D
 from performance_eval import PerformanceEvaluator
 from descriptor import RunDescriptorLight
@@ -39,6 +39,11 @@ def main(cfg_path):
                               ignore_last_channel=True,
                               verbose=False,
                               data_augmentation=False)
+    
+    
+    val_batch = next(val_datagen.data.__iter__()) 
+    
+    bi = BatchInspector3D(val_batch)
     
     callback_cfg = CallbackConfigurator(config)
     callbacks = callback_cfg.callbacks
@@ -82,7 +87,7 @@ if __name__ == "__main__":
     
     parser.add_argument("-c","--conf", action="store", type=str,
                         dest="configuration_path_str",
-                        default="/home/phil/repos/neuroseg/neuroseg/tests/test_train_cfg.yml",
+                        default="/home/phil/repos/neuroseg/neuroseg/tests/test_train_cfg_3d.yml",
                         help="Configuration file path")
     
     args, unknown = parser.parse_known_args()

@@ -40,7 +40,7 @@ output_cfg:
     
 data_augmentation_cfg:
     debug_mode: false
-    single_thread:  false
+    single_thread:  true
     threads: 6
     buffer_size : 1000
     shuffle: false
@@ -51,7 +51,9 @@ data_augmentation_cfg:
             do_elastic_deform: true
             deformation_scale: [0, 0.25, 0.25]
             do_rotation: true
-            angle: [-0.314, 0.314]
+            angle_x: [-0.314, 0.314]
+            angle_y: [0, 6.38]
+            angle_z: [0, 6.38]
             p_rot_per_sample: 0.15
             do_scale: true
             scale: [0.95, 1.05]
@@ -89,7 +91,7 @@ data_augmentation_cfg:
         
         gaussian_blur_transform:
             p_per_sample: 0.15
-            blur_sigma: (1,5)
+            blur_sigma: [1, 5]
             different_sigma_per_channel: true,
             p_per_channel: 1
             
