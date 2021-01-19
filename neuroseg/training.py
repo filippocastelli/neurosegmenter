@@ -11,7 +11,7 @@ from config import (
 
 from datagens import Datagen
 from utils import BatchInspector
-from tiledpredict import DataPredictor2D
+from tiledpredict import DataPredictor3D
 from performance_eval import PerformanceEvaluator
 from descriptor import RunDescriptorLight
 
@@ -22,6 +22,16 @@ def setup_logger(logfile_path):
     file_handler.setLevel(logging.DEBUG)
     logger.addHandler(file_handler)
     
+    
+def debug_train_val_datagens(config, train_datagen, val_datagen):
+    
+    if config.train_datagen_inspector:
+        train_batch = next(train_datagen.data.__iter__())
+        _ = BatchInspector(config, train_batch)
+    if config.val_datagen_inspector:
+        val_batch = next(val_datagen.data.__iter__())
+        _ = BatchInspector(config, val_batch)
+        
 def main(cfg_path):
     
     config = TrainConfig(cfg_path)
@@ -40,10 +50,7 @@ def main(cfg_path):
                               verbose=False,
                               data_augmentation=False)
     
-    
-    val_batch = next(val_datagen.data.__iter__()) 
-    
-    bi = BatchInspector(config, val_batch)
+    debug_train_val_datagens(config, train_datagen, val_datagen)
     
     callback_cfg = CallbackConfigurator(config)
     callbacks = callback_cfg.callbacks
@@ -70,7 +77,7 @@ def main(cfg_path):
     model.save(str(config.final_model_path))
     
     if config.evaluate_performance:
-        dp = DataPredictor2D(config, model)
+        dp = DataPredictor3D(config, model)
         ev = PerformanceEvaluator(config, dp.predicted_data)
         performance_dict = ev.measure_dict
     else:
@@ -79,8 +86,6 @@ def main(cfg_path):
     _ = RunDescriptorLight(config,
                                performance_metrics_dict=performance_dict,
                                model_history_dict=model_history)
-    
-    
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -95,3 +100,7 @@ if __name__ == "__main__":
     cfg_path = Path(args.configuration_path_str)
     
     main(cfg_path)
+    
+    
+
+        

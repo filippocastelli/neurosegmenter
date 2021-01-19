@@ -1,7 +1,7 @@
 training_cfg:
     mode: "3d"
     epochs: 1
-    batch_size: 60
+    batch_size: 10
     loss: "binary_crossentropy"
     track_metrics:
         - "accuracy"
@@ -28,7 +28,7 @@ model_cfg:
     
 dataset_cfg:
     dataset_path: "/mnt/ssd1/datasets/em_neuroseg"
-    mode: "stacks"
+    mode: "stack"
     n_channels: 1
     positive_class_value: 1
     negative_class_value: 255
@@ -40,7 +40,7 @@ output_cfg:
     
 data_augmentation_cfg:
     debug_mode: false
-    single_thread:  true
+    single_thread:  false
     threads: 6
     buffer_size : 1000
     shuffle: false
@@ -96,8 +96,8 @@ data_augmentation_cfg:
             p_per_channel: 1
             
 performance_evaluation_cfg:
-    ground_truth_path: "/mnt/ssd1/datasets/em_neuroseg/test/masks.tif"
-    data_mode: "stacks"
+#    ground_truth_path: "/mnt/ssd1/datasets/em_neuroseg/test/masks.tif"
+#    data_mode: "stack"
     window_size: [64, 64, 64]
     batch_size:       15
     chunk_size:       20
@@ -122,7 +122,6 @@ callbacks_cfg:
         verbose:    1
         
     # tensorboard:
-        
     #     write_graph: true
     #     histogram_freq: 1
         
@@ -131,5 +130,11 @@ callbacks_cfg:
     #     mode: "min"
     #     save_weights_only: false
     #     save_model: true
-        
+    
 notes: ""
+
+debug_cfg:
+    test_datagen_inspector: false
+    train_datagen_inspector: false
+    val_datagen_inspector: false
+    

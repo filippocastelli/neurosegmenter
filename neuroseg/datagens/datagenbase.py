@@ -1,4 +1,4 @@
-SUPPORTED_FORMATS = ["png", "tif", "tiff"]
+from utils import SUPPORTED_IMG_FORMATS, SUPPORTED_STACK_FORMATS
 
 class dataGenBase:
     def __init__(self,
@@ -11,9 +11,9 @@ class dataGenBase:
         self.config = config
         self.partition = partition
         self.data_path_dict = self.config.path_dict[partition]
+        self.dataset_mode = self.config.dataset_mode
         
         self.positive_class_value = self.config.positive_class_value
-        
         self.verbose = verbose
         self._path_sanity_check()
         
@@ -21,7 +21,6 @@ class dataGenBase:
         self.batch_size = config.batch_size
         
         self.normalize_inputs = normalize_inputs
-        
         
         self.single_thread = config.da_single_thread
         self.threads = 1 if config.da_single_thread == True else config.da_threads
@@ -35,9 +34,11 @@ class dataGenBase:
         
     
     def _path_sanity_check(self):
-        if not (self.data_path_dict["frames"].is_dir()
-                and self.data_path_dict["masks"].is_dir()):
-            raise ValueError("dataset paths are not actual dirs")
+        
+        if self.dataset_mode in ["single-images", "stack"]:
+            if not (self.data_path_dict["frames"].is_dir()
+                    and self.data_path_dict["masks"].is_dir()):
+                raise ValueError("dataset paths are not actual dirs")
             
     def _scan_dirs(self):
         self.frames_paths = self._glob_subdirs("frames")
@@ -55,4 +56,4 @@ class dataGenBase:
     @staticmethod
     def _is_supported_format(fpath):
         extension = fpath.suffix.split(".")[1]
-        return extension in SUPPORTED_FORMATS
+        return extension in SUPPORTED_IMG_FORMATS or extension in SUPPORTED_STACK_FORMATS

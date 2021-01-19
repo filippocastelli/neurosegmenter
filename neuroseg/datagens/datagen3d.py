@@ -116,7 +116,7 @@ class datagen3DSingle(dataGenBase):
             self.frames_volume = np.expand_dims(self.frames_volume, axis=-1)
             self.masks_volume = np.expand_dims(self.masks_volume, axis=-1)
         
-        self.volume_shape = frames_shape[:-1]
+        self.volume_shape = self.frames_volume.shape[:-1]
         
         # convert to [ch, z, y, x]
         self.frames_volume = np.moveaxis(self.frames_volume, -1, 0)

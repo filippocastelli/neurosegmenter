@@ -3,6 +3,13 @@ import yaml
 
 from utils import NameGenerator
 
+SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
+
+# DESIGN NOTE: tutti i path dovrebbero essere individuati in Config, 
+# per ogni modalità (stack, multi-stack, single-images), ogni modalità produrrà i suoi attributi 
+# specifici che verranno richiesti differenziatamente nelle classi successive
+# ogni problema legato a glob dei file deve essere ricondotto qui
+
 class Config:
     
     def __init__(self,
@@ -94,6 +101,11 @@ class Config:
             yaml.dump(conf_dict, out_conf_file)
         return
     
+    @staticmethod
+    def _is_supported_format(fpath, supported_list):
+        extension = fpath.suffix.split(".")[1]
+        return extension in supported_list
+    
 class TrainConfig(Config):
     def __init__(self, yml_path):
         super().__init__(yml_path)
@@ -123,6 +135,10 @@ class TrainConfig(Config):
         # callbacks parsing
         self.callbacks_cfg = self.cfg_dict["callbacks_cfg"]
         self._parse_callbacks_cfg(self.callbacks_cfg)
+        
+        # debug parsing
+        self.debug_cfg = self.cfg_dict["callbacks_cfg"]
+        self._parse_debug_cfg(self.debug_cfg)
         
     def _parse_training_cfg(self, training_cfg):
         self.training_mode = training_cfg["mode"]
@@ -205,20 +221,51 @@ class TrainConfig(Config):
     def _parse_callbacks_cfg(self, callbacks_cfg):
         self.callbacks = list(callbacks_cfg.keys())
         
+    def _parse_debug_cfg(self, debug_cfg):
+        default_debug_cfg = {
+            "test_datagen_inspector": False,
+            "train_datagen_inspector": False,
+            "val_datagen_inspector": False
+            }
+        default_debug_cfg.update(debug_cfg)
+        self.test_datagen_inspector = default_debug_cfg["test_datagen_inspector"]
+        self.train_datagen_inspector = default_debug_cfg["train_datagen_inspector"]
+        self.val_datagen_inspector = default_debug_cfg["val_datagen_inspector"]     
+        
     def _gen_paths(self, dataset_path):
         path_dict = {}
         if self.training_mode in ["2d", "3d"]:
-            for partition in ["train", "val", "test"]:
-                partition_path = dataset_path.joinpath(partition)
-                partition_subdir_dict = {}
-                for subdir in ["frames", "masks"]:
-                    partition_subdir_dict[subdir] = partition_path.joinpath(subdir)
-                path_dict[partition] = partition_subdir_dict
-            
-            self.path_dict = path_dict
-            self.train_paths = path_dict["train"]
-            self.val_paths = path_dict["val"]
-            self.test_paths = path_dict["test"]
+            if self.dataset_mode == "single-images":
+                for partition in ["train", "val", "test"]:
+                    partition_path = dataset_path.joinpath(partition)
+                    partition_subdir_dict = {}
+                    for subdir in ["frames", "masks"]:
+                        partition_subdir_dict[subdir] = partition_path.joinpath(subdir)
+                    path_dict[partition] = partition_subdir_dict
+                
+                self.path_dict = path_dict
+                self.train_paths = path_dict["train"]
+                self.val_paths = path_dict["val"]
+                self.test_paths = path_dict["test"]
+                # I FILE ANDREBBERO GLOBBATI QUI
+                
+            elif self.dataset_mode == "stack":
+                # stack_file_dict = {"frames": "frames.tif",
+                #                    "masks": "masks.tif"}
+                for partition in ["train", "val", "test"]:
+                    partition_path = dataset_path.joinpath(partition)
+                    partition_subdir_dict = {}
+                    for subdir in ["frames", "masks"]:
+                        partition_subdir_dict[subdir] = partition_path.joinpath(subdir)
+                    path_dict[partition] = partition_subdir_dict
+                
+                self.path_dict = path_dict
+                self.train_paths = path_dict["train"]
+                self.val_paths = path_dict["val"]
+                self.test_paths = path_dict["test"]
+                
+            elif self.dataset_mode == "multi-stack":
+                raise NotImplementedError(self.dataset_mode)
                 
             # create output path structure
             self.output_path.mkdir(exist_ok=True, parents=True)
@@ -256,7 +303,7 @@ class PredictConfig(Config):
         self.data_mode = data_cfg["mode"]
         self.normalize_data = data_cfg["normalize_data"]
         
-        if self.data_mode not in SUPPORTED_DATA_MODES:  
+        if self.data_mode not in SUPPORTED_DATA_MODES:
             raise NotImplementedError(self.data_mode)
         
         self.n_channels = data_cfg["n_channels"]
@@ -271,7 +318,7 @@ class PredictConfig(Config):
         self.batch_size = prediction_cfg["batch_size"]
         self.chunk_size = prediction_cfg["chunk_size"]
         self.padding_mode = prediction_cfg["padding_mode"]
-        self.keep_tmp = prediction_cfg["keep_tmp"]        
+        self.keep_tmp = prediction_cfg["keep_tmp"]
         
     def _gen_paths(self):
         self.output_path.mkdir(exist_ok=True, parents=True)

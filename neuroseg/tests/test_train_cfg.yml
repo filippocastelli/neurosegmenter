@@ -119,3 +119,10 @@ callbacks_cfg:
     #     save_model: true
         
 notes: ""
+
+
+debug_cfg:
+    test_datagen_inspector: false
+    train_datagen_inspector: false
+    val_datagen_inspector: false
+    

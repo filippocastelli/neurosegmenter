@@ -1,0 +1,38 @@
+prediction_cfg:
+    mode: "3d"
+    model_path: "/mnt/ssd1/neuroseg_tmp/out/grandiose-hippopotamus-119/weights.01.hdf5"
+    n_output_classes: 1
+    window_size: [64, 64, 64]
+    batch_size: 5
+    chunk_size: 100
+    padding_mode: "reflect"
+    keep_tmp: false
+    
+data_cfg:
+    image_path: "/mnt/ssd1/datasets/em_neuroseg/test/frames"
+    #PREDICTION DATA CONFIG
+    mode: "stack"
+    normalize_data: true
+    n_channels: 2
+    
+    # GROUND TRUTH CONFIG
+    positive_class_value: 1
+    negative_class_value: 255
+
+output_cfg:
+    output_mode : "stack"
+    output_path: "/mnt/ssd1/neuroseg_tmp/pred/"
+    descriptor_path: "/mnt/ssd1/neuroseg_tmp/pred/descr"
+    enable_wandb_tracking: false
+    
+performance_evaluation_cfg:
+    ground_truth_path: "/mnt/ssd1/datasets/em_neuroseg/test/masks"
+    data_mode: "stack"
+    window_size: [64, 64, 64]
+    batch_size:       5
+    chunk_size:       20
+    classification_threshold:   0.5
+    add_empty_channel:          true
+    
+notes: ""
+run_name:

@@ -1,11 +1,13 @@
 import pickle
+from pathlib import Path
 
 import numpy as np
 from skimage import io as skio
 # import skimage.external.tifffile as tifffile
 import tifffile
 
-SUPPORTED_FORMATS = ["tif", "png"]
+SUPPORTED_IMG_FORMATS = ["tif", "tiff", "png", "jpg", "jpeg"]
+SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
 
 def load_volume(imgpath,
                 drop_last_dim=True,
@@ -26,6 +28,8 @@ def load_volume(imgpath,
             vol_list.append(img)
         
         vol = np.array(vol_list)
+    else:
+        raise ValueError("unsupported data_mode: {}".format(data_mode))
     if drop_last_dim:
         vol = vol[...,:2]
     if expand_last_dim:
@@ -63,8 +67,23 @@ def save_volume(volume,
             for img_plane in volume:
                 stack.save(img_plane)
         
-def is_supported_ext(path):
+def is_supported_ext(path, mode="img"):
     suffix = path.suffix
     extension = suffix.split(".")[1]
-    return extension in SUPPORTED_FORMATS
+    if mode == "img":
+        return extension in SUPPORTED_IMG_FORMATS
+    elif mode == "stack":
+        return extension in SUPPORTED_STACK_FORMATS
+    else:
+        raise ValueError("mode {} is not a valid input mode".format(mode))
+        
+        
+def glob_imgs(dir_path, mode="stack", to_string=False):
+    dir_path = Path(dir_path)
+    paths = [imgpath for imgpath in sorted(dir_path.glob("*.*")) if is_supported_ext(imgpath, mode=mode)]
+    
+    if to_string:
+        paths = [str(path) for path in paths]
+        
+    return paths
     

@@ -15,7 +15,6 @@ def Datagen(config, partition="train",
                          verbose=verbose,
                          data_augmentation=data_augmentation)
     elif config.training_mode == "3d":
-        
         return datagen3DSingle(config=config,
                                partition=partition,
                                data_augmentation=data_augmentation,
