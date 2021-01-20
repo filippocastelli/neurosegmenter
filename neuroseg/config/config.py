@@ -41,8 +41,6 @@ class Config:
     def _parse_performance_evaluation_cfg(self, pe_cfg):
         if pe_cfg is not None:
             self.evaluate_performance = True
-            self.ground_truth_mode = pe_cfg["data_mode"]
-            self.ground_truth_path = self._decode_path(pe_cfg["ground_truth_path"])
             self.pe_window_size = pe_cfg["window_size"]
             self.pe_batch_size = pe_cfg["batch_size"]
             self.pe_chunk_size = pe_cfg["chunk_size"]
@@ -139,6 +137,8 @@ class TrainConfig(Config):
         # debug parsing
         self.debug_cfg = self.cfg_dict["callbacks_cfg"]
         self._parse_debug_cfg(self.debug_cfg)
+        
+        self._parse_performance_evaluation_cfg_additional()
         
     def _parse_training_cfg(self, training_cfg):
         self.training_mode = training_cfg["mode"]
@@ -282,6 +282,12 @@ class TrainConfig(Config):
         else:
             raise NotImplementedError(self.training_mode)
             
+    def _parse_performance_evaluation_cfg_additional(self):        
+        self.ground_truth_mode = self.dataset_mode
+        self.ground_truth_path  = self.test_paths["masks"]
+
+            
+            
 class PredictConfig(Config):
     def __init__(self, yml_path):
         super().__init__(yml_path)
@@ -296,6 +302,8 @@ class PredictConfig(Config):
         self.output_mode = self.output_cfg["output_mode"]
         
         self._gen_paths()
+        
+        self._parse_performance_evaluation_cfg_additional()
     
     def _parse_input_data_cfg(self, data_cfg):
         self.data_path = self._decode_path(data_cfg["image_path"])
@@ -324,6 +332,10 @@ class PredictConfig(Config):
         self.output_path.mkdir(exist_ok=True, parents=True)
         self.temp_path = self._joinpath_mkdir(self.output_path, "tmp")
         self.logs_path = self._joinpath_mkdir(self.output_path, "logs")
+        
+    def _parse_performance_evaluation_cfg_additional(self):
+        self.ground_truth_mode = self.pe_cfg["data_mode"]
+        self.ground_truth_path = self._decode_path(self.pe_cfg["ground_truth_path"])
         
 if __name__ == "__main__":
     import platform

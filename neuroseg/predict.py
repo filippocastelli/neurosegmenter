@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 from config import PredictConfig
-from tiledpredict import DataPredictor2D
+from tiledpredict import DataPredictor
 from performance_eval import PerformanceEvaluator
 
 from descriptor import RunDescriptorLight
@@ -14,7 +14,7 @@ def main(cfg_path):
 
     config = PredictConfig(cfg_path)
     # setup_logger(config.logfile_path)
-    dp = DataPredictor2D(config)
+    dp = DataPredictor(config)
     
     ev = PerformanceEvaluator(config, dp.predicted_data)
     performance_dict = ev.measure_dict

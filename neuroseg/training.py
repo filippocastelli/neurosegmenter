@@ -11,7 +11,7 @@ from config import (
 
 from datagens import Datagen
 from utils import BatchInspector
-from tiledpredict import DataPredictor3D
+from tiledpredict import DataPredictor
 from performance_eval import PerformanceEvaluator
 from descriptor import RunDescriptorLight
 
@@ -77,7 +77,7 @@ def main(cfg_path):
     model.save(str(config.final_model_path))
     
     if config.evaluate_performance:
-        dp = DataPredictor3D(config, model)
+        dp = DataPredictor(config, model)
         ev = PerformanceEvaluator(config, dp.predicted_data)
         performance_dict = ev.measure_dict
     else:
