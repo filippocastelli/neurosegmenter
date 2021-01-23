@@ -2,8 +2,8 @@ from pathlib import Path
 import datetime
 import random
 
-animals_path = Path("./utils/animals.txt")
-adjective_path = Path("./utils/adjectives.txt")
+animals_path = Path("../neuroseg/utils/animals.txt")
+adjective_path = Path("../neuroseg/utils/adjectives.txt")
 
 class NameGenerator:
     
