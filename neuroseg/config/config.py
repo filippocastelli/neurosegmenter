@@ -6,7 +6,7 @@ from utils import NameGenerator
 SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
 
 # DESIGN NOTE: tutti i path dovrebbero essere individuati in Config, 
-# per ogni modalità (stack, multi-stack, single-images), ogni modalità produrrà i suoi attributi 
+# per ogni modalità (stack, multi_stack, single_images), ogni modalità produrrà i suoi attributi 
 # specifici che verranno richiesti differenziatamente nelle classi successive
 # ogni problema legato a glob dei file deve essere ricondotto qui
 
@@ -235,7 +235,7 @@ class TrainConfig(Config):
     def _gen_paths(self, dataset_path):
         path_dict = {}
         if self.training_mode in ["2d", "3d"]:
-            if self.dataset_mode == "single-images":
+            if self.dataset_mode == "single_images":
                 for partition in ["train", "val", "test"]:
                     partition_path = dataset_path.joinpath(partition)
                     partition_subdir_dict = {}
@@ -264,7 +264,10 @@ class TrainConfig(Config):
                 self.val_paths = path_dict["val"]
                 self.test_paths = path_dict["test"]
                 
-            elif self.dataset_mode == "multi-stack":
+            elif self.dataset_mode == "multi_stack":
+                raise NotImplementedError(self.dataset_mode)
+                
+            else:
                 raise NotImplementedError(self.dataset_mode)
                 
             # create output path structure
