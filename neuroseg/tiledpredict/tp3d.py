@@ -47,6 +47,8 @@ class TiledPredictor3D:
     ):
 
         self.input_volume = input_volume
+        self._adjust_input_dims()
+        
         self.batch_size = batch_size
         self.window_size = window_size
         self.model = model
@@ -59,7 +61,7 @@ class TiledPredictor3D:
         self.tmp_folder = Path(tmp_folder)
         # TMP
         # self.inference_volume = np.zeros_like(self.padded_volume).astype("float32")
-        self.inference_volume = np.zeros(shape=self._get_spatial_dims()).astype("float32")
+        self.inference_volume = np.zeros(shape=self._get_padded_output_dims()).astype("float32")
         self.weighting_window = self.get_weighting_window(self.window_size)
         
         self.generate_batches()
@@ -69,13 +71,39 @@ class TiledPredictor3D:
 
         if not keep_tmp:
             self.empty_tmp()
+    
+    def _adjust_input_dims(self):
+        volume_shape = self.input_volume.shape
+        if len(volume_shape) < 3:
+            #not enough dims
+            raise ValueError(volume_shape, "Incorrect input volume dims")
+        elif len(volume_shape) == 3:
+            # if 3 channels then all dims are spatial
+            # tensor must be expanded for color
+            self.input_volume = np.expand_dims(self.input_volume, axis=-1)
             
+        elif len(volume_shape) == 4:
+            # if 4 dims one is color
+            # should be channel_last
+            pass
+        else:
+            # too many dims, can't figure out what they are
+            raise ValueError(volume_shape, "Incorrect input volume dims")
+            
+        assert len(self.input_volume.shape) == 4, "Incorrect volume adjust"
+    
     def _get_spatial_dims(self):
-        return np.append(self.padded_volume.shape[:-1], (self.n_output_classes))
+        return self.input_volume.shape[:-1]
    
+    def _get_output_dims(self):
+        return np.append(self._get_spatial_dims(), (self.n_output_classes))
+    
+    def _get_padded_output_dims(self):
+        padded_spatial_dims = self.padded_volume.shape[:-1]
+        return np.append(padded_spatial_dims, (self.n_output_classes))
 
     @staticmethod
-    def get_paddings(input_volume, window_size):
+    def get_paddings(input_volume, window_size, spatial_dims):
         """
         calculate the the padding vectors for the volume to be integer divisible
         by the window size.
@@ -89,6 +117,8 @@ class TiledPredictor3D:
             Input volume.
         window_size : list or tuple
             shape of the window.
+        spatial_dims : list or tuple or np.ndarray
+            spatial dims of the Input Volume
         Returns
         -------
         paddings : np.ndarray
@@ -100,7 +130,7 @@ class TiledPredictor3D:
             [0,0]
         """
         window_size_array = np.array(window_size)
-        spatial_dims = input_volume.shape[:-1]
+        spatial_dims = spatial_dims
 
         tot_paddings = np.zeros_like(spatial_dims)
         window_mod = window_size_array - (spatial_dims % window_size_array)
@@ -121,7 +151,7 @@ class TiledPredictor3D:
 
     def apply_padding(self, padding_mode="reflect"):
         """ apply the paddings"""
-        self.paddings = self.get_paddings(self.input_volume, self.window_size)
+        self.paddings = self.get_paddings(self.input_volume, self.window_size, self._get_spatial_dims())
         self.padded_volume = np.pad(self.input_volume, self.paddings, mode="reflect")
 
     def remove_padding(self):
@@ -251,12 +281,16 @@ class TiledPredictor3D:
             for i, patch in enumerate(weighted_predictions):
                 pivot = chunk_pivots[i]
                 z, y, x = pivot
-                self.inference_volume[
-                    z : z + self.window_size[0],
-                    y : y + self.window_size[1],
-                    x : x + self.window_size[2],
-                    :
-                ] += patch
+                try:
+                    self.inference_volume[
+                        z : z + self.window_size[0],
+                        y : y + self.window_size[1],
+                        x : x + self.window_size[2],
+                        :
+                    ] += patch
+                except ValueError:
+                    raise ValueError("Incompatible shapes between sliced inference volume and patch, check the padding routines for errors.")
+                
             # distribute to predictions
 
     def weight_chunk(self, prediction_chunk):

@@ -3,7 +3,7 @@ prediction_cfg:
     model_path: "/mnt/ssd1/neuroseg_tmp/out/grandiose-hippopotamus-119/weights.01.hdf5"
     n_output_classes: 1
     window_size: [64, 64, 64]
-    batch_size: 5
+    batch_size: 3
     chunk_size: 100
     padding_mode: "reflect"
     keep_tmp: false
@@ -13,7 +13,7 @@ data_cfg:
     #PREDICTION DATA CONFIG
     mode: "stack"
     normalize_data: true
-    n_channels: 2
+    n_channels: 1
     
     # GROUND TRUTH CONFIG
     positive_class_value: 1
