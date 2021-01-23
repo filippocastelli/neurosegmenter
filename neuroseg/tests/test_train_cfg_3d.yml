@@ -27,15 +27,15 @@ model_cfg:
     residual_preactivation: true
     
 dataset_cfg:
-    dataset_path: "/mnt/ssd1/datasets/em_neuroseg"
+    dataset_path: "/home/phil/repos/neuroseg/neuroseg/tests/em_neuroseg_test"
     mode: "stack"
     n_channels: 1
     positive_class_value: 1
     negative_class_value: 255
     
 output_cfg:
-    output_path: "/mnt/ssd1/neuroseg_tmp/out"
-    descriptor_path: "/mnt/ssd1/neuroseg_tmp/descr"
+    output_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/3d/train"
+    descriptor_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/3d/descr"
     enable_wandb_tracking: false
     
 data_augmentation_cfg:
@@ -45,7 +45,7 @@ data_augmentation_cfg:
     buffer_size : 1000
     shuffle: false
     seed: 123
-    pre_crop_scales: [1.5, 1.1, 1.1]
+    pre_crop_scales: [1.1, 1.1, 1.1]
     transform_cfg:
         spatial_transform:
             do_elastic_deform: true
