@@ -2,19 +2,31 @@ import numpy as np
 import sklearn.metrics as skmetrics
 import logging
 
-from utils import load_volume
+from utils import load_volume, glob_imgs
 
 class PerformanceEvaluator:
     
     def __init__(self, config,pred_array):
         self.config = config
-        self.ground_truth_path = config.ground_truth_path
         self.ground_truth_mode = config.ground_truth_mode
-        self._load_gt()
-        self._load_predictions(pred_array)
+        self.ground_truth_path = self._get_gt_path()
+        self._load_data(pred_array)
         self.classification_threshold = config.pe_classification_threshold
         
         self._calc_metrics()
+        
+        
+    def _get_gt_path(self):
+        if self.ground_truth_mode == "stack":
+            return glob_imgs(self.config.ground_truth_path, mode="stack", to_string=False)[0]
+        elif self.ground_truth_mode == "single_images":
+            return self.ground_truth_path
+        else:
+            raise NotImplementedError(self.ground_truth_mode)
+            
+    def _load_data(self, pred_array):
+        self._load_gt()
+        self._load_predictions(pred_array)
         
     def _load_predictions(self, pred_array):
         if len(pred_array.shape) > len(self.ground_truth.shape):
