@@ -10,6 +10,7 @@ sys.path.insert(0,parentdir)
 
 import numpy as np
 import numpy.testing as nptest
+import pudb
 
 import tensorflow as tf
 import tensorflow.debugging as tfdebug
@@ -26,6 +27,7 @@ class Datagen2DTest(unittest.TestCase):
         self.config = TrainConfig(self.config_path)
 
         self.dataset_path = self.config.dataset_path
+        
         
         self.train_paths = self.config.train_paths
         self.val_paths = self.config.val_paths
@@ -148,8 +150,6 @@ class Datagen2DTest(unittest.TestCase):
         # pudb.set_trace()
         frame, mask = dataGen2D._augment(frame, mask, self.transform_cfg)
         
-        
-    
     def _load_frame_mask(self):
         # pudb.set_trace()
         frame = dataGen2D._load_img(self.test_frames_paths[0],
