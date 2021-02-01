@@ -27,7 +27,8 @@ model_cfg:
     residual_preactivation: true
     
 dataset_cfg:
-    dataset_path: "/home/phil/repos/neuroseg/neuroseg/tests/em_neuroseg_test"
+    # dataset_path: "/home/phil/repos/neuroseg/neuroseg/tests/em_neuroseg_test"
+    dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
     mode: "stack"
     n_channels: 1
     positive_class_value: 1
