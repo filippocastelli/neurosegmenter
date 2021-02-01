@@ -26,8 +26,7 @@ import numpy as np
 import tifffile
 
 from datagens.datagenbase import dataGenBase
-
-SUPPORTED_FORMATS = ["tiff", "tif"]
+from utils import load_volume
 
 
 class datagen3DSingle(dataGenBase):
@@ -64,10 +63,22 @@ class datagen3DSingle(dataGenBase):
         return (stack_arr/norm).astype(np.float32)
     
     def _load_volumes(self):
-        logging.debug("reading from disk...")
         
-        self.frames_volume = tifffile.imread(str(self.frames_path)).astype(np.float32)
-        self.masks_volume = tifffile.imread(str(self.masks_path)).astype(np.float32)
+        # for processing purposes we use "stack" instead of "multi_stack"
+        data_mode = self.dataset_mode if self.dataset_mode != "multi_stack" else "stack"
+        
+        #TODO: check if need drop_last_dim or expand_last_dim
+        self.frames_volume = load_volume(str(self.frames_path),
+                                         data_mode=data_mode,
+                                         drop_last_dim=False).astype(np.float32)
+        self.masks_volume = load_volume(str(self.masks_path),
+                                        data_mode=data_mode,
+                                        drop_last_dim=False).astype(np.float32)
+        
+        # self.frames_volume = tifffile.imread(str(self.frames_path)).astype(np.float32)
+        # self.masks_volume = tifffile.imread(str(self.masks_path)).astype(np.float32)
+        
+        logging.debug("reading from disk, dataset mode: {}...".format(self.dataset_mode))
         
         if self.normalize_inputs:
             self.frames_volume = self._normalize_stack(self.frames_volume, norm=255)
