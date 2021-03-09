@@ -20,7 +20,7 @@ class PerformanceEvaluator:
         if self.ground_truth_mode == "stack":
             return glob_imgs(self.config.ground_truth_path, mode="stack", to_string=False)[0]
         elif self.ground_truth_mode == "single_images":
-            return self.ground_truth_path
+            return self.config.ground_truth_path
         else:
             raise NotImplementedError(self.ground_truth_mode)
             
