@@ -206,10 +206,10 @@ class TrainConfig(Config):
         else:
             self.da_seed = None
             
-        if "pre_crop_scales" in da_cfg:
-            self.da_pre_crop_scales = da_cfg["pre_crop_scales"]
-        else:
-            self.da_pre_crop_scales = None
+        # if "pre_crop_scales" in da_cfg:
+        #     self.da_pre_crop_scales = da_cfg["pre_crop_scales"]
+        # else:
+        #     self.da_pre_crop_scales = None
         
     def _parse_data_augmentation_common(self, da_cfg):
         self.da_single_thread = da_cfg["single_thread"]

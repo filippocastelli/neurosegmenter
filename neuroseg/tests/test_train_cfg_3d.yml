@@ -46,7 +46,7 @@ data_augmentation_cfg:
     buffer_size : 1000
     shuffle: false
     seed: 123
-    pre_crop_scales: [1.1, 1.1, 1.1]
+    # pre_crop_scales: [1.1, 1.1, 1.1]
     transform_cfg:
         spatial_transform:
             do_elastic_deform: true
