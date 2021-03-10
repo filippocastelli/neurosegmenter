@@ -153,6 +153,8 @@ class TrainConfig(Config):
         self.n_channels = dataset_cfg["n_channels"]
         self.positive_class_value = dataset_cfg["positive_class_value"]
         self.negative_class_value = dataset_cfg["negative_class_value"]
+        
+        self.ignore_last_channel = dataset_cfg["ignore_last_channel"] if "ignore_last_channel" in dataset_cfg else False
     
     # > MODEL PARSING <
     def _parse_model_cfg(self, model_cfg):

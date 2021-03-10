@@ -15,6 +15,8 @@ import numpy as np
 #     tf_debug.TensorBoardDebugWrapperSession(tf.Session(), "shelob:6006"))
 
 from datagens.datagenbase import dataGenBase
+from utils import load_volume
+
 
 TFA_INTERPOLATION_MODES = {"nearest": "NEAREST", "bilinear": "BILINEAR"}
 
@@ -27,7 +29,6 @@ class dataGen2D(dataGenBase):
         partition="train",
         data_augmentation=True,
         normalize_inputs=True,
-        ignore_last_channel=False,
         verbose=False
     ):
         """
@@ -47,9 +48,6 @@ class dataGen2D(dataGenBase):
             The default is True.
         normalize_inputs : bool, optional
             if True divides image values by np.iinfo(img.dtype).max. The default is True.
-        ignore_last_channel : bool, optional
-            If True doesn't consider the last channel of an image
-            (RGB 2-channel images with empty third channel) . The default is False.
         verbose : bool, optional
             Enable additional verbosity. The default is False.
 
@@ -72,14 +70,16 @@ class dataGen2D(dataGenBase):
         )
 
         self.steps_per_epoch = None
-        self.ignore_last_channel = ignore_last_channel
+        self.ignore_last_channel = config.ignore_last_channel
         self.buffer_size = config.da_buffer_size
         self.debug_mode = config.da_debug_mode
+        
+        self.crop_shape = config.crop_shape
 
         # TODO: Multi_stack support
         # if self.prefetch_volume == True:
         if self.dataset_mode == "stack":
-            self._load_volumes()
+            self.frames_volume, self.masks_volume = self._load_single_stack()
 
         self.data = self.gen_dataset()
         self.iter = self.data.__iter__
@@ -102,29 +102,64 @@ class dataGen2D(dataGenBase):
         )
 
     def _get_img_shape(self):
-        frame_path = self.frames_paths[0]
-        mask_path = self.masks_paths[0]
-        frame = self._load_img(frame_path, ignore_last_channel=self.ignore_last_channel)
-        mask = self._load_img(mask_path, is_binary_mask=True)
-        return frame.shape, mask.shape
+        
+        if self.dataset_mode == "single_images":
+            frame_path = self.frames_paths[0]
+            mask_path = self.masks_paths[0]
+            frame = self._load_img(frame_path, ignore_last_channel=self.ignore_last_channel)
+            mask = self._load_img(mask_path, is_binary_mask=True)
+            
+            frame_shape = frame.shape
+            mask_shape = mask.shape
+            
+        elif self.dataset_mode == "stack":
+            frame_shape = self.frames_volume[0].shape
+            mask_shape = self.masks_volume[0].shape
+        else:
+            raise NotImplementedError(self.dataset_mode)
+            
+        return frame_shape, mask_shape
 
-    def _load_volumes(self):
-        example_path_list = zip(self.frames_paths, self.masks_paths)
-        frame_list = []
-        mask_list = []
-        for example_path in example_path_list:
-            frame, mask = self._load_example(
-                example_path[0],
-                example_path[1],
-                self.normalize_inputs,
-                self.ignore_last_channel,
-                self.positive_class_value,
-            )
-            frame_list.append(frame)
-            mask_list.append(mask)
+    def _load_single_stack(self):
+        assert (len(self.frames_paths) == 1) and (len(self.masks_paths) == 1), "More than 1 stack found"
+        frame = load_volume(self.frames_paths[0],
+                            drop_last_dim=self.ignore_last_channel,
+                            expand_last_dim=True,
+                            data_mode="stack")
+        
+        mask = load_volume(self.masks_paths[0],
+                           drop_last_dim=False,
+                           expand_last_dim=True,
+                           data_mode="stack")
+        
+        mask = np.where(mask==self.positive_class_value, 1,0)
+        
+        if self.normalize_inputs:
+            norm_constant_frame = np.iinfo(frame.dtype).max
+            frame = frame / norm_constant_frame
+            
+            norm_constant_mask = np.iinfo(mask.dtype).max
+            mask = mask / norm_constant_mask
+            
+        return frame,  mask
+        
+    # def _load_volumes(self):
+    #     example_path_list = zip(self.frames_paths, self.masks_paths)
+    #     frame_list = []
+    #     mask_list = []
+    #     for example_path in example_path_list:
+    #         frame, mask = self._load_example(
+    #             example_path[0],
+    #             example_path[1],
+    #             self.normalize_inputs,
+    #             self.ignore_last_channel,
+    #             self.positive_class_value,
+    #         )
+    #         frame_list.append(frame)
+    #         mask_list.append(mask)
 
-        self.frames_volume = np.array(frame_list)
-        self.masks_volume = np.array(mask_list)
+    #     self.frames_volume = np.array(frame_list)
+    #     self.masks_volume = np.array(mask_list)
 
     @staticmethod
     def _load_img(
@@ -253,7 +288,6 @@ class dataGen2D(dataGenBase):
         """generate a 2D pipeline tf.Dataset"""
 
         if self.dataset_mode == "stack":
-            # self._load_volumes()
             ds = Dataset.from_tensor_slices((self.frames_volume, self.masks_volume))
         else:
             ds = Dataset.from_tensor_slices((self.frames_paths, self.masks_paths))
@@ -265,6 +299,8 @@ class dataGen2D(dataGenBase):
                 num_parallel_calls=self.threads,
             )
         full_frame_shape, full_mask_shape = self._get_img_shape()
+        # full_frame_shape = [768, 1024]
+        # full_mask_shape = [768, 1024]
         ds = ds.map(
             map_func=lambda frame, mask: self._set_shapes(
                 frame, mask, full_frame_shape, full_mask_shape

@@ -26,12 +26,24 @@ model_cfg:
     transposed_convolution: false
     residual_preactivation: true
     
+    
+# # SINGLE_IMAGES_DATASET
+# dataset_cfg:
+#     dataset_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds"
+#     mode: "single_images"
+#     n_channels: 2
+#     positive_class_value: 1
+#     negative_class_value: 255
+#     ignore_last_channel: true
+    
+#  STACK DATASET
 dataset_cfg:
-    dataset_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds"
-    mode: "single_images"
-    n_channels: 2
+    dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
+    mode: "stack"
+    n_channels: 1
     positive_class_value: 1
     negative_class_value: 255
+    ignore_last_channel: false
     
 output_cfg:
     output_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/train"
@@ -82,8 +94,8 @@ data_augmentation_cfg:
         #     p_per_sample:  0.15
             
 performance_evaluation_cfg:
-    ground_truth_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds/test/masks"
-    data_mode: "single_images"
+    # ground_truth_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds/test/masks"
+    # data_mode: "single_images"
     window_size: [128, 128]
     batch_size:       15
     chunk_size:       20

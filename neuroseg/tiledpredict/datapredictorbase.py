@@ -9,6 +9,8 @@ class DataPredictorBase:
                  model=None):
         
         self.config = config
+        self.ignore_last_channel = config.ignore_last_channel
+        
         self.mode = self.config.config_type
         self._parse_settings()
         self._parse_paths()
@@ -77,9 +79,11 @@ class DataPredictorBase:
     
     def _load_volume(self):
         drop_last_channel = True if (self.n_channels == 2) else False
+        expand_last_dim = True if self.n_channels == 1 else False
+        
         vol = load_volume(self.data_path,
                           drop_last_channel,
-                          expand_last_dim=False,
+                          expand_last_dim=expand_last_dim,
                           data_mode=self.data_mode)
         
         if self.normalize_data:

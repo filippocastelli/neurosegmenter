@@ -33,6 +33,7 @@ dataset_cfg:
     n_channels: 1
     positive_class_value: 1
     negative_class_value: 255
+    ignore_last_channel: false
     
 output_cfg:
     output_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/3d/train"

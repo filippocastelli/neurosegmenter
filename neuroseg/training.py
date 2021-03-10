@@ -39,14 +39,12 @@ def main(cfg_path):
     train_datagen = Datagen(config,
                               partition="train",
                               normalize_inputs=True,
-                              ignore_last_channel=True,
                               verbose=False,
                               data_augmentation=True)
     
     val_datagen = Datagen(config,
                               partition="val",
                               normalize_inputs=True,
-                              ignore_last_channel=True,
                               verbose=False,
                               data_augmentation=False)
     
@@ -92,7 +90,7 @@ if __name__ == "__main__":
     
     parser.add_argument("-c","--conf", action="store", type=str,
                         dest="configuration_path_str",
-                        default="/home/phil/repos/neuroseg/neuroseg/tests/test_train_cfg_3d.yml",
+                        default="/home/phil/repos/neuroseg/neuroseg/tests/test_train_cfg.yml",
                         help="Configuration file path")
     
     args, unknown = parser.parse_known_args()
