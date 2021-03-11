@@ -79,7 +79,14 @@ class dataGen2D(dataGenBase):
         # TODO: Multi_stack support
         # if self.prefetch_volume == True:
         if self.dataset_mode == "stack":
-            self.frames_volume, self.masks_volume = self._load_single_stack()
+            assert (len(self.frames_paths) == 1) and (len(self.masks_paths) == 1), "More than 1 stack found"
+            
+            self.frames_volume, self.masks_volume = self._load_single_stack(self.frames_paths[0],
+                                                                            self.masks_paths[0])
+        elif self.dataset_mode == "multi_stack":
+            
+            self.frames_volume, self.masks_volume = self._load_multi_stack(self.frames_paths,
+                                                                           self.masks_paths)
 
         self.data = self.gen_dataset()
         self.iter = self.data.__iter__
@@ -112,7 +119,7 @@ class dataGen2D(dataGenBase):
             frame_shape = frame.shape
             mask_shape = mask.shape
             
-        elif self.dataset_mode == "stack":
+        elif self.dataset_mode in ["stack", "multi_stack"]:
             frame_shape = self.frames_volume[0].shape
             mask_shape = self.masks_volume[0].shape
         else:
@@ -120,14 +127,13 @@ class dataGen2D(dataGenBase):
             
         return frame_shape, mask_shape
 
-    def _load_single_stack(self):
-        assert (len(self.frames_paths) == 1) and (len(self.masks_paths) == 1), "More than 1 stack found"
-        frame = load_volume(self.frames_paths[0],
+    def _load_single_stack(self, frame_path, mask_path):
+        frame = load_volume(frame_path,
                             drop_last_dim=self.ignore_last_channel,
                             expand_last_dim=True,
                             data_mode="stack")
         
-        mask = load_volume(self.masks_paths[0],
+        mask = load_volume(mask_path,
                            drop_last_dim=False,
                            expand_last_dim=True,
                            data_mode="stack")
@@ -142,6 +148,29 @@ class dataGen2D(dataGenBase):
             mask = mask / norm_constant_mask
             
         return frame,  mask
+    
+    def _load_multi_stack(self, frame_paths, mask_paths):
+        frames = []
+        masks = []
+        for idx, frame_path in enumerate(frame_paths):
+            
+            frame, mask = self._load_single_stack(frame_path, mask_paths[idx])
+            frames.append(frame)
+            masks.append(mask)
+            # frames.append(load_volume(frame_path,
+            #                     drop_last_dim=self.ignore_last_channel,
+            #                     expand_last_dim=True,
+            #                     data_mode="stack"))
+            
+            # masks.append(load_volume(mask_paths[idx],
+            #                    drop_last_dim=False,
+            #                    expand_last_dim=True,
+            #                    data_mode="stack"))
+            
+        frames_volume = np.concatenate(frames, axis=0)
+        masks_volume = np.concatenate(masks, axis=0)
+        
+        return frames_volume, masks_volume
         
     # def _load_volumes(self):
     #     example_path_list = zip(self.frames_paths, self.masks_paths)
@@ -287,9 +316,9 @@ class dataGen2D(dataGenBase):
     def gen_dataset(self):
         """generate a 2D pipeline tf.Dataset"""
 
-        if self.dataset_mode == "stack":
+        if self.dataset_mode in ["stack", "multi_stack"]:
             ds = Dataset.from_tensor_slices((self.frames_volume, self.masks_volume))
-        else:
+        elif self.dataset_mode == "single_images":
             ds = Dataset.from_tensor_slices((self.frames_paths, self.masks_paths))
             ds = ds.map(
                 map_func=lambda frame_path, mask_path: self._load_example_wrapper(
@@ -298,6 +327,8 @@ class dataGen2D(dataGenBase):
                 deterministic=True,
                 num_parallel_calls=self.threads,
             )
+        else :
+            raise NotImplementedError(self.dataset_mode)
         full_frame_shape, full_mask_shape = self._get_img_shape()
         # full_frame_shape = [768, 1024]
         # full_mask_shape = [768, 1024]

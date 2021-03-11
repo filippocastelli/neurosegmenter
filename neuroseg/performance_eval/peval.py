@@ -4,15 +4,94 @@ import logging
 
 from utils import load_volume, glob_imgs
 
-class PerformanceEvaluator:
+
+def PerformanceEvaluator(config,
+                         predicted_data=None):
+    data_mode = config.dataset_mode if config.config_type == "training" else config.data_mode
+    if data_mode in ["single_images", "stack"]:
+        return SingleVolumePerformanceEvaluator(config, predicted_data=predicted_data)
+    elif data_mode == "multi_stack":
+        return MultiVolumePerformanceEvaluator(config, prediction_dict=predicted_data)
+
+class MultiVolumePerformanceEvaluator:
     
-    def __init__(self, config,pred_array):
+    def __init__(self, config, prediction_dict):
         self.config = config
+        self.prediction_dict = {key: np.squeeze(prediction) for key, prediction in prediction_dict.items()}
         self.ground_truth_mode = config.ground_truth_mode
-        self.ground_truth_path = self._get_gt_path()
-        self._load_data(pred_array)
-        self.classification_threshold = config.pe_classification_threshold
+        self.ground_truth_path = config.ground_truth_path
+        self.gt_dict = self._load_gt()
         
+        self.measure_dict = self._calc_aggregated_metrics()
+        
+        
+    def _load_gt(self):
+        self.ground_truth_volume_fpaths = glob_imgs(self.ground_truth_path, mode="stack", to_string=False)
+        gt_fpath_names = [fpath.name for fpath in self.ground_truth_volume_fpaths]
+        if set(self.prediction_dict.keys()) != set(gt_fpath_names):
+            raise ValueError("GT masks not matching GT frames")
+            
+        gt_dict = {}
+        for idx, gt_fpath in enumerate(self.ground_truth_volume_fpaths):
+            volume_name = gt_fpath.name
+            gt_volume = load_volume(gt_fpath,
+                    drop_last_dim=False,
+                    expand_last_dim=False,
+                    squeeze=True,
+                    data_mode="stack")
+            norm_constant = np.iinfo(gt_volume.dtype).max
+            gt_volume = gt_volume / norm_constant
+            gt_dict[volume_name] = gt_volume.astype(np.uint8)
+            
+        return gt_dict
+        
+    def _calc_metrics(self):
+        metrics_dict = {}
+        for name, prediction in self.prediction_dict.items():
+            ground_truth = self.gt_dict[name]
+            pe = SingleVolumePerformanceEvaluator(self.config,prediction, ground_truth)
+            metrics_dict[name] = pe.measure_dict
+            
+        self.metrics_dict = metrics_dict
+        return metrics_dict   
+
+    def _calc_aggregated_metrics(self):
+        metrics_dict = self.metrics_dict if hasattr(self, "metrics_dict") else self._calc_metrics()
+        aggregated_dict = self._get_metric_aggregated_dict(metrics_dict)
+        mean_aggregated_dict = {metric: np.mean(metric_array) for metric, metric_array in aggregated_dict.items()}
+        return mean_aggregated_dict
+                    
+    @staticmethod
+    def _get_metric_aggregated_dict(sample_metric_dict):
+        first_elem = list(sample_metric_dict.keys())[0]
+        metrics = list(sample_metric_dict[first_elem].keys())
+        
+        aggregated_dict = {metric: [] for metric in metrics}
+        
+        for sample_name, metric_dict in sample_metric_dict.items():
+            for metric in metrics:
+                aggregated_dict[metric].append(metric_dict[metric])
+                
+                
+        return aggregated_dict
+                   
+        
+class SingleVolumePerformanceEvaluator:
+    
+    def __init__(self, config, predicted_data=None, gt_array=None):
+        self.config = config
+
+        if (gt_array is None):
+            self.ground_truth_mode = config.ground_truth_mode
+            self.ground_truth_path = self._get_gt_path()
+            self._load_gt()
+        else:
+            self.ground_truth = gt_array
+            
+        self._preprocess_pred(predicted_data)
+            
+        self.classification_threshold = config.pe_classification_threshold
+        self.enable_curves = config.pe_enable_curves
         self._calc_metrics()
         
         
@@ -28,7 +107,7 @@ class PerformanceEvaluator:
         self._load_gt()
         self._load_predictions(pred_array)
         
-    def _load_predictions(self, pred_array):
+    def _preprocess_pred(self, pred_array):
         if len(pred_array.shape) > len(self.ground_truth.shape):
             pred_array = np.squeeze(pred_array)
         
@@ -37,11 +116,11 @@ class PerformanceEvaluator:
         self.predictions = pred_array
         
     def _load_gt(self):
-        
         gt_vol = (load_volume(self.ground_truth_path,
                              drop_last_dim=False,
                              expand_last_dim=False,
                              squeeze=True,
+                             # data_mode=self.ground_truth_mode) / 255
                              data_mode=self.ground_truth_mode) / 255).astype(np.uint8)
         self.ground_truth = gt_vol
         
@@ -49,14 +128,17 @@ class PerformanceEvaluator:
         
         self.performanceMetrics = PerformanceMetrics(y_true = self.ground_truth,
                                                      y_pred = self.predictions,
-                                                     thr=self.classification_threshold)
+                                                     thr=self.classification_threshold,
+                                                     enable_curves=self.enable_curves)
         
         self.measure_dict = self.performanceMetrics.measure_dict
     
                  
 class PerformanceMetrics:
     """general class for performance metrics evaluation"""
-    def __init__(self, y_true, y_pred, thr):
+    def __init__(self, y_true, y_pred, thr, enable_curves=False):
+        
+        self.enable_curves = enable_curves
         self.y_true = np.copy(y_true)
         self.y_pred = np.copy(y_pred)
         self.thr = thr
@@ -205,8 +287,11 @@ class PerformanceMetrics:
         """Area under ROC curve
         Implemented by scikit-learn"""
         logging.info("Calculating PR curve")
-        return skmetrics.roc_auc_score(y_true=self.y_true_fuzzy.flatten(),
-                                       y_score=self.y_pred_fuzzy.flatten())
+        flatten_y_true = self.y_true_fuzzy.flatten()
+        flatten_y_pred = self.y_pred_fuzzy.flatten()
+        
+        return skmetrics.roc_auc_score(y_true=flatten_y_true,
+                                       y_score=flatten_y_pred)
     
     def sk_pr_curve(self):
         """Precision Recall curve
@@ -232,8 +317,7 @@ class PerformanceMetrics:
         sk_f1_score  =  self.sk_f1_score()
         fuzzy_dice = self.fuzzy_dice()
         fuzzy_jaccard = self.fuzzy_jaccard()
-        roc_curve = self.sk_roc_curve()
-        pr_curve = self.sk_pr_curve()
+
         sk_roc_auc_score = self.sk_roc_auc_score()
         
         dictionary = {
@@ -249,10 +333,16 @@ class PerformanceMetrics:
             "sk_f1_score": sk_f1_score,
             "fuzzy_dice" : fuzzy_dice,
             "fuzzy_jaccard": fuzzy_jaccard,
-            "roc_curve": roc_curve,
-            "pr_curve": pr_curve,
             "sk_roc_auc_score": sk_roc_auc_score
         }
+        
+        if self.enable_curves:
+            roc_curve = self.sk_roc_curve()
+            pr_curve = self.sk_pr_curve()
+            
+            dictionary.update({
+                "roc_curve": roc_curve,
+                "pr_curve": pr_curve})
 
         return dictionary
 

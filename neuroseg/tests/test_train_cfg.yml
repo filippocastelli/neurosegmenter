@@ -36,10 +36,20 @@ model_cfg:
 #     negative_class_value: 255
 #     ignore_last_channel: true
     
-#  STACK DATASET
+# #  STACK DATASET
+# dataset_cfg:
+#     dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
+#     mode: "stack"
+#     n_channels: 1
+#     positive_class_value: 1
+#     negative_class_value: 255
+#     ignore_last_channel: false
+
+
+#  MULTISTACK DATASET
 dataset_cfg:
-    dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
-    mode: "stack"
+    dataset_path : "/mnt/ssd1/datasets/em_neuroseg_multi"
+    mode: "multi_stack"
     n_channels: 1
     positive_class_value: 1
     negative_class_value: 255
@@ -101,6 +111,7 @@ performance_evaluation_cfg:
     chunk_size:       20
     classification_threshold:   0.5
     add_empty_channel:          true
+    enable_curves: false
     
 callbacks_cfg:
     checkpoint:

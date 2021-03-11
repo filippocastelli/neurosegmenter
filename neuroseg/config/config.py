@@ -46,6 +46,7 @@ class Config:
             self.pe_chunk_size = pe_cfg["chunk_size"]
             self.pe_classification_threshold = pe_cfg["classification_threshold"]
             self.pe_add_empty_channel = pe_cfg["add_empty_channel"]
+            self.pe_enable_curves = pe_cfg["enable_curves"] if "enable_curves" in pe_cfg else False
         else:
             self.evaluate_performance = False
             
@@ -237,7 +238,7 @@ class TrainConfig(Config):
     def _gen_paths(self, dataset_path):
         path_dict = {}
         if self.training_mode in ["2d", "3d"]:
-            if self.dataset_mode == "single_images":
+            if self.dataset_mode in ["single_images", "multi_stack"]:
                 for partition in ["train", "val", "test"]:
                     partition_path = dataset_path.joinpath(partition)
                     partition_subdir_dict = {}
