@@ -26,8 +26,7 @@ model_cfg:
     transposed_convolution: false
     residual_preactivation: true
     
-    
-# # SINGLE_IMAGES_DATASET
+# # SINGLE_IMAGES_DATASET TWO CHANNELS
 # dataset_cfg:
 #     dataset_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds"
 #     mode: "single_images"
@@ -35,6 +34,15 @@ model_cfg:
 #     positive_class_value: 1
 #     negative_class_value: 255
 #     ignore_last_channel: true
+
+# # SINGLE_IMAGES_DATASET SINGLE CHANNEL
+# dataset_cfg:
+#     dataset_path: "/mnt/ssd1/datasets/em_neuroseg_single"
+#     mode: "single_images"
+#     n_channels: 1
+#     positive_class_value: 1
+#     negative_class_value: 255
+#     ignore_last_channel: false
     
 # #  STACK DATASET
 # dataset_cfg:
