@@ -34,7 +34,6 @@ class dataGenBase:
         
     
     def _path_sanity_check(self):
-        
         if self.dataset_mode in ["single_images", "stack"]:
             if not (self.data_path_dict["frames"].is_dir()
                     and self.data_path_dict["masks"].is_dir()):

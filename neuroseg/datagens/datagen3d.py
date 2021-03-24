@@ -1,5 +1,6 @@
 import logging
 import gc
+from pathlib import Path
 
 from batchgenerators.dataloading import (
     MultiThreadedAugmenter,
@@ -24,7 +25,7 @@ import numpy as np
 from datagens.datagenbase import dataGenBase
 from utils import load_volume
 
-
+   
 class datagen3DSingle(dataGenBase):
     """3D data pipeline, inherits from dataGenBase
     based on BatchGenerators"""
@@ -72,9 +73,9 @@ class datagen3DSingle(dataGenBase):
                          data_augmentation=data_augmentation,
                          normalize_inputs=normalize_inputs,
                          verbose=verbose)
-
-        self._parse_single_stack_paths()
-        self._load_volumes()
+        
+        # self._parse_single_stack_paths()
+        # self._load_volumes()
         
         self.shuffle = self.config.da_shuffle
         self.seed = self.config.da_seed
@@ -84,54 +85,86 @@ class datagen3DSingle(dataGenBase):
         self.iter = self.data.__iter__
         self.steps_per_epoch = self._get_steps_per_epoch(self.volume_shape, self.crop_shape, self.batch_size)
 
-    def _parse_single_stack_paths(self):
-        self.frames_path = self.frames_paths[0]
-        self.masks_path = self.masks_paths[0]
-    
+
     @staticmethod
     def _normalize_stack(stack_arr, norm=255):
         """divide stack by normalization constant"""
         return (stack_arr/norm).astype(np.float32)
     
+    def _get_data_dict(self):
+        
+        if self.dataset_mode == "stack":
+            self.frames_path = self.frames_paths[0]
+            self.masks_path = self.masks_paths[0]
+            
+            data = {"img": self.frames_path,
+                    "label": self.masks_path}
+        elif self.dataset_mode == "multi_stack":
+            data = {"img": self.frames_paths,
+                    "label": self.masks_paths}
+        elif self.dataset_mode == "single_images":
+            data = {"img": self.frames_paths,
+                    "label": self.masks_paths}
+        return data
+        
+        
     def _load_volumes(self):
         """load images from file,
         apply normalizations,
         fix stack dimensions,,
         create {"img: img_volume, "label": label_volume} data dict"""
-        # for processing purposes we use "stack" instead of "multi_stack"
-        data_mode = self.dataset_mode if self.dataset_mode != "multi_stack" else "stack"
-        
-        #TODO: check if need drop_last_dim or expand_last_dim
-        self.frames_volume = load_volume(str(self.frames_path),
-                                         data_mode=data_mode,
-                                         drop_last_dim=False)
-        self.masks_volume = load_volume(str(self.masks_path),
-                                        data_mode=data_mode,
-                                        drop_last_dim=False)
-        
-        # self.frames_volume = tifffile.imread(str(self.frames_path)).astype(np.float32)
-        # self.masks_volume = tifffile.imread(str(self.masks_path)).astype(np.float32)
-        
-        logging.debug("reading from disk, dataset mode: {}...".format(self.dataset_mode))
-        
-        if self.normalize_inputs:
-            #TODO check normalization constant
-            self.frames_volume = self._normalize_stack(self.frames_volume,
-                                                       norm=np.iinfo(self.frames_volume.dtype).max)
-            self.masks_volume = self._normalize_stack(self.masks_volume,
-                                                      norm=np.iinfo(self.masks_volume.dtype).max)
+                
+        if self.dataset_mode in ["single_images", "stack"]:
             
-        self._adjust_stack_dims()
+            # TODO: MOVE ALL THIS PREPROCESSING INSIDE CROPPED DATA LOADER
+            # ONLY data = {img: img_path, label: label_path} must be here
+            
+            
+            # for processing purposes we use "stack" instead of "multi_stack"
+            data_mode = self.dataset_mode if self.dataset_mode != "multi_stack" else "stack"
+            
+            #TODO: check if need drop_last_dim or expand_last_dim
+            # self.frames_volume = load_volume(str(self.frames_path),
+            #                                  data_mode=data_mode,
+            #                                  drop_last_dim=False)
+            # self.masks_volume = load_volume(str(self.masks_path),
+            #                                 data_mode=data_mode,
+            #                                 drop_last_dim=False)
+            
+            # self.frames_volume = tifffile.imread(str(self.frames_path)).astype(np.float32)
+            # self.masks_volume = tifffile.imread(str(self.masks_path)).astype(np.float32)
+            
+            logging.debug("reading from disk, dataset mode: {}...".format(self.dataset_mode))
+            
+            # if self.normalize_inputs:
+            #     #TODO check normalization constant
+            #     self.frames_volume = self._normalize_stack(self.frames_volume,
+            #                                                norm=np.iinfo(self.frames_volume.dtype).max)
+            #     self.masks_volume = self._normalize_stack(self.masks_volume,
+            #                                               norm=np.iinfo(self.masks_volume.dtype).max)
+                
+            # self._adjust_stack_dims()
+            
+            self.data_dict = {
+                "img" : self.frames_volume,
+                "label": self.masks_volume }
+            # self.frames_volume and self.masks_volume are redundant at this point
+            # they might need to be deleted to free space
+            
+            del self.frames_volume
+            del self.masks_volume
+            gc.collect()
         
-        self.data_dict = {
-            "img" : self.frames_volume,
-            "label": self.masks_volume }
-        # self.frames_volume and self.masks_volume are redundant at this point
-        # they might need to be deleted to free space
         
-        del self.frames_volume
-        del self.masks_volume
-        gc.collect()
+        elif self.dataset_mode == "multi_stack":
+            
+            self.data_dict = {
+                "img": self.frames_paths,
+                "label": self.masks_paths}
+          
+        else:
+            raise NotImplementedError(self.dataset_mode)
+
             
     
     def _adjust_stack_dims(self):
@@ -330,16 +363,35 @@ class datagen3DSingle(dataGenBase):
     def _setup_gen(self):
         """returns a python generator to be used with keras
         supports both SingleThread and MultiThread BatchGenerators augmenters"""
-        self.dataLoader = CroppedDataLoaderBG(
-            data=self.data_dict,
-            batch_size=self.batch_size,
-            crop_shape=self.crop_shape,
-            num_threads_in_multithreaded=self.threads,
-            shuffle=self.shuffle,
-            seed_for_shuffle=self.seed,
-            infinite=False,
-            # pre_crop_scales=self.pre_crop_scales
-            )
+        
+        self.data_dict = self._get_data_dict()
+        
+        if self.dataset_mode in ["single_images", "stack"]:
+            self.dataLoader = CroppedDataLoaderBG(
+                data=self.data_dict,
+                data_mode=self.dataset_mode,
+                batch_size=self.batch_size,
+                crop_shape=self.crop_shape,
+                num_threads_in_multithreaded=self.threads,
+                shuffle=self.shuffle,
+                seed_for_shuffle=self.seed,
+                infinite=False,
+                # pre_crop_scales=self.pre_crop_scales
+                )
+        elif self.dataset_mode == "multi_stack":
+            self.dataLoader = MultiCroppedDataLoaderBG(
+                data=self.data_dict,
+                batch_size=self.batch_size,
+                crop_shape=self.crop_shape,
+                normalize_inputs=self.normalize_inputs,
+                num_threads_in_multithreaded=self.threads,
+                shuffle=self.shuffle,
+                seed_for_shuffle=self.seed,
+                infinite=False)
+        else:
+            raise NotImplementedError(self.dataset_mode)
+            
+        self.volume_shape = self.dataLoader.volume_shape
         self.composed_transform = self._get_transform_chain()
         
         if self.single_thread:
@@ -397,6 +449,106 @@ class datagen3DSingle(dataGenBase):
         return np.moveaxis(input_tensor, source=1, destination=-1)
 
 
+class MultiCroppedDataLoaderBG(DataLoader):
+    
+    def __init__(
+            self,
+            data,
+            batch_size,
+            crop_shape,
+            num_threads_in_multithreaded=1,
+            shuffle=False,
+            seed_for_shuffle=12,
+            infinite=False,
+            normalize_inputs=True):
+        
+        # data = {"img": [img_paths], "label": [label_paths]}}
+        super().__init__(
+            data=data,
+            batch_size=batch_size,
+            num_threads_in_multithreaded=num_threads_in_multithreaded,
+            shuffle=shuffle,
+            seed_for_shuffle=seed_for_shuffle,
+            infinite=infinite)
+        
+        self.crop_shape = crop_shape
+        self.img_paths = self._data["img"]
+        self.label_paths = self._data["label"]
+        self.rng_seed = seed_for_shuffle
+        self.normalize_inputs = normalize_inputs
+        
+        if self.rng_seed is not None:
+            np.random.seed(self.rng_seed)
+        
+        if len(self.img_paths) != len(self.label_paths):
+            raise ValueError("img and labels have different length, check dataset")
+            
+        self.img_path_dict = {Path(fpath).name : fpath for fpath in self.img_paths}
+        self.label_path_dict = {Path(fpath).name : fpath  for fpath in self.label_paths}
+        
+        if set(self.img_path_dict.keys()) != set(self.label_path_dict.keys()):
+            raise ValueError("imag and labels have different names")
+            
+        self.path_dict = self._get_nested_path_dict()
+        self.volume_dict = self._load_volumes()
+        self.volume_names = list(self.volume_dict.keys())        
+        self.volume_shape_dict = {key: vol_dict_item["img"].shape[1:] for key, vol_dict_item in self.volume_dict.items()}
+        self.volume_shape = self.volume_shape_dict[list(self.volume_shape_dict.keys())[0]][1:]
+        
+    def _get_nested_path_dict(self):
+        nested_dict = {}
+        for key in self.img_path_dict.keys():
+            key_dict = {
+                "img": self.img_path_dict[key],
+                "label": self.label_path_dict[key]}
+            nested_dict[key] = key_dict
+        return nested_dict
+        
+
+    def _load_volumes(self):
+        volume_dict = {}
+        for key, vol_path_dict in self.path_dict.items():
+            
+            img_path = vol_path_dict["img"]
+            label_path = vol_path_dict["label"]
+            
+            # NOTE LOAD_VOLUME_COUPLE IS NOW IN SINGLE CROPPED DATA LOADER
+            img_volume, label_volume = CroppedDataLoaderBG._load_volume_couple(img_path,
+                                                                               label_path,
+                                                                               self.normalize_inputs)
+            key_volume_dict = {
+                "img": img_volume,
+                "label": label_volume}
+            
+            volume_dict[key] = key_volume_dict
+        return volume_dict
+    
+    @staticmethod
+    def _normalize_stack(stack_arr, norm=255):
+        return (stack_arr/norm).astype(np.float32)
+    
+    def generate_train_batch(self):
+        img_batch = []
+        label_batch = []
+        for idx in range(self.batch_size):
+            crop_img, crop_label = self._get_random_crop_multi()
+            img_batch.append(crop_img)
+            label_batch.append(crop_label)
+            
+        stack_img = np.stack(img_batch, axis=0)
+        stack_label = np.stack(label_batch, axis=0)
+        
+        return {"data": stack_img, "seg": stack_label}
+    
+    def _get_random_crop_multi(self):
+        vol_name = np.random.choice(self.volume_names)
+
+        return CroppedDataLoaderBG._get_random_crop(
+            frames_volume=self.volume_dict[vol_name]["img"],
+            masks_volume=self.volume_dict[vol_name]["label"],
+            volume_shape=self.volume_shape_dict[vol_name],
+            crop_shape=self.crop_shape)
+        
 class CroppedDataLoaderBG(DataLoader):
     """expands DataLoader class
     used for loading pre-applied random cropping to data"""
@@ -406,10 +558,12 @@ class CroppedDataLoaderBG(DataLoader):
             data,
             batch_size,
             crop_shape,
+            data_mode="stack",
             num_threads_in_multithreaded=1,
             shuffle=False,
             seed_for_shuffle=123,
-            infinite=False):
+            infinite=False,
+            normalize_inputs=True):
         """
         CroppedDataLoaderBG
         
@@ -418,7 +572,7 @@ class CroppedDataLoaderBG(DataLoader):
         Parameters
         ----------
         data : dict
-            {"img": img_npy, "label": label_npy} dict.
+            {"img": img_paths, "label": label_paths} dict.
         batch_size : int
             batch size.
         crop_shape : tuple or list
@@ -443,10 +597,26 @@ class CroppedDataLoaderBG(DataLoader):
             infinite=infinite
             )
         
-        self.volume_shape = data["img"].shape[1:]
-        self.frames_volume = data["img"]
-        self.masks_volume = data["label"]
+        # self.volume_shape = data["img"].shape[1:]
+        # self.frames_volume = data["img"]
+        # self.masks_volume = data["label"]
+        self.img_path = data["img"]
+        self.labels_path = data["label"]
         
+        self.data_mode = data_mode
+        self.normalize_inputs = normalize_inputs
+        
+        if self.data_mode not in ["single_images", "stack"]:
+            raise ValueError("CroppedDataLoaderBG does not suppport data mode {} \
+                             maybe you wanted to use MultiVolumeDataLoaderBG?".format(self.data_mode))
+        
+        self.frames_volume, self.masks_volume = self._load_volume_couple(
+            img_path=self.img_path,
+            label_path=self.labels_path,
+            normalize_inputs=self.normalize_inputs,
+            data_mode=self.data_mode)
+        
+        self.volume_shape = self.frames_volume.shape[1:]
         self.crop_shape = crop_shape
         # self.pre_crop_scales = pre_crop_scales
         self.rng_seed = seed_for_shuffle
@@ -454,7 +624,59 @@ class CroppedDataLoaderBG(DataLoader):
         if self.rng_seed is not None:
             np.random.seed(self.rng_seed)
         
+    @classmethod
+    def _load_volume_couple(cls, img_path, label_path, normalize_inputs, data_mode="stack"):
+        img_volume = load_volume(img_path,
+                                 data_mode=data_mode,
+                                 drop_last_dim=False)
         
+        label_volume = load_volume(label_path,
+                                   data_mode=data_mode,
+                                   drop_last_dim=False)
+        if normalize_inputs:
+            img_volume = cls._normalize_stack(img_volume,
+                                               norm=np.iinfo(img_volume.dtype).max)
+            label_volume = cls._normalize_stack(label_volume,
+                                                 norm=np.iinfo(label_volume.dtype).max)
+            
+        img_volume, label_volume = cls._adjust_stack_dims(img_volume, label_volume, to_channel_first=True)
+        return img_volume, label_volume
+    
+    @classmethod
+    def _adjust_stack_dims(cls, img_volume, labels_volume, to_channel_first=True):
+
+        # determine if third channel is empty
+        if len(np.unique(img_volume[...,2])) == 1:
+            img_volume = img_volume[...,:-1]
+
+        img_volume = cls._expand_dims_if_needed(img_volume)
+        labels_volume = cls._expand_dims_if_needed(labels_volume)
+        
+        if to_channel_first:
+            img_volume = np.moveaxis(img_volume, -1 , 0)
+            labels_volume = np.moveaxis(labels_volume, -1, 0)
+            
+        return img_volume, labels_volume
+
+            
+    @staticmethod
+    def _expand_dims_if_needed(stack):
+        stack_shape = stack.shape
+        
+        if len(stack_shape) == 4:
+            pass
+        elif len(stack_shape) == 3:
+            stack = np.expand_dims(stack, axis=-1)
+        else:
+            raise ValueError("invalid stack_shape {}".format(stack_shape))
+            
+        return stack
+    
+
+    @staticmethod
+    def _normalize_stack(stack_arr, norm=255):
+        return (stack_arr/norm).astype(np.float32)
+    
     # TODO: consider if reviving pre-scaling is worth it or not
     
     #     self.scaled_crop_shape = self._get_scaled_crop_shape(self.crop_shape,
@@ -481,7 +703,11 @@ class CroppedDataLoaderBG(DataLoader):
         label_batch = []
         
         for i in range(self.batch_size):
-            crop_img, crop_label = self._get_random_crop()
+            crop_img, crop_label = self._get_random_crop(
+                frames_volume=self.frames_volume,
+                masks_volume=self.masks_volume,
+                volume_shape=self.volume_shape,
+                crop_shape=self.crop_shape)
             img_batch.append(crop_img)
             label_batch.append(crop_label)
         
@@ -490,26 +716,27 @@ class CroppedDataLoaderBG(DataLoader):
         
         return {"data": stack_img, "seg": stack_label}
      
-    def _get_random_crop(self):
+    @staticmethod
+    def _get_random_crop(frames_volume, masks_volume, volume_shape, crop_shape):
         """get a random crop_img, crop_label tuple"""
-        z_shape, y_shape, x_shape = self.volume_shape
+        z_shape, y_shape, x_shape = volume_shape
         
-        z_0 = np.random.randint(low=0, high=z_shape - self.crop_shape[0])
-        y_0 = np.random.randint(low=0, high=y_shape - self.crop_shape[1])
-        x_0 = np.random.randint(low=0, high=x_shape - self.crop_shape[2])
+        z_0 = np.random.randint(low=0, high=z_shape - crop_shape[0])
+        y_0 = np.random.randint(low=0, high=y_shape - crop_shape[1])
+        x_0 = np.random.randint(low=0, high=x_shape - crop_shape[2])
         
-        crop_img = self.frames_volume[
+        crop_img = frames_volume[
             :,
-            z_0 : z_0 + self.crop_shape[0],
-            y_0 : y_0 + self.crop_shape[1],
-            x_0 : x_0 + self.crop_shape[2]
+            z_0 : z_0 + crop_shape[0],
+            y_0 : y_0 + crop_shape[1],
+            x_0 : x_0 + crop_shape[2]
             ]
         
-        crop_label = self.masks_volume[
+        crop_label = masks_volume[
             :,
-            z_0 : z_0 + self.crop_shape[0],
-            y_0 : y_0 + self.crop_shape[1],
-            x_0 : x_0 + self.crop_shape[2]
+            z_0 : z_0 + crop_shape[0],
+            y_0 : y_0 + crop_shape[1],
+            x_0 : x_0 + crop_shape[2]
             ]
         
         return crop_img, crop_label
