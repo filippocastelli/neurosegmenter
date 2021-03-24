@@ -9,13 +9,11 @@ import numpy as np
 from tqdm import tqdm
 import scipy.signal as signal
 
+
 class DataPredictor3D(DataPredictorBase):
-    def __init__(self,
-                 config,
-                 model=None):
+    def __init__(self, config, model=None):
         super().__init__(config, model)
-        
-    
+
     def predict(self):
         self.tiledpredictor = TiledPredictor3D(
             input_volume=self.input_data,
@@ -26,9 +24,38 @@ class DataPredictor3D(DataPredictorBase):
             chunk_size=self.chunk_size,
             tmp_folder=self.temp_path,
             keep_tmp=self.keep_tmp,
-            n_output_classes=self.n_output_classes)
-        
+            n_output_classes=self.n_output_classes,
+        )
+
         self.predicted_data = self.tiledpredictor.output_volume
+        return self.predicted_data
+
+
+class MultiVolumeDataPredictor3D(DataPredictorBase):
+    def __init__(self, config, model=None):
+        super().__init__(config, model)
+
+    def predict(self):
+        tiled_predictors = {}
+        for idx, volume in enumerate(self.input_data):
+            volume_name = self.data_paths[idx].name
+            tiledpredictor = TiledPredictor3D(
+                input_volume=volume,
+                batch_size=self.batch_size,
+                window_size=self.window_size,
+                model=self.prediction_model,
+                padding_mode=self.padding_mode,
+                chunk_size=self.chunk_size,
+                tmp_folder=self.temp_path,
+                keep_tmp=self.keep_tmp,
+                n_output_classes=self.n_output_classes,
+            )
+
+            tiled_predictors[volume_name] = tiledpredictor
+
+        self.predicted_data = {
+            name: pred.output_volume for name, pred in tiled_predictors.items()
+        }
         return self.predicted_data
 
 
@@ -43,12 +70,12 @@ class TiledPredictor3D:
         chunk_size=100,
         tmp_folder="tmp",
         keep_tmp=False,
-        n_output_classes=1
+        n_output_classes=1,
     ):
 
         self.input_volume = input_volume
         self._adjust_input_dims()
-        
+
         self.batch_size = batch_size
         self.window_size = window_size
         self.model = model
@@ -61,9 +88,11 @@ class TiledPredictor3D:
         self.tmp_folder = Path(tmp_folder)
         # TMP
         # self.inference_volume = np.zeros_like(self.padded_volume).astype("float32")
-        self.inference_volume = np.zeros(shape=self._get_padded_output_dims()).astype("float32")
+        self.inference_volume = np.zeros(shape=self._get_padded_output_dims()).astype(
+            "float32"
+        )
         self.weighting_window = self.get_weighting_window(self.window_size)
-        
+
         self.generate_batches()
         self.generate_chunks()
         self.predict()
@@ -71,17 +100,17 @@ class TiledPredictor3D:
 
         if not keep_tmp:
             self.empty_tmp()
-    
+
     def _adjust_input_dims(self):
         volume_shape = self.input_volume.shape
         if len(volume_shape) < 3:
-            #not enough dims
+            # not enough dims
             raise ValueError(volume_shape, "Incorrect input volume dims")
         elif len(volume_shape) == 3:
             # if 3 channels then all dims are spatial
             # tensor must be expanded for color
             self.input_volume = np.expand_dims(self.input_volume, axis=-1)
-            
+
         elif len(volume_shape) == 4:
             # if 4 dims one is color
             # should be channel_last
@@ -89,15 +118,15 @@ class TiledPredictor3D:
         else:
             # too many dims, can't figure out what they are
             raise ValueError(volume_shape, "Incorrect input volume dims")
-            
+
         assert len(self.input_volume.shape) == 4, "Incorrect volume adjust"
-    
+
     def _get_spatial_dims(self):
         return self.input_volume.shape[:-1]
-   
+
     def _get_output_dims(self):
         return np.append(self._get_spatial_dims(), (self.n_output_classes))
-    
+
     def _get_padded_output_dims(self):
         padded_spatial_dims = self.padded_volume.shape[:-1]
         return np.append(padded_spatial_dims, (self.n_output_classes))
@@ -151,7 +180,9 @@ class TiledPredictor3D:
 
     def apply_padding(self, padding_mode="reflect"):
         """ apply the paddings"""
-        self.paddings = self.get_paddings(self.input_volume, self.window_size, self._get_spatial_dims())
+        self.paddings = self.get_paddings(
+            self.input_volume, self.window_size, self._get_spatial_dims()
+        )
         self.padded_volume = np.pad(self.input_volume, self.paddings, mode="reflect")
 
     def remove_padding(self):
@@ -286,11 +317,13 @@ class TiledPredictor3D:
                         z : z + self.window_size[0],
                         y : y + self.window_size[1],
                         x : x + self.window_size[2],
-                        :
+                        :,
                     ] += patch
                 except ValueError:
-                    raise ValueError("Incompatible shapes between sliced inference volume and patch, check the padding routines for errors.")
-                
+                    raise ValueError(
+                        "Incompatible shapes between sliced inference volume and patch, check the padding routines for errors."
+                    )
+
             # distribute to predictions
 
     def weight_chunk(self, prediction_chunk):
@@ -329,20 +362,20 @@ class TiledPredictor3D:
         wind_z = cls.spline_window(window_size[0], power=2)
         wind_y = cls.spline_window(window_size[1], power=2)
         wind_x = cls.spline_window(window_size[2], power=2)
-        
+
         wind_z = np.expand_dims(wind_z, axis=-1)
         wind_y = np.expand_dims(wind_y, axis=-1)
         wind_x = np.expand_dims(wind_x, axis=-1)
-        
+
         wind = wind_y.transpose() * wind_z
         wind = np.expand_dims(wind, axis=-1)
-        wind = wind*wind_x.T
-        
+        wind = wind * wind_x.T
+
         wind = wind / wind.max()
-        
+
         if expand_dims:
             wind = np.expand_dims(wind, axis=-1)
-            
+
         return wind.astype("float32")
 
     @staticmethod
@@ -363,4 +396,3 @@ class TiledPredictor3D:
     def empty_tmp(self):
         path = self.tmp_folder
         shutil.rmtree(path)
-        

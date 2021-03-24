@@ -101,7 +101,6 @@ class DataPredictorBase:
 
     def _load_volume(self):
         if self.data_mode in ["single_images", "stack"]:
-
             self.input_data = self._load_single_volume(
                 self.data_path, self.n_channels, self.data_mode
             )

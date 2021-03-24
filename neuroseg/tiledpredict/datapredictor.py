@@ -1,5 +1,5 @@
 from tiledpredict.tp2d import DataPredictor2D, MultiVolumeDataPredictor2D
-from tiledpredict.tp3d import DataPredictor3D
+from tiledpredict.tp3d import DataPredictor3D, MultiVolumeDataPredictor3D
 
 
 def DataPredictor(config, model=None):
@@ -19,7 +19,7 @@ def DataPredictor(config, model=None):
         if data_mode in ["single_images", "stack" ]:
             return DataPredictor3D(config, model)
         elif data_mode == "multi_stack":
-            raise NotImplementedError(data_mode)
+            return MultiVolumeDataPredictor3D(config, model)
         else:
             raise NotImplementedError(data_mode)
             

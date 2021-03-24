@@ -1,5 +1,6 @@
 import pickle
 from pathlib import Path
+from pathlib import PosixPath
 
 import numpy as np
 from skimage import io as skio
@@ -19,9 +20,19 @@ def load_volume(imgpath,
     #     raise ValueError(imgpath, "unsupported image format")
         
     if data_mode == "stack":
-        vol = skio.imread(imgpath, plugin="pil")
+        vol = skio.imread(str(imgpath), plugin="pil")
+        
     elif data_mode == "single_images":
-        img_paths = [fpath for fpath in imgpath.glob("*.*") if is_supported_ext(fpath)]
+        if type(imgpath) is list:
+            img_paths = imgpath
+        elif type(imgpath) is PosixPath:
+            if imgpath.is_dir():
+                img_paths = [fpath for fpath in imgpath.glob("*.*") if is_supported_ext(fpath)]
+            else:
+                img_paths = [imgpath]
+        else:
+            raise TypeError("invalid type for imgpath")
+        
         vol_list = []
         for slice_path in img_paths:
             img = skio.imread(slice_path, plugin="pil")
