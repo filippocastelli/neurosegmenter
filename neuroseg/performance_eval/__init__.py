@@ -1,3 +1,3 @@
-from performance_eval.peval import PerformanceEvaluator
-from performance_eval.peval import MultiVolumePerformanceEvaluator
-from performance_eval.peval import SingleVolumePerformanceEvaluator
+from neuroseg.performance_eval.peval import PerformanceEvaluator
+from neuroseg.performance_eval.peval import MultiVolumePerformanceEvaluator
+from neuroseg.performance_eval.peval import SingleVolumePerformanceEvaluator

@@ -1,19 +1,17 @@
-from argparse import ArgumentParser
-from pathlib import Path
 import logging
 
-from config import (
+from neuroseg.config import (
     TrainConfig,
     CallbackConfigurator,
     ModelConfigurator,
     OptimizerConfigurator,
     MetricsConfigurator)
 
-from datagens import Datagen
-from utils import BatchInspector
-from tiledpredict import DataPredictor
-from performance_eval import PerformanceEvaluator
-from descriptor import RunDescriptorLight
+from neuroseg.datagens import Datagen
+from neuroseg.utils import BatchInspector
+from neuroseg.tiledpredict import DataPredictor
+from neuroseg.performance_eval import PerformanceEvaluator
+from neuroseg.descriptor import RunDescriptorLight
 
 def setup_logger(logfile_path):
     logger = logging.getLogger()
@@ -31,34 +29,33 @@ def debug_train_val_datagens(config, train_datagen, val_datagen):
     if config.val_datagen_inspector:
         val_batch = next(val_datagen.data.__iter__())
         _ = BatchInspector(config, val_batch)
-        
-def main(cfg_path):
+
+def train(train_config: TrainConfig):
     
-    config = TrainConfig(cfg_path)
-    setup_logger(config.logfile_path)
-    train_datagen = Datagen(config,
+    setup_logger(train_config.logfile_path)
+    train_datagen = Datagen(train_config,
                               partition="train",
                               normalize_inputs=True,
                               verbose=False,
                               data_augmentation=True)
     
-    val_datagen = Datagen(config,
+    val_datagen = Datagen(train_config,
                               partition="val",
                               normalize_inputs=True,
                               verbose=False,
                               data_augmentation=False)
     
-    debug_train_val_datagens(config, train_datagen, val_datagen)
+    debug_train_val_datagens(train_config, train_datagen, val_datagen)
     
-    callback_cfg = CallbackConfigurator(config)
+    callback_cfg = CallbackConfigurator(train_config)
     callbacks = callback_cfg.callbacks
     
-    model_cfg = ModelConfigurator(config)
+    model_cfg = ModelConfigurator(train_config)
     model = model_cfg.model
     
-    optimizer_cfg = OptimizerConfigurator(config)
+    optimizer_cfg = OptimizerConfigurator(train_config)
 
-    metrics_cfg = MetricsConfigurator(config)
+    metrics_cfg = MetricsConfigurator(train_config)
     
     model.compile(optimizer=optimizer_cfg.optimizer,
                   loss=metrics_cfg.loss,
@@ -69,35 +66,23 @@ def main(cfg_path):
         steps_per_epoch = train_datagen.steps_per_epoch,
         validation_data=val_datagen.data,
         validation_steps=val_datagen.steps_per_epoch,
-        epochs=config.epochs,
+        epochs=train_config.epochs,
         callbacks=callbacks)
     
-    model.save(str(config.final_model_path))
+    model.save(str(train_config.final_model_path))
     
-    if config.evaluate_performance:
-        dp = DataPredictor(config, model)
-        ev = PerformanceEvaluator(config, dp.predicted_data)
+    if train_config.evaluate_performance:
+        dp = DataPredictor(train_config, model)
+        ev = PerformanceEvaluator(train_config, dp.predicted_data)
         performance_dict = ev.measure_dict
     else:
         performance_dict = None
         
-    _ = RunDescriptorLight(config,
+    _ = RunDescriptorLight(train_config,
                                performance_metrics_dict=performance_dict,
                                model_history_dict=model_history)
 
-if __name__ == "__main__":
-    parser = ArgumentParser()
-    
-    parser.add_argument("-c","--conf", action="store", type=str,
-                        dest="configuration_path_str",
-                        default="/home/phil/repos/neuroseg/neuroseg/tests/test_train_cfg_3d.yml",
-                        help="Configuration file path")
-    
-    args, unknown = parser.parse_known_args()
-    
-    cfg_path = Path(args.configuration_path_str)
-    
-    main(cfg_path)
+    return model, model_history, performance_dict
     
     
 

@@ -3,12 +3,11 @@ from itertools import product
 import pickle
 import shutil
 
-
-from tiledpredict.datapredictorbase import DataPredictorBase
 import numpy as np
 from tqdm import tqdm
 import scipy.signal as signal
 
+from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
 
 class DataPredictor3D(DataPredictorBase):
     def __init__(self, config, model=None):

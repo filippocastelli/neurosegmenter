@@ -26,14 +26,14 @@ model_cfg:
     transposed_convolution: false
     residual_preactivation: true
     
-# # SINGLE_IMAGES_DATASET
-# dataset_cfg:
-#     dataset_path: "/mnt/ssd1/datasets/em_neuroseg_single"
-#     mode: "single_images"
-#     n_channels: 1
-#     positive_class_value: 1
-#     negative_class_value: 255
-#     ignore_last_channel: false
+# SINGLE_IMAGES_DATASET
+dataset_cfg:
+    dataset_path: "/mnt/ssd1/datasets/em_neuroseg_single"
+    mode: "single_images"
+    n_channels: 1
+    positive_class_value: 1
+    negative_class_value: 255
+    ignore_last_channel: false
     
 
 # #  MULTISTACK DATASET
@@ -45,14 +45,14 @@ model_cfg:
 #     negative_class_value: 255
 #     ignore_last_channel: false
     
-#  STACK DATASET
-dataset_cfg:
-    dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
-    mode: "stack"
-    n_channels: 1
-    positive_class_value: 1
-    negative_class_value: 255
-    ignore_last_channel: false
+# #  STACK DATASET
+# dataset_cfg:
+#     dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
+#     mode: "stack"
+#     n_channels: 1
+#     positive_class_value: 1
+#     negative_class_value: 255
+#     ignore_last_channel: false
     
 output_cfg:
     output_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/3d/train"

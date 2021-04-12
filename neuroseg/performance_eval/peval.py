@@ -2,7 +2,7 @@ import numpy as np
 import sklearn.metrics as skmetrics
 import logging
 
-from utils import load_volume, glob_imgs
+from neuroseg.utils import load_volume, glob_imgs
 
 
 def PerformanceEvaluator(config,

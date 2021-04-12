@@ -7,7 +7,7 @@ import numpy as np
 import scipy.signal as signal
 from tqdm import tqdm
 
-from tiledpredict.datapredictorbase import DataPredictorBase
+from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
 
 
 class DataPredictor2D(DataPredictorBase):

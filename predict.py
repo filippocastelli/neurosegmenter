@@ -2,24 +2,13 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 
-from neuroseg.config import PredictConfig
-from neuroseg.tiledpredict import DataPredictor
-from neuroseg.performance_eval import PerformanceEvaluator
-
-from neuroseg.descriptor import RunDescriptorLight
+from neuroseg import PredictConfig, predict
 
 def main(cfg_path):
 
     config = PredictConfig(cfg_path)
     # setup_logger(config.logfile_path)
     predict(config)
-
-def predict(predict_config: PredictConfig):
-    dp = DataPredictor(predict_config)
-    ev = PerformanceEvaluator(predict_config, dp.predicted_data)
-    performance_dict = ev.measure_dict
-    _ = RunDescriptorLight(predict_config, performance_metrics_dict=performance_dict)
-    return performance_dict
 
 if __name__ == "__main__":
     parser = ArgumentParser()

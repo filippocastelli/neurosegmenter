@@ -1,7 +1,7 @@
 from pathlib import Path
 import yaml
 
-from utils import NameGenerator
+from neuroseg.utils import NameGenerator
 
 SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
 

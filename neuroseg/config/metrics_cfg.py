@@ -1,4 +1,4 @@
-from metrics import jaccard_index, dice_coefficient
+from neuroseg.metrics import jaccard_index, dice_coefficient
 
 class MetricsConfigurator:
     

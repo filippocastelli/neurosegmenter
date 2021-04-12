@@ -1,5 +1,5 @@
-from tiledpredict.tp2d import DataPredictor2D, MultiVolumeDataPredictor2D
-from tiledpredict.tp3d import DataPredictor3D, MultiVolumeDataPredictor3D
+from neuroseg.tiledpredict.tp2d import DataPredictor2D, MultiVolumeDataPredictor2D
+from neuroseg.tiledpredict.tp3d import DataPredictor3D, MultiVolumeDataPredictor3D
 
 
 def DataPredictor(config, model=None):

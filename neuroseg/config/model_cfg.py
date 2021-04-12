@@ -1,5 +1,5 @@
-from models import ResUNET2D, ResUNET3D
-from config.optimizer_cfg import OptimizerConfigurator
+from neuroseg.models import ResUNET2D, ResUNET3D
+from neuroseg.config.optimizer_cfg import OptimizerConfigurator
 
 class ModelConfigurator:
     def __init__(self,

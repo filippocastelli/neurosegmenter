@@ -2,8 +2,13 @@ from pathlib import Path
 import datetime
 import random
 
-animals_path = Path("../neuroseg/utils/animals.txt")
-adjective_path = Path("../neuroseg/utils/adjectives.txt")
+import inspect
+import neuroseg.utils as utils
+utils_path = Path(inspect.getfile(utils)).parent
+
+animals_path = utils_path.joinpath("animals.txt")
+adjective_path = utils_path.joinpath("adjectives.txt")
+
 
 class NameGenerator:
     

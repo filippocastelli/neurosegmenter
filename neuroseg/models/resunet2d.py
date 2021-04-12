@@ -12,7 +12,7 @@ from tensorflow.keras.layers import (
 from tensorflow.keras.models import Model
 from tensorflow.keras.activations import get as get_activation
 
-from models.resunetbase import ResUNETBase
+from neuroseg.models.resunetbase import ResUNETBase
 
 
 class ResUNET2D(ResUNETBase):

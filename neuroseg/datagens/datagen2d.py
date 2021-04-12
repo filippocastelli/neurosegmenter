@@ -14,8 +14,8 @@ import numpy as np
 # tf.compat.v1.keras.backend.set_session(
 #     tf_debug.TensorBoardDebugWrapperSession(tf.Session(), "shelob:6006"))
 
-from datagens.datagenbase import dataGenBase
-from utils import load_volume
+from neuroseg.datagens.datagenbase import dataGenBase
+from neuroseg.utils import load_volume
 
 
 TFA_INTERPOLATION_MODES = {"nearest": "NEAREST", "bilinear": "BILINEAR"}

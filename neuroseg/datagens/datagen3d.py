@@ -22,8 +22,8 @@ from batchgenerators.transforms.noise_transforms import (
 
 import numpy as np
 
-from datagens.datagenbase import dataGenBase
-from utils import load_volume
+from neuroseg.datagens.datagenbase import dataGenBase
+from neuroseg.utils import load_volume
 
    
 class datagen3DSingle(dataGenBase):

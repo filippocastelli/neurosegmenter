@@ -1,14 +1,13 @@
 import numpy as np
-from utils import load_volume, save_volume, is_supported_ext, glob_imgs
-from config.config import SUPPORTED_STACK_FORMATS
 from tensorflow.python.keras.models import load_model
 
+from neuroseg.utils import load_volume, save_volume, glob_imgs
+# from neuroseg.config.config import SUPPORTED_STACK_FORMATS
 
 class DataPredictorBase:
     def __init__(self, config, model=None):
 
         self.config = config
-        self.ignore_last_channel = config.ignore_last_channel
 
         self.mode = self.config.config_type
         self._parse_settings()

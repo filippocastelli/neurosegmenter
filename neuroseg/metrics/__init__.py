@@ -1,2 +1,2 @@
-from metrics.metrics import jaccard_index
-from metrics.metrics import dice_coefficient
+from neuroseg.metrics.metrics import jaccard_index
+from neuroseg.metrics.metrics import dice_coefficient

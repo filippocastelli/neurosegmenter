@@ -14,6 +14,7 @@ data_cfg:
     mode: "single_images"
     normalize_data: true
     n_channels: 2
+    ignore_last_channel: false
     
     # GROUND TRUTH CONFIG
     positive_class_value: 1

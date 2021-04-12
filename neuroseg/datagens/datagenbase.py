@@ -1,4 +1,4 @@
-from utils import SUPPORTED_IMG_FORMATS, SUPPORTED_STACK_FORMATS
+from neuroseg.utils import SUPPORTED_IMG_FORMATS, SUPPORTED_STACK_FORMATS
 
 class dataGenBase:
     def __init__(self,
