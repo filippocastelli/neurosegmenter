@@ -8,3 +8,4 @@ tifffile==2020.9.3
 tqdm==4.48.2
 batchgenerators==0.21
 pyyaml==5.4.1
+tensorflow-addons==0.12.1
