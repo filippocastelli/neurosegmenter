@@ -3,8 +3,9 @@ import datetime
 import random
 
 import inspect
-import neuroseg.utils as utils
-utils_path = Path(inspect.getfile(utils)).parent
+import neuroseg
+
+utils_path = Path(inspect.getfile(neuroseg)).parent.joinpath("utils")
 
 animals_path = utils_path.joinpath("animals.txt")
 adjective_path = utils_path.joinpath("adjectives.txt")
