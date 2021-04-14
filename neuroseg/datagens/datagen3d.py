@@ -250,9 +250,16 @@ class datagen3DSingle(dataGenBase):
     
     def _rot90_transform_cfg(self):
         """rigid 90 degree rotation transform configurator"""
+        
+        if len(set(self.crop_shape)) == 1:
+            rotation_axes = (0,1,2)
+        else:
+            rotation_axes = (1,2)
+            
         rot90_transform_cfg = {
             "num_rot" : (1,2,3),
-            "axes": (0,1,2),
+            # "axes": (0,1,2),
+            "axes": rotation_axes,
             "p_per_sample" : 0.15
             }
         
