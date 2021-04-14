@@ -1,4 +1,4 @@
-tensorflow==2.3.2
+tensorflow-gpu==2.3.2
 numpy==1.18.0
 pandas==1.1.1
 scikit-image==0.16.2
