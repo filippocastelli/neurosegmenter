@@ -136,7 +136,7 @@ class TrainConfig(Config):
         self._parse_callbacks_cfg(self.callbacks_cfg)
         
         # debug parsing
-        self.debug_cfg = self.cfg_dict["callbacks_cfg"]
+        self.debug_cfg = self.cfg_dict["debug_cfg"]
         self._parse_debug_cfg(self.debug_cfg)
         
         self._parse_performance_evaluation_cfg_additional()
