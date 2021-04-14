@@ -1,8 +1,8 @@
-from datagens.datagen2d import dataGen2D
+from neuroseg.datagens.datagen2d import dataGen2D
+from neuroseg.datagens.datagen3d import datagen3DSingle
 
-def get_datagen(config, partition="train",
+def Datagen(config, partition="train",
                 normalize_inputs=True,
-                ignore_last_channel=False,
                 verbose=False,
                 data_augmentation=False):
     
@@ -10,8 +10,13 @@ def get_datagen(config, partition="train",
         return dataGen2D(config=config,
                          partition=partition,
                          normalize_inputs=normalize_inputs,
-                         ignore_last_channel=ignore_last_channel,
                          verbose=verbose,
                          data_augmentation=data_augmentation)
+    elif config.training_mode == "3d":
+        return datagen3DSingle(config=config,
+                               partition=partition,
+                               data_augmentation=data_augmentation,
+                               verbose=verbose,
+                               normalize_inputs=normalize_inputs)
     else:
         raise NotImplementedError(config.training_mode)

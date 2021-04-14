@@ -7,48 +7,49 @@ from tensorflow.keras.layers import (
     Activation,
     add,
     concatenate,
-    UpSampling2D
+    UpSampling2D,
 )
 from tensorflow.keras.models import Model
 from tensorflow.keras.activations import get as get_activation
 
-import numpy as np
+from neuroseg.models.resunetbase import ResUNETBase
 
-class ResUNET2D:
-    def __init__(self,
-                 config):
-        
-        self.config = config
-        self.crop_shape = self.config.crop_shape
-        self.depth = self.config.unet_depth
-        self.base_filters = self.config.base_filters
-        self.batch_normalization = self.config.batch_normalization
-        self.pre_activation = self.config.residual_preactivation
-        self.transposed_convolution = self.config.transposed_convolution
-        self.n_channels = self.config.n_channels
-        
-        self.input_shape = self._get_input_shape()
-        self.model = self._get_model(input_shape=self.input_shape,
-                                     base_filters=self.base_filters,
-                                     depth=self.depth,
-                                     batch_normalization=self.batch_normalization,
-                                     pre_activation=self.pre_activation,
-                                     transposed_convolution=self.transposed_convolution)
 
-    
-    def _get_input_shape(self):
-        input_shape = self.crop_shape.copy()
-        input_shape.append(self.n_channels)
-        return input_shape
-    
+class ResUNET2D(ResUNETBase):
+    # def __init__(self,
+    #              config):
+
+    #     self.config = config
+    #     self.crop_shape = self.config.crop_shape
+    #     self.depth = self.config.unet_depth
+    #     self.base_filters = self.config.base_filters
+    #     self.batch_normalization = self.config.batch_normalization
+    #     self.pre_activation = self.config.residual_preactivation
+    #     self.transposed_convolution = self.config.transposed_convolution
+    #     self.n_channels = self.config.n_channels
+
+    #     self.input_shape = self._get_input_shape()
+    #     self.model = self._get_model(input_shape=self.input_shape,
+    #                                  base_filters=self.base_filters,
+    #                                  depth=self.depth,
+    #                                  batch_normalization=self.batch_normalization,
+    #                                  pre_activation=self.pre_activation,
+    #                                  transposed_convolution=self.transposed_convolution)
+
+    # def _get_input_shape(self):
+    #     input_shape = self.crop_shape.copy()
+    #     input_shape.append(self.n_channels)
+    #     return input_shape
+
     @classmethod
     def _get_convolution_block(
-            cls,
-            input_layer,
-            n_filters,
-            activation="relu",
-            batch_normalization=True,
-            pre_activation=True):
+        cls,
+        input_layer,
+        n_filters,
+        activation="relu",
+        batch_normalization=True,
+        pre_activation=True,
+    ):
         """
         Parameters
         ----------
@@ -67,7 +68,7 @@ class ResUNET2D:
         -------
         convolution_block
         """
-    
+
         # Layer definitions
         conv = Conv2D(
             filters=n_filters,
@@ -87,17 +88,17 @@ class ResUNET2D:
             #
             # See original implementation
             # https://github.com/tensorflow/tensorflow/blob/r1.15/tensorflow/python/keras/activations.py#L310-L325
-    
+
             activation_layer = Activation(get_activation(activation))
-    
+
         # Assembling layers together
-    
+
         # Layer ordering follows a residual "full pre-activation" scheme
         # see He et. al. "Identity Mappings in Deep Residual Networks" pag. 5
         # https://arxiv.org/pdf/1603.05027.pdf
-    
+
         # Base convolution unit is composed as
-    
+
         #               +-----------------------+
         # INPUTS +----->+  BATCH NORMALIZATION  |
         #               +-----------+-----------+
@@ -111,15 +112,15 @@ class ResUNET2D:
         #               +-----------+-----------+
         #               |        CONV2D         +------> OUT
         #               +-----------------------+
-    
+
         layer_list = []
-    
+
         if batch_normalization:
             layer_list.append(batchnorm_layer)
-    
+
         if activation:
             layer_list.append(activation_layer)
-    
+
         if pre_activation:
             layer_list.append(conv)
         else:
@@ -127,19 +128,19 @@ class ResUNET2D:
             # discouraged in residual block because of representational issues, but the option is there.
             # (ref. He. et al.)
             layer_list.insert(0, conv)
-    
+
         layer_out = cls._combine_layers(input_layer, layer_list)
-    
+
         return layer_out
 
     @classmethod
     def _get_encoder_block(
-            cls,
-            input_layer,
-            conv_filters_depths,
-            batch_normalization=True,
-            pre_activation=True,
-            is_first_block=False
+        cls,
+        input_layer,
+        conv_filters_depths,
+        batch_normalization=True,
+        pre_activation=True,
+        is_first_block=False,
     ):
         """
         Parameters
@@ -163,9 +164,9 @@ class ResUNET2D:
         # Layer ordering is based on
         # He. et al. Deep Residual Learning for Image Recognition
         # https://arxiv.org/abs/1512.03385
-    
+
         # The basic encoder block is composed as
-    
+
         #       INPUT  +----------------+
         #         +                     |
         #         |                     |
@@ -192,7 +193,7 @@ class ResUNET2D:
         # +-------+--------+
         # |   2D MAXPOOL   +---------> OUT2
         # +----------------+
-    
+
         # First convblock
         if is_first_block:
             # If it's the first block we don't want to create a full pre-activated and batchnormalized block
@@ -202,51 +203,52 @@ class ResUNET2D:
                 (3, 3),
                 padding="same",
                 strides=(1, 1),
-                data_format="channels_last"
+                data_format="channels_last",
             )(input_layer)
         else:
             first_conv = cls._get_convolution_block(
                 input_layer=input_layer,
                 n_filters=conv_filters_depths[0],
                 batch_normalization=batch_normalization,
-                pre_activation=pre_activation
+                pre_activation=pre_activation,
             )
-    
+
         # Second convblock
         out = cls._get_convolution_block(
             input_layer=first_conv,
             n_filters=conv_filters_depths[1],
             batch_normalization=batch_normalization,
-            pre_activation=pre_activation
+            pre_activation=pre_activation,
         )
-    
+
         # Residual shortcut
-    
+
         # Input and output dimensionalities are not supposed to match: we do a
         # conv_filter_depts[1] 1x1x1 convolutions to adjust input and output sizes
         shortcut = Conv2D(
             conv_filters_depths[1],
             kernel_size=(1, 1),
             strides=(1, 1),
-            data_format="channels_last"
+            data_format="channels_last",
         )(input_layer)
-        shortcut = BatchNormalization(axis=-1)(shortcut)  # Batchnormalization of the transformed inputs
+        shortcut = BatchNormalization(axis=-1)(
+            shortcut
+        )  # Batchnormalization of the transformed inputs
         out = add([out, shortcut])  # Adding inputs and outputs
-    
-        out_maxpooled = MaxPooling2D(pool_size=(2, 2),
-                                     data_format="channels_last")(out)
-    
+
+        out_maxpooled = MaxPooling2D(pool_size=(2, 2), data_format="channels_last")(out)
+
         return out_maxpooled, out
-    
+
     @classmethod
     def _get_decoder_block(
-            cls,
-            input_layer,
-            to_concatenate_layer,
-            conv_filters_depths,
-            batch_normalization,
-            transposed_convolution=False,
-            pre_activation=True
+        cls,
+        input_layer,
+        to_concatenate_layer,
+        conv_filters_depths,
+        batch_normalization,
+        transposed_convolution=False,
+        pre_activation=True,
     ):
         """
         Parameters
@@ -268,18 +270,18 @@ class ResUNET2D:
         -------
         out : keras_layer
         """
-    
+
         # Decoder block structure is similar to encoder block, with exception made
         # for the initial concatenation.
         # The inputs are upsampled using a Conv2DTranspose layer.
-    
+
         # Transposed Convolution layers are known to possibly cause checkerboard
         # artifacts, if that's the case one could switch to a deterministic
         # Upsampling + Conv alternative, sacrificing some representational capability
         # https://distill.pub/2016/deconv-checkerboard/
-    
+
         # The general structure of a Decoder block is:
-    
+
         #       INPUT1                  INPUT2
         #         +                        +
         #         |                        |
@@ -307,52 +309,56 @@ class ResUNET2D:
         #         |
         #         v
         #        OUT
-        
+
         # Implementing Resize-Convolution layer https://distill.pub/2016/deconv-checkerboard/
         if not transposed_convolution:
-            upsampled = UpSampling2D(size=(2,2),
-                                     data_format="channels_last",
-                                     interpolation="bilinear")(input_layer)
-            
-            up_conv = Conv2D(filters=conv_filters_depths[0],
-                             kernel_size=(1,1),
-                             strides=(1,1),
-                             data_format="channels_last")(upsampled)
+            upsampled = UpSampling2D(
+                size=(2, 2), data_format="channels_last", interpolation="bilinear"
+            )(input_layer)
+
+            up_conv = Conv2D(
+                filters=conv_filters_depths[0],
+                kernel_size=(1, 1),
+                strides=(1, 1),
+                data_format="channels_last",
+            )(upsampled)
         else:
             up_conv = Conv2DTranspose(
                 filters=conv_filters_depths[0],
                 kernel_size=(2, 2),
                 strides=(2, 2),
-                data_format="channels_last"
+                data_format="channels_last",
             )(input_layer)
-            
+
         # Concatenation with corresponding element in contracting path
         concatenation_layer = concatenate([up_conv, to_concatenate_layer], axis=-1)
-    
+
         # First conv block
         first_conv = cls._get_convolution_block(
             input_layer=concatenation_layer,
             n_filters=conv_filters_depths[1],
             batch_normalization=batch_normalization,
-            pre_activation=pre_activation)
-    
+            pre_activation=pre_activation,
+        )
+
         # Second conv block
         out = cls._get_convolution_block(
             input_layer=first_conv,
             n_filters=conv_filters_depths[1],
             batch_normalization=batch_normalization,
-            pre_activation=pre_activation)
-    
+            pre_activation=pre_activation,
+        )
+
         # Residual shortcut
         shortcut = Conv2D(
             filters=conv_filters_depths[1],
             kernel_size=(1, 1),
             strides=(1, 1),
-            data_format="channels_last"
+            data_format="channels_last",
         )(concatenation_layer)
         shortcut = BatchNormalization(axis=-1)(shortcut)
         out = add([out, shortcut])
-    
+
         return out
 
     @staticmethod
@@ -372,11 +378,11 @@ class ResUNET2D:
         combined_layer : keras_layer
             stacked layers
         """
-    
+
         layer_in = input_layer
         for layerfunc in layerlist:
             layer_in = layerfunc(layer_in)
-    
+
         return layer_in
 
     @staticmethod
@@ -417,23 +423,26 @@ class ResUNET2D:
     
         """
         if decoder:
-            filters0 = (2 ** (block_depth + 2)) * base_filters  # Decoder 2 gets 2*filters3, filters2
+            filters0 = (
+                2 ** (block_depth + 2)
+            ) * base_filters  # Decoder 2 gets 2*filters3, filters2
             filters1 = (2 ** block_depth) * base_filters
             return filters0, filters1
         else:
-            filters = (2 ** block_depth) * base_filters  # Encoder 2 gets filters2, 2*filters2
+            filters = (
+                2 ** block_depth
+            ) * base_filters  # Encoder 2 gets filters2, 2*filters2
             return filters, 2 * filters
-
 
     @classmethod
     def _get_model(
-            cls,
-            input_shape=(128,128,1),
-            base_filters=16,
-            depth=2,
-            batch_normalization=True,
-            pre_activation=True,
-            transposed_convolution=False
+        cls,
+        input_shape=(128, 128, 1),
+        base_filters=16,
+        depth=2,
+        batch_normalization=True,
+        pre_activation=True,
+        transposed_convolution=False,
     ):
         """Segmentation model based on UNET
     
@@ -458,7 +467,7 @@ class ResUNET2D:
             UNCOMPILED model
         """
         # Large-view model scheme :
-    
+
         #             +-----------------+        concatenation            +-----------------+      +--------------+
         # INPUTS+---->+ ENCODER BLOCK 0 +-------------------------------->+ DECODER BLOCK 0 +----->+  FINAL CONV  |
         #             +--------+--------+                                 +-----+-----------+      +------+-------+
@@ -476,64 +485,69 @@ class ResUNET2D:
         #                           |            +--------------+             | transposed conv
         #                           +------------+ BRIDGE BLOCK +-------------+
         #                                        +--------------+
-    
+
         # can edit this on http://asciiflow.com/
-    
+
         inputs = Input(input_shape)
-        
+
         # Encoder List
         encoders = []
-        for d in range(depth+1):
-            
-            #determine inputs
+        for d in range(depth + 1):
+
+            # determine inputs
             if d == 0:
                 enc_inputs = inputs
             else:
-                enc_inputs = encoders[d-1][0]
+                enc_inputs = encoders[d - 1][0]
             pooled_enc, enc = cls._get_encoder_block(
                 input_layer=enc_inputs,
-                conv_filters_depths=cls._get_filter_depths(base_filters=base_filters,
-                                                      block_depth=d),
+                conv_filters_depths=cls._get_filter_depths(
+                    base_filters=base_filters, block_depth=d
+                ),
                 batch_normalization=batch_normalization,
-                pre_activation=pre_activation)
+                pre_activation=pre_activation,
+            )
             encoders.append((pooled_enc, enc))
-        
+
         # Bridge
         _, bridge = cls._get_encoder_block(
             input_layer=encoders[-1][0],
-            conv_filters_depths=cls._get_filter_depths(base_filters=base_filters,
-                                                  block_depth=depth+1),
+            conv_filters_depths=cls._get_filter_depths(
+                base_filters=base_filters, block_depth=depth + 1
+            ),
             batch_normalization=batch_normalization,
-            pre_activation=pre_activation)
-        
+            pre_activation=pre_activation,
+        )
+
         # Decoder List
-        decoders=[None]*(depth+1)
-        
-        for d in reversed(range(depth+1)):
+        decoders = [None] * (depth + 1)
+
+        for d in reversed(range(depth + 1)):
             if d == depth:
                 input_layer = bridge
             else:
-                input_layer = decoders[d+1]
+                input_layer = decoders[d + 1]
             concat_layer = encoders[d][1]
-            
+
             dec = cls._get_decoder_block(
                 input_layer=input_layer,
                 to_concatenate_layer=concat_layer,
-                conv_filters_depths=cls._get_filter_depths(base_filters=base_filters,
-                                                      block_depth=d),
+                conv_filters_depths=cls._get_filter_depths(
+                    base_filters=base_filters, block_depth=d
+                ),
                 transposed_convolution=transposed_convolution,
                 batch_normalization=batch_normalization,
-                pre_activation=pre_activation)
+                pre_activation=pre_activation,
+            )
             decoders[d] = dec
-    
+
         # Final Conv layer
-        final_conv = Conv2D(filters=1,
-                            kernel_size=(1, 1),
-                            data_format="channels_last")(decoders[0])
-    
+        final_conv = Conv2D(filters=1, kernel_size=(1, 1), data_format="channels_last")(
+            decoders[0]
+        )
+
         final_activation = Activation("sigmoid")(final_conv)
-    
-        model = Model(inputs=inputs,
-                      outputs=final_activation)
-    
+
+        model = Model(inputs=inputs, outputs=final_activation)
+
         return model

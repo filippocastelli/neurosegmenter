@@ -1,4 +1,9 @@
-from tensorflow.keras.callbacks import CSVLogger, ModelCheckpoint, ReduceLROnPlateau
+from tensorflow.keras.callbacks import (
+    CSVLogger,
+    ModelCheckpoint,
+    ReduceLROnPlateau,
+    TensorBoard
+    )
 # TODO: WANDB
 
 class CallbackConfigurator:
@@ -14,7 +19,8 @@ class CallbackConfigurator:
         SUPPORTED_CALLBACKS = {
             "checkpoint": ModelCheckpoint,
             "csvlogger": CSVLogger,
-            "reducelronplateau": ReduceLROnPlateau
+            "reducelronplateau": ReduceLROnPlateau,
+            "tensorboard": TensorBoard
             }
         if callback_name in SUPPORTED_CALLBACKS:
             return SUPPORTED_CALLBACKS[callback_name]
@@ -34,9 +40,11 @@ class CallbackConfigurator:
         config_args = self.callback_cfg[callback_name]
         extra_args = {}
         if callback_name == "checkpoint":
-            extra_args["filepath"] = str(self.config.output_path) + "/weights.{epoch:02d}.hdf5",
+            extra_args["filepath"] = str(self.config.output_path) + "/weights.{epoch:02d}.hdf5"
         elif callback_name == "csvlogger":
             extra_args["filename"] = str(self.config.csv_summary_path)
+        elif callback_name == "tensorboard":
+            extra_args["log_dir"] = str(self.config.logs_path)
         
         config_args.update(extra_args)
         return config_args

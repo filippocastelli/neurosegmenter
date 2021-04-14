@@ -1,0 +1,39 @@
+prediction_cfg:
+    mode: "2d"
+    model_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/train/each-piglet-1124/weights.01.hdf5"
+    n_output_classes: 1
+    window_size: [128, 128]
+    batch_size: 5
+    chunk_size: 100
+    padding_mode: "reflect"
+    keep_tmp: false
+    
+data_cfg:
+    image_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds/test/frames"
+    #PREDICTION DATA CONFIG
+    mode: "single_images"
+    normalize_data: true
+    n_channels: 2
+    ignore_last_channel: false
+    
+    # GROUND TRUTH CONFIG
+    positive_class_value: 1
+    negative_class_value: 255
+
+output_cfg:
+    output_mode : "stack"
+    output_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/predict/"
+    descriptor_path: "/home/phil/repos/neuroseg/neuroseg/tests/tmp/descr/predict"
+    enable_wandb_tracking: false
+    
+performance_evaluation_cfg:
+    ground_truth_path: "/home/phil/repos/neuroseg/neuroseg/tests/ds/test/masks"
+    data_mode: "single_images"
+    window_size: [128, 128]
+    batch_size:       15
+    chunk_size:       20
+    classification_threshold:   0.5
+    add_empty_channel:          true
+    
+notes: ""
+run_name:
