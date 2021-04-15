@@ -7,9 +7,10 @@ from tensorflow.data import Dataset
 
 # from tensorflow.python import debug as tf_debug
 # import tensorflow.keras.preprocessing.image as tfk_image
-
+from tensorflow.keras.preprocessing.image import apply_affine_transform
 from skimage import io as skio
 import numpy as np
+import pudb
 
 # tf.compat.v1.keras.backend.set_session(
 #     tf_debug.TensorBoardDebugWrapperSession(tf.Session(), "shelob:6006"))
@@ -152,7 +153,7 @@ class dataGen2D(dataGenBase):
                            expand_last_dim=True,
                            data_mode="stack")
         
-        mask = np.where(mask==self.positive_class_value, 1,0)
+        mask = np.where(mask==self.positive_class_value, 1,0).astype(frame.dtype)
         
         if self.normalize_inputs:
             norm_constant_frame = np.iinfo(frame.dtype).max
@@ -492,14 +493,16 @@ class dataGen2D(dataGenBase):
         
         if len(frame_shape) == 2:
             frame = tf.expand_dims(frame, axis=-1)
-        elif len(frame_shape) == 3:
+        elif len(frame_shape) in [3,4]:
             pass
         else:
             raise ValueError("image has too many dims")
         
         if len(mask_shape) == 2:
             mask = tf.expand_dims(mask, axis=-1)
-        elif len(mask_shape) == 3:
+        elif len(mask_shape) in [3,4]:
+            # TODO: adapt for multi-class segmentation
+            assert mask_shape[-1] == 1, "Single-class segmentation supports only one mask channel"
             pass
         else:
             raise ValueError("mask has too many dims")
@@ -671,13 +674,76 @@ class dataGen2D(dataGenBase):
         """gamma power transform"""
         # invert_image is not used
         # maintained for consistency with batchtgenerators syntax
-
+        # pudb.set_trace()
         gamma = tf.random.uniform(
             shape=[], minval=gamma_range[0], maxval=gamma_range[1], dtype=tf.float32
         )
         frame = tf.pow(frame, gamma)
         frame = tf.clip_by_value(frame, clip_value_min=0.0, clip_value_max=1.0)
         return frame, mask
+   
+    @classmethod
+    def _zoom_transform(cls, frame, mask, scale=[0.95, 1.05], border_mode_data="reflect"):        
+        if scale[0] == 1 and scale[1] == 1:
+            zx, zy = 1, 1
+        else:
+            zx, zy = np.random.uniform(scale[0], scale[1], 2)
+        
+        return cls._apply_affine_transform(frame, mask, zoom=[zx,zy], fill_mode=border_mode_data)
+        
+        
+    @classmethod
+    def _rotation_transform(cls, frame, mask, angle=[-0.314, 0.314], border_mode_data="reflect"):
+        rotation_angle = np.random.uniform(angle[0], angle[1])
+        return cls._apply_affine_transform(frame, mask, rotation=rotation_angle, fill_mode=border_mode_data)
+    
+    
+    @classmethod
+    def _rotation_zoom_transform(cls, frame, mask,
+                                 angle=[-0.314, 0.314],
+                                 scale=[0.95, 1.05],
+                                 border_mode_data="reflect"):
+        if scale[0] == 1 and scale[1] == 1:
+            zx, zy = 1, 1
+        else:
+            zx, zy = np.random.uniform(scale[0], scale[1], 2)
+        rotation_angle = np.random.uniform(angle[0], angle[1])
+        return cls._apply_affine_transform(frame, mask,
+                                           zoom=[zx,zy],
+                                           rotation=rotation_angle,
+                                           fill_mode=border_mode_data)
+    
+    @staticmethod
+    def _apply_affine_transform(frame, mask, shift=[0,0], zoom=[1,1], rotation=0, fill_mode="reflect"):
+        zx, zy = zoom
+        tx, ty = shift
+        theta = np.rad2deg(rotation)
+        
+        transform_partial = partial(apply_affine_transform,
+                                    tx=tx, ty=ty,
+                                    zx=zx, zy=zy,
+                                    theta=theta,
+                                    row_axis=0,
+                                    col_axis=1,
+                                    channel_axis=2,
+                                    fill_mode=fill_mode)
+        # iterating over batch
+        frame_npy = frame.numpy()
+        mask_npy = mask.numpy()
+        
+        transformed_batch_frames = []
+        transformed_batch_masks = []
+        
+        for idx, frame_img in enumerate(frame_npy):
+            transformed_batch_frames.append(transform_partial(frame_img))
+            transformed_mask = transform_partial(mask_npy[idx])
+            transformed_mask = np.where(transformed_mask > .5, 1., 0.)
+            transformed_batch_masks.append(transformed_mask)
+            
+        transformed_frame_stack = np.stack(transformed_batch_frames, axis=0)
+        transformed_mask_stack = np.stack(transformed_batch_masks, axis=0)
+        
+        return tf.convert_to_tensor(transformed_frame_stack), tf.convert_to_tensor(transformed_mask_stack)
 
     @classmethod
     def _spatial_transform(
@@ -694,35 +760,37 @@ class dataGen2D(dataGenBase):
         p_scale_per_sample=0.15,
         border_mode_data="nearest",
         random_crop=False,
+        force_scale=False,
+        force_rotation=False,
+        force_scale_rotation=False
     ):
         """generalized spatial transform"""
-
-        if border_mode_data not in TFA_INTERPOLATION_MODES:
-            raise NotImplementedError(border_mode_data)
-
-        if do_rotation and np.random.uniform(0, 1) > p_rot_per_sample:
-            rot_angle = np.random.uniform(low=angle[0], high=angle[1])
-            frame = tfa.image.rotate(
-                frame,
-                rot_angle,
-                interpolation=TFA_INTERPOLATION_MODES[border_mode_data],
-            )
-            mask = tfa.image.rotate(mask, rot_angle, interpolation="NEAREST")
-
-        if do_scale and np.random.uniform(0, 1) > p_scale_per_sample:
-            # determine crop shape
-            crop_shape = cls._get_scaled_cropshape(frame.shape[1:-1], scale_range=scale)
-            frame, mask = cls._random_crop(
-                frame, mask, crop_shape, batch_crops=False, keep_original_size=True
-            )
-            # tfk_image.random_zoom(frame, zoom_range=scale,
-            #                       row_axis=0, col_axis=1, channel_axis=2,
-            #                       fill_mode=border_mode_data,
-            #                       interpolation_order=1)
-        if random_crop:
-            pass
-            # random cropping not implemented yet
-
+        
+        if (do_scale and np.random.uniform(0,1) > p_scale_per_sample) or force_scale:
+            perform_scale = True
+        else:
+            perform_scale = False
+            
+        if (do_rotation and np.random.uniform(0, 1) > p_rot_per_sample) or force_rotation:
+            perform_rotation = True
+        else:
+            perform_rotation = False
+            
+        if (perform_scale and perform_rotation) or force_scale_rotation:
+            frame, mask = cls._rotation_zoom_transform(frame, mask,
+                                                       angle=angle,
+                                                       scale=scale,
+                                                       border_mode_data=border_mode_data)
+        else:
+            if perform_rotation:
+                frame, mask = cls._rotation_transform(frame, mask,
+                                                      angle=angle,
+                                                      border_mode_data=border_mode_data)
+            if perform_scale:
+                frame, mask = cls._zoom_transform(frame, mask,
+                                                  scale=scale,
+                                                  border_mode_data=border_mode_data)
+        
         return frame, mask
 
     @staticmethod
