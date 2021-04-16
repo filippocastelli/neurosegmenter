@@ -138,13 +138,11 @@ class dataGen2D(dataGenBase):
         
     def _load_single_stack(self, frame_path, mask_path):
         frame = load_volume(frame_path,
-                            drop_last_dim=self.ignore_last_channel,
-                            expand_last_dim=True,
+                            ignore_last_channel=self.ignore_last_channel,
                             data_mode="stack")
         
         mask = load_volume(mask_path,
-                           drop_last_dim=False,
-                           expand_last_dim=True,
+                           ignore_last_channel=False,
                            data_mode="stack")
         
         mask = np.where(mask==self.positive_class_value, 1,0).astype(frame.dtype)

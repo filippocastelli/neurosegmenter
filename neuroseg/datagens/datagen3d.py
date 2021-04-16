@@ -120,31 +120,10 @@ class datagen3DSingle(dataGenBase):
             # TODO: MOVE ALL THIS PREPROCESSING INSIDE CROPPED DATA LOADER
             # ONLY data = {img: img_path, label: label_path} must be here
             
-            
             # for processing purposes we use "stack" instead of "multi_stack"
-            data_mode = self.dataset_mode if self.dataset_mode != "multi_stack" else "stack"
-            
-            #TODO: check if need drop_last_dim or expand_last_dim
-            # self.frames_volume = load_volume(str(self.frames_path),
-            #                                  data_mode=data_mode,
-            #                                  drop_last_dim=False)
-            # self.masks_volume = load_volume(str(self.masks_path),
-            #                                 data_mode=data_mode,
-            #                                 drop_last_dim=False)
-            
-            # self.frames_volume = tifffile.imread(str(self.frames_path)).astype(np.float32)
-            # self.masks_volume = tifffile.imread(str(self.masks_path)).astype(np.float32)
+            # data_mode = self.dataset_mode if self.dataset_mode != "multi_stack" else "stack"
             
             logging.debug("reading from disk, dataset mode: {}...".format(self.dataset_mode))
-            
-            # if self.normalize_inputs:
-            #     #TODO check normalization constant
-            #     self.frames_volume = self._normalize_stack(self.frames_volume,
-            #                                                norm=np.iinfo(self.frames_volume.dtype).max)
-            #     self.masks_volume = self._normalize_stack(self.masks_volume,
-            #                                               norm=np.iinfo(self.masks_volume.dtype).max)
-                
-            # self._adjust_stack_dims()
             
             self.data_dict = {
                 "img" : self.frames_volume,
@@ -166,45 +145,6 @@ class datagen3DSingle(dataGenBase):
         else:
             raise NotImplementedError(self.dataset_mode)
 
-            
-    
-    def _adjust_stack_dims(self):
-        """uniform stack dimensions
-        target dimensions are [z, y, x, ch]"""
-        frames_shape = self.frames_volume.shape
-        masks_shape = self.masks_volume.shape
-        
-        # transform to [z, y, x, ch]
-        
-        if len(np.unique(self.frames_volume[...,2])) == 1:
-            # if samples are two-colors, third rgb dim should not be included
-            self.frames_volume = self.frames_volume[...,-1]
-        
-        if len(frames_shape) == 4 and len(masks_shape) == 4:
-            # this should be ok except when labels are multichannel
-            # check if labels are monochrome
-            
-            if masks_shape[-1] != 1:
-                raise Exception(
-                    "Labels must be monochrome for single-class semantic segmentation")
-                
-        elif len(frames_shape) == 4 and len(masks_shape) == 4:
-            # frames are multichannel but labels are monochrome
-            # expand dimensions for labels
-            self.masks_volume = np.expand_dims(self.masks_volume, axis=-1)
-        
-        elif len(frames_shape) == 3 and len(masks_shape) == 3:
-            # both stacks are monochrome
-            # expand dimensions_for both
-            
-            self.frames_volume = np.expand_dims(self.frames_volume, axis=-1)
-            self.masks_volume = np.expand_dims(self.masks_volume, axis=-1)
-        
-        self.volume_shape = self.frames_volume.shape[:-1]
-        
-        # convert to [ch, z, y, x]
-        self.frames_volume = np.moveaxis(self.frames_volume, -1, 0)
-        self.masks_volume = np.moveaxis(self.masks_volume, -1, 0)
         
     def _spatial_transform_cfg(self):
         """spatial transform"""
@@ -648,11 +588,11 @@ class CroppedDataLoaderBG(DataLoader):
         
         img_volume = load_volume(img_path,
                                  data_mode=data_mode,
-                                 drop_last_dim=False).astype(np.float32)
+                                 ignore_last_channel=False).astype(np.float32)
         
         label_volume = load_volume(label_path,
                                    data_mode=data_mode,
-                                   drop_last_dim=False)
+                                   ignore_last_channel=False)
         
         label_volume = np.where(label_volume > label_positive_class_value, 1,0).astype(img_volume.dtype)
         
@@ -667,11 +607,18 @@ class CroppedDataLoaderBG(DataLoader):
     def _adjust_stack_dims(cls, img_volume, labels_volume, to_channel_first=True):
 
         # determine if third channel is empty
-        if len(np.unique(img_volume[...,2])) == 1:
-            img_volume = img_volume[...,:-1]
+        img_volume_shape = img_volume.shape
+        
+        assert len(img_volume_shape) == 4, f"Image volume has shape {img_volume_shape}, it should be [z, y, x, ch]"
+        
+        if img_volume_shape[-1] == 3:
+            if len(np.unique(img_volume[...,2])) == 1:
+                logging.warning("last channel of input volume is empty, you should use ignore_last_channel: true in config to avoid this warning")
+                logging.warning("ignoring last channel")
+                img_volume = img_volume[...,:-1]
 
-        img_volume = cls._expand_dims_if_needed(img_volume)
-        labels_volume = cls._expand_dims_if_needed(labels_volume)
+        # img_volume = cls._expand_dims_if_needed(img_volume)
+        # labels_volume = cls._expand_dims_if_needed(labels_volume)
         
         if to_channel_first:
             img_volume = np.moveaxis(img_volume, -1 , 0)
@@ -680,18 +627,18 @@ class CroppedDataLoaderBG(DataLoader):
         return img_volume, labels_volume
 
             
-    @staticmethod
-    def _expand_dims_if_needed(stack):
-        stack_shape = stack.shape
+    # @staticmethod
+    # def _expand_dims_if_needed(stack):
+    #     stack_shape = stack.shape
         
-        if len(stack_shape) == 4:
-            pass
-        elif len(stack_shape) == 3:
-            stack = np.expand_dims(stack, axis=-1)
-        else:
-            raise ValueError("invalid stack_shape {}".format(stack_shape))
+    #     if len(stack_shape) == 4:
+    #         pass
+    #     elif len(stack_shape) == 3:
+    #         stack = np.expand_dims(stack, axis=-1)
+    #     else:
+    #         raise ValueError("invalid stack_shape {}".format(stack_shape))
             
-        return stack
+    #     return stack
     
 
     @staticmethod

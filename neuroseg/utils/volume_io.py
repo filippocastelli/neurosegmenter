@@ -11,18 +11,13 @@ SUPPORTED_IMG_FORMATS = ["tif", "tiff", "png", "jpg", "jpeg"]
 SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
 
 def load_volume(imgpath,
-                drop_last_dim=True,
-                expand_last_dim=False,
-                squeeze=False,
+                ignore_last_channel=False,
                 data_mode="stack"):
     
     # if not is_supported_ext(imgpath):
     #     raise ValueError(imgpath, "unsupported image format")
         
-    if data_mode == "stack":
-        vol = skio.imread(str(imgpath), plugin="pil")
-        
-    elif data_mode == "single_images":
+    def glob_if_needed(imgpath):
         if type(imgpath) is list:
             img_paths = imgpath
         elif type(imgpath) is PosixPath:
@@ -32,24 +27,77 @@ def load_volume(imgpath,
                 img_paths = [imgpath]
         else:
             raise TypeError("invalid type for imgpath")
+        return img_paths
+    
+    def adjust_dimensions(vol):
+        vol_shape = vol.shape
+        # my target is [z, y, x, ch]
+        if len(vol_shape) == 2:
+            # this is a single monochromatic image
+            # [y, x]
+            # shoudln't happen that a dataset has only 1 image
+            vol = np.expand_dims(vol, axis=0) # adding z
+            vol = np.expand_dims(vol, axis=-1) # adding ch
+        elif len(vol_shape) == 3:
+            # 3d tensor without channels or 2D tensor with channel
+            # [z, y, x] OR [y, x, ch]
+            if data_mode == "single_images":
+                z_len = len(img_paths)
+                if z_len > 1:
+                    # [z, y, x] case
+                    vol = np.expand_dims(vol, axis=-1) # adding ch
+                else:
+                    # [y, x, ch] case
+                    vol = np.expand_dims(vol, axis=0)
+            elif data_mode in ["stack", "multi_stack"]:
+                z_len = vol_shape[0]
+                if z_len > 1:
+                    # [z, y, x] case
+                    vol = np.expand_dims(vol, axis=-1)
+                else:
+                    # [y, x, ch] case
+                    vol = np.expand_dims(vol, axis=0)
+        elif len(vol_shape) == 4:
+            # 3d tensor with channel
+            # should already be [z, y, x, ch]
+            # you're beautiful as you are, my little tensor
+            pass
+        else:
+            # boi, you're an abomination in the eyes of men and God
+            # this training has to fail because of you
+            # cursed you are among your fellow tensors
+            raise ValueError("input volume has too many dims")
+        return vol
         
+    def postprocess_vol(vol):
+        vol = adjust_dimensions(vol)
+        if ignore_last_channel:
+            vol_shape = vol.shape
+            assert len(vol_shape) >= 3, "this image does not have a channel dim"
+            vol = vol[...,:2]
+        return vol
+    
+    if data_mode == "stack":
+        vol = skio.imread(str(imgpath), plugin="pil")
+        return postprocess_vol(vol)
+    elif data_mode == "single_images":
+        img_paths = glob_if_needed(imgpath)
         vol_list = []
         for slice_path in img_paths:
             img = skio.imread(slice_path, plugin="pil")
             vol_list.append(img)
-        
         vol = np.array(vol_list)
+        return postprocess_vol(vol)
+    elif data_mode == "multi_stack":
+        img_paths = glob_if_needed(imgpath)
+        vols_list = []
+        for vol_path in img_paths:
+            vol = skio.imread(vol_path, plugin="pil")
+            vol = postprocess_vol(vol)
+            vols_list.append(vol)
+        return vols_list
     else:
-        raise ValueError("unsupported data_mode: {}".format(data_mode))
-    if drop_last_dim:
-        vol = vol[...,:2]
-    if expand_last_dim:
-        vol = np.expand_dims(vol, axis=-1)
-        
-    if squeeze:
-        vol = np.squeeze(vol)
-        
-    return vol
+        raise ValueError(f"unsupported data_mode {data_mode}")
 
 def save_volume(volume,
                 output_path,
