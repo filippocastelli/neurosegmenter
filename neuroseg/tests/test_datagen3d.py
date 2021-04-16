@@ -19,8 +19,30 @@ from datagens.datagen3d import datagen3DSingle
 from config import TrainConfig
 
 CURRENT_DIR_PATH = Path(currentdir)
-YML_CONFIG_PATH = CURRENT_DIR_PATH.joinpath("test_cfg_datagen.yml")
-TRAIN_CFG_PATH = CURRENT_DIR_PATH.joinpath("test_train_cfg_3d.yml")
+CONFIG_PATH = CURRENT_DIR_PATH.joinpath("test_configs")
+
+DATASETS_PATH = CURRENT_DIR_PATH.joinpath("test_datasets")
+DATASET_CONFIGS_PATH = DATASETS_PATH.joinpath("configs")
+
+YML_CONFIG_PATH = CONFIG_PATH.joinpath("test_cfg_datagen.yml")
+TRAIN_CFG_PATH = CONFIG_PATH.joinpath("test_train_cfg_3d.yml")
+
+
+DATASETS = [
+    "single_images_1ch",
+    # "single_images_2ch",
+    "stack_1ch",
+    "multi_stack_1ch"
+    ]
+    
+CROP_SHAPES = [
+    (64,64,64),
+    # (128,128,128)
+    ]
+CROP_SHAPES_IDS = [
+    "crop64_64_64",
+    # "crop128_128_128"
+    ]
 
 class YMLio:
     @staticmethod
@@ -41,18 +63,19 @@ class YMLio:
         yml_default_dict = cls.read_yml(yml_dict_default_path)
         yml_default_dict.update(yml_dict)
         cls.write_yml(yml_default_dict, yml_out_path)
-        return 
+        return yml_default_dict
     
-@pytest.fixture(params=["single_images", "stack", "multi_stack"])
+@pytest.fixture(params=DATASETS)
 def config_yml_path_fixture(request):
-    dataset_yml_name = f"dataset_{request.param}.yml"
-    dataset_yml_path = CURRENT_DIR_PATH.joinpath(dataset_yml_name)
+    # pudb.set_trace()
+    dataset_yml_name = f"{request.param}.yml"
+    dataset_yml_path = DATASET_CONFIGS_PATH.joinpath(dataset_yml_name)
     # print(dataset_yml_name)
     default_yml_path = TRAIN_CFG_PATH
-    YMLio.combine_ymls(yml_dict_default_path=default_yml_path,
+    combined_dict = YMLio.combine_ymls(yml_dict_default_path=default_yml_path,
                        yml_dict_path=dataset_yml_path,
                        yml_out_path=YML_CONFIG_PATH)
-    yield YML_CONFIG_PATH
+    yield YML_CONFIG_PATH, combined_dict
     YML_CONFIG_PATH.unlink(missing_ok=False)
     
 class TestDatagen3DSingle:
@@ -60,12 +83,16 @@ class TestDatagen3DSingle:
     @pytest.mark.parametrize("data_augmentation", [True, False], ids=["augment", "no_augment"])
     @pytest.mark.parametrize("partition", ["train", "test", "val"], ids=["train", "test", "val"])
     @pytest.mark.parametrize("normalize_inputs", [True, False], ids=["normalized", "not_normalized"])
+    @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
     def test_setup_datagen(self, config_yml_path_fixture,
                            data_augmentation,
                            partition,
-                           normalize_inputs):
-        yml_cfg_path = config_yml_path_fixture
-        config = TrainConfig(yml_cfg_path)
+                           normalize_inputs,
+                           crop_shape):
+        yml_cfg_path, cfg_dict = config_yml_path_fixture
+        cfg_dict["model_cfg"]["crop_shape"] = crop_shape
+        # pudb.set_trace()
+        config = TrainConfig(cfg_dict=cfg_dict)
 
         datagen = datagen3DSingle(config=config,
                                   partition=partition,
@@ -98,5 +125,5 @@ class TestDatagen3DSingle:
         
         batch_n, size_z, size_y, size_x, size_c = batch_frames_shape
         assert batch_n == config.batch_size, "different batch size"
-        assert [size_z, size_y, size_x] == config.crop_shape, "spatial dimensions different"
+        assert [size_z, size_y, size_x] == list(config.crop_shape), "spatial dimensions different"
         assert size_c == config.n_channels, "different number of channels"

@@ -1,0 +1,8 @@
+#  MULTISTACK DATASET
+dataset_cfg:
+    dataset_path : "test_datasets/stack_1ch"
+    mode: "stack"
+    n_channels: 1
+    positive_class_value: 255
+    negative_class_value: 0
+    ignore_last_channel: false
