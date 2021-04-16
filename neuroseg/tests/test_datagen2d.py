@@ -33,6 +33,32 @@ CHANNELS_IDS = ["ch1", "ch2"]
 BATCH_SIZES_AUGMENTATION = [1,]
 BATCH_SIZES_IDS_AUGMENTATION = ["batch1",]
 
+AUGMENTATION_TRANSFORMS = [
+    dataGen2D._rot90_transform,
+    dataGen2D._mirror_transform,
+    dataGen2D._brightness_transform,
+    dataGen2D._brightness_multiplicative_transform,
+    dataGen2D._gaussian_noise_transform,
+    dataGen2D._gamma_transform,
+    dataGen2D._zoom_transform,
+    dataGen2D._rotation_transform,
+    dataGen2D._rotation_zoom_transform,
+    dataGen2D._spatial_transform,
+    ]
+
+AUGMENTATION_TRANSFORMS_IDS = [
+    "transform_rot90",
+    "transform_mirror",
+    "transform_brightness",
+    "transform_brightness_multiplicative",
+    "transform_gaussian_noise",
+    "transform_gamma",
+    "transform_zoom",
+    "transform_rotation",
+    "transform_rotation_zoom",
+    "transform_spatial"
+    ]
+
 class YMLio:
     @staticmethod
     def read_yml(yml_path):
@@ -90,7 +116,7 @@ def get_crop_fixture():
 
 
 class TestDatagen2D:
-    @pytest.mark.ensemble_datagen2D
+    @pytest.mark.neuroseg_ensemble_datagen2D
     @pytest.mark.parametrize("data_augmentation", [True, False], ids=["augment", "no_augment"])
     @pytest.mark.parametrize("partition", ["train", "test", "val"], ids=["train", "test", "val"])
     @pytest.mark.parametrize("normalize_inputs", [True, False], ids=["normalized", "not_normalized"])
@@ -138,7 +164,7 @@ class TestDatagen2D:
         assert size_c == config.n_channels, "different number of channels"
         
             
-    @pytest.mark.augmentation2D
+    @pytest.mark.neuroseg_augmentation2D
     @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
     def test_random_crop(self, frame_mask, crop_shape):
         batch_crops = False
@@ -172,144 +198,19 @@ class TestDatagen2D:
         
         assert frame_crop_shape == full_crop_shape_frames, "frame crop has wrong shape"
         assert mask_crop_shape == full_crop_shape_masks, "mask crop has wrong shape"
-        
-    @pytest.mark.augmentation2D
-    @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
-    @pytest.mark.parametrize("n_channels", CHANNELS, ids=CHANNELS_IDS)
-    @pytest.mark.parametrize("batch_size", BATCH_SIZES_AUGMENTATION, ids=BATCH_SIZES_IDS_AUGMENTATION)
-    def test_rot90_transform(self, get_crop_fixture, crop_shape, n_channels, batch_size):
-        frame_batch, mask_batch = get_crop_fixture(batch_size, crop_shape, n_channels)
-        transformed_frames, transformed_masks = dataGen2D._rot90_transform(frame_batch, mask_batch)
-        
-        frame_expected_shape = [batch_size, *crop_shape, n_channels]
-        mask_expected_shape = [batch_size, *crop_shape, 1]
-        
-        tfdebug.assert_shapes([(transformed_frames, frame_expected_shape),
-                               (transformed_masks, mask_expected_shape)])
-        
-    @pytest.mark.augmentation2D
-    @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
-    @pytest.mark.parametrize("n_channels", CHANNELS, ids=CHANNELS_IDS)
-    @pytest.mark.parametrize("batch_size", BATCH_SIZES_AUGMENTATION, ids=BATCH_SIZES_IDS_AUGMENTATION)
-    def test_mirror_transform(self, get_crop_fixture, crop_shape, n_channels, batch_size):
-        frame_batch, mask_batch = get_crop_fixture(batch_size, crop_shape, n_channels)
-        transformed_frames, transformed_masks = dataGen2D._mirror_transform(frame_batch, mask_batch)
-        
-        frame_expected_shape = [batch_size, *crop_shape, n_channels]
-        mask_expected_shape = [batch_size, *crop_shape, 1]
-        
-        tfdebug.assert_shapes([(transformed_frames, frame_expected_shape),
-                               (transformed_masks, mask_expected_shape)])
-        
-    @pytest.mark.augmentation2D
-    @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
-    @pytest.mark.parametrize("n_channels", CHANNELS, ids=CHANNELS_IDS)
-    @pytest.mark.parametrize("batch_size", BATCH_SIZES_AUGMENTATION, ids=BATCH_SIZES_IDS_AUGMENTATION)
-    def test_brightness_transform(self, get_crop_fixture, crop_shape, n_channels, batch_size):
-        frame_batch, mask_batch = get_crop_fixture(batch_size, crop_shape, n_channels)
-        transformed_frames, transformed_masks = dataGen2D._brightness_transform(frame_batch, mask_batch)
-        
-        frame_expected_shape = [batch_size, *crop_shape, n_channels]
-        mask_expected_shape = [batch_size, *crop_shape, 1]
-        
-        tfdebug.assert_shapes([(transformed_frames, frame_expected_shape),
-                               (transformed_masks, mask_expected_shape)])     
-        
-    @pytest.mark.augmentation2D
-    @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
-    @pytest.mark.parametrize("n_channels", CHANNELS, ids=CHANNELS_IDS)
-    @pytest.mark.parametrize("batch_size", BATCH_SIZES_AUGMENTATION, ids=BATCH_SIZES_IDS_AUGMENTATION)
-    def test_brightness_multiplicative_transform(self, get_crop_fixture, crop_shape, n_channels, batch_size):
-        frame_batch, mask_batch = get_crop_fixture(batch_size, crop_shape, n_channels)
-        transformed_frames, transformed_masks = dataGen2D._brightness_multiplicative_transform(frame_batch, mask_batch)
-        
-        frame_expected_shape = [batch_size, *crop_shape, n_channels]
-        mask_expected_shape = [batch_size, *crop_shape, 1]
-        
-        tfdebug.assert_shapes([(transformed_frames, frame_expected_shape),
-                               (transformed_masks, mask_expected_shape)])    
 
-    @pytest.mark.augmentation2D
+
+    @pytest.mark.neuroseg_augmentation2D
     @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
     @pytest.mark.parametrize("n_channels", CHANNELS, ids=CHANNELS_IDS)
     @pytest.mark.parametrize("batch_size", BATCH_SIZES_AUGMENTATION, ids=BATCH_SIZES_IDS_AUGMENTATION)
-    def test_gaussian_noise_transform(self, get_crop_fixture, crop_shape, n_channels, batch_size):
+    @pytest.mark.parametrize("transform", AUGMENTATION_TRANSFORMS, ids=AUGMENTATION_TRANSFORMS_IDS)
+    def test_augmentation_transform(self, get_crop_fixture, crop_shape, n_channels, batch_size, transform):
         frame_batch, mask_batch = get_crop_fixture(batch_size, crop_shape, n_channels)
-        transformed_frames, transformed_masks = dataGen2D._gaussian_noise_transform(frame_batch, mask_batch)
-        
-        frame_expected_shape = [batch_size, *crop_shape, n_channels]
-        mask_expected_shape = [batch_size, *crop_shape, 1]
-        
-        tfdebug.assert_shapes([(transformed_frames, frame_expected_shape),
-                               (transformed_masks, mask_expected_shape)])    
-                
-    @pytest.mark.augmentation2D
-    @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
-    @pytest.mark.parametrize("n_channels", CHANNELS, ids=CHANNELS_IDS)
-    @pytest.mark.parametrize("batch_size", BATCH_SIZES_AUGMENTATION, ids=BATCH_SIZES_IDS_AUGMENTATION)
-    def test_gamma_transform(self, get_crop_fixture, crop_shape, n_channels, batch_size):
-        frame_batch, mask_batch = get_crop_fixture(batch_size, crop_shape, n_channels)
-        transformed_frames, transformed_masks = dataGen2D._gamma_transform(frame_batch, mask_batch)
-        
-        frame_expected_shape = [batch_size, *crop_shape, n_channels]
-        mask_expected_shape = [batch_size, *crop_shape, 1]
-        
-        tfdebug.assert_shapes([(transformed_frames, frame_expected_shape),
-                               (transformed_masks, mask_expected_shape)])
-                
-    @pytest.mark.augmentation2D
-    @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
-    @pytest.mark.parametrize("n_channels", CHANNELS, ids=CHANNELS_IDS)
-    @pytest.mark.parametrize("batch_size", BATCH_SIZES_AUGMENTATION, ids=BATCH_SIZES_IDS_AUGMENTATION)
-    def test_spatial_transform(self, get_crop_fixture, crop_shape, n_channels, batch_size):
-        frame_batch, mask_batch = get_crop_fixture(batch_size, crop_shape, n_channels)
-        transformed_frames, transformed_masks = dataGen2D._spatial_transform(frame_batch, mask_batch)
-        
-        frame_expected_shape = [batch_size, *crop_shape, n_channels]
-        mask_expected_shape = [batch_size, *crop_shape, 1]
-        
-        tfdebug.assert_shapes([(transformed_frames, frame_expected_shape),
-                               (transformed_masks, mask_expected_shape)])
-            
-    @pytest.mark.augmentation2D
-    @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
-    @pytest.mark.parametrize("n_channels", CHANNELS, ids=CHANNELS_IDS)
-    @pytest.mark.parametrize("batch_size", BATCH_SIZES_AUGMENTATION, ids=BATCH_SIZES_IDS_AUGMENTATION)
-    def test_zoom_transform(self, get_crop_fixture, crop_shape, n_channels, batch_size):
-        frame_batch, mask_batch = get_crop_fixture(batch_size, crop_shape, n_channels)
-        transformed_frames, transformed_masks = dataGen2D._zoom_transform(frame_batch, mask_batch)
-        
-        frame_expected_shape = [batch_size, *crop_shape, n_channels]
-        mask_expected_shape = [batch_size, *crop_shape, 1]
-        
-        tfdebug.assert_shapes([(transformed_frames, frame_expected_shape),
-                               (transformed_masks, mask_expected_shape)])
-        
-    @pytest.mark.augmentation2D
-    @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
-    @pytest.mark.parametrize("n_channels", CHANNELS, ids=CHANNELS_IDS)
-    @pytest.mark.parametrize("batch_size", BATCH_SIZES_AUGMENTATION, ids=BATCH_SIZES_IDS_AUGMENTATION)
-    def test_rotation_transform(self, get_crop_fixture, crop_shape, n_channels, batch_size):
-        frame_batch, mask_batch = get_crop_fixture(batch_size, crop_shape, n_channels)
-        transformed_frames, transformed_masks = dataGen2D._rotation_transform(frame_batch, mask_batch)
-        
-        frame_expected_shape = [batch_size, *crop_shape, n_channels]
-        mask_expected_shape = [batch_size, *crop_shape, 1]
-        
-        tfdebug.assert_shapes([(transformed_frames, frame_expected_shape),
-                               (transformed_masks, mask_expected_shape)])
-    @pytest.mark.augmentation2D
-    @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
-    @pytest.mark.parametrize("n_channels", CHANNELS, ids=CHANNELS_IDS)
-    @pytest.mark.parametrize("batch_size", BATCH_SIZES_AUGMENTATION, ids=BATCH_SIZES_IDS_AUGMENTATION)
-    def test_rotation_zoom_transform(self, get_crop_fixture, crop_shape, n_channels, batch_size):
-        frame_batch, mask_batch = get_crop_fixture(batch_size, crop_shape, n_channels)
-        transformed_frames, transformed_masks = dataGen2D._rotation_zoom_transform(frame_batch, mask_batch)
+        transformed_frames, transformed_masks = transform(frame_batch, mask_batch)
         
         frame_expected_shape = [batch_size, *crop_shape, n_channels]
         mask_expected_shape = [batch_size, *crop_shape, 1]
         
         tfdebug.assert_shapes([(transformed_frames, frame_expected_shape),
                                (transformed_masks, mask_expected_shape)]) 
-
-        

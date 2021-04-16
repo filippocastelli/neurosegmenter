@@ -56,7 +56,7 @@ def config_yml_path_fixture(request):
     YML_CONFIG_PATH.unlink(missing_ok=False)
     
 class TestDatagen3DSingle:
-    @pytest.mark.ensemble_datagen3D
+    @pytest.mark.neuroseg_ensemble_datagen3D
     @pytest.mark.parametrize("data_augmentation", [True, False], ids=["augment", "no_augment"])
     @pytest.mark.parametrize("partition", ["train", "test", "val"], ids=["train", "test", "val"])
     @pytest.mark.parametrize("normalize_inputs", [True, False], ids=["normalized", "not_normalized"])
