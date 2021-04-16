@@ -686,8 +686,14 @@ class CroppedDataLoaderBG(DataLoader):
      
     @staticmethod
     def _get_random_crop(frames_volume, masks_volume, volume_shape, crop_shape):
+        volume_shape = list(volume_shape) # casting to list
+        crop_shape = list(crop_shape)
         """get a random crop_img, crop_label tuple"""
         z_shape, y_shape, x_shape = volume_shape
+    
+        assert len(crop_shape) == len(volume_shape), f"crop_shape {crop_shape} and volume_shape {volume_shape} have different dimensionalities"
+        # assert we're not trying to crop something larger than volume 
+        assert volume_shape > crop_shape, f"crop_shape {crop_shape} > volume_shape {volume_shape}"
         
         z_0 = np.random.randint(low=0, high=z_shape - crop_shape[0])
         y_0 = np.random.randint(low=0, high=y_shape - crop_shape[1])
