@@ -13,22 +13,28 @@ SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
 class Config:
     
     def __init__(self,
-                 yml_path):
+                 yml_path=None,
+                 cfg_dict=None):
         
-        self.yml_path = Path(yml_path)
-        self.cfg_dict = {}
-        self.cfg_dict = self.load_yml(yml_path)
-        self._parse_run_name()
-        
-        self.output_cfg = self.cfg_dict["output_cfg"]
-        self._parse_output_cfg(self.output_cfg)
-        
-        # performance evaluation parsing
-        self.pe_cfg = self.cfg_dict["performance_evaluation_cfg"] if "performance_evaluation_cfg" in self.cfg_dict else None
-        self._parse_performance_evaluation_cfg(self.pe_cfg)
-        
-        # notes parsing
-        self.notes = self.cfg_dict["notes"]
+        if cfg_dict is not None or yml_path is not None:
+            if cfg_dict is None:
+                self.yml_path = Path(yml_path)
+                self.cfg_dict = {}
+                self.cfg_dict = self.load_yml(yml_path)
+            else:
+                self.cfg_dict = cfg_dict
+                
+            self._parse_run_name()
+            
+            self.output_cfg = self.cfg_dict["output_cfg"]
+            self._parse_output_cfg(self.output_cfg)
+            
+            # performance evaluation parsing
+            self.pe_cfg = self.cfg_dict["performance_evaluation_cfg"] if "performance_evaluation_cfg" in self.cfg_dict else None
+            self._parse_performance_evaluation_cfg(self.pe_cfg)
+            
+            # notes parsing
+            self.notes = self.cfg_dict["notes"]
         
         
     def _parse_output_cfg(self, out_cfg):
@@ -106,8 +112,8 @@ class Config:
         return extension in supported_list
     
 class TrainConfig(Config):
-    def __init__(self, yml_path):
-        super().__init__(yml_path)
+    def __init__(self, yml_path=None, cfg_dict=None):
+        super().__init__(yml_path=yml_path, cfg_dict=cfg_dict)
         
         self.config_type = "training"
         
@@ -295,8 +301,8 @@ class TrainConfig(Config):
             
             
 class PredictConfig(Config):
-    def __init__(self, yml_path):
-        super().__init__(yml_path)
+    def __init__(self, yml_path=None, cfg_dict=None):
+        super().__init__(yml_path=yml_path, cfg_dict=cfg_dict)
         
         self.config_type = "predict"
         self.data_cfg = self.cfg_dict["data_cfg"]
