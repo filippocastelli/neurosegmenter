@@ -104,7 +104,8 @@ class dataGen2D(dataGenBase):
         )
 
     def _get_img_shape(self):
-        
+        # import pudb
+        # pudb.set_trace()
         if self.dataset_mode == "single_images":
             frame_path = self.frames_paths[0]
             mask_path = self.masks_paths[0]
@@ -115,7 +116,7 @@ class dataGen2D(dataGenBase):
             mask_shape = mask.shape
             
             if len(frame_shape) > len(mask_shape):
-                mask_shape = np.append(mask_shape, [0])
+                mask_shape = np.append(mask_shape, [1])
             elif len(mask_shape) < len(frame_shape):
                 mask_shape = mask_shape[:-1]
             assert len(frame_shape) == len(mask_shape), "frame and mask have different dim lengths"
@@ -468,7 +469,7 @@ class dataGen2D(dataGenBase):
             mask = tf.expand_dims(mask, axis=-1)
         elif len(mask_shape) in [3,4]:
             # TODO: adapt for multi-class segmentation
-            assert mask_shape[-1] == 1, "Single-class segmentation supports only one mask channel"
+            assert mask_shape[-1] == 1, f"Single-class segmentation supports only one mask channel. frame_shape = {frame_shape} mask_shape = {mask_shape}"
             pass
         else:
             raise ValueError("mask has too many dims")
