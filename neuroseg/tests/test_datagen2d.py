@@ -90,7 +90,6 @@ def get_crop_fixture():
 
 
 class TestDatagen2D:
-        
     @pytest.mark.ensemble_datagen2D
     @pytest.mark.parametrize("data_augmentation", [True, False], ids=["augment", "no_augment"])
     @pytest.mark.parametrize("partition", ["train", "test", "val"], ids=["train", "test", "val"])
