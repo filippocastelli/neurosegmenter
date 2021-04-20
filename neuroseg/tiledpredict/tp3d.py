@@ -29,6 +29,7 @@ class TiledPredictor3D:
         self.chunk_size = chunk_size
         self.crop_shape = np.array(window_size)
         self.padding_mode = padding_mode
+        self.model = model
         # self.tmp_folder = Path(tmp_folder)
         # self.keep_tmp = keep_tmp
         self.n_output_classes = n_output_classes
@@ -41,6 +42,10 @@ class TiledPredictor3D:
         # calculating steps
         self.step = self.crop_shape // 2
         self.input_volume_shape = self.input_volume.shape
+        
+        # if len(self.input_volume_shape) == 4:
+        #     import pudb
+        #     pudb.set_trace()
 
         self.paddings = self.get_paddings(self.input_volume.shape, self.crop_shape)
         self.padded_volume = self.pad_image(
@@ -68,16 +73,26 @@ class TiledPredictor3D:
     @staticmethod
     def get_paddings(image_shape, crop_shape):
         """given image_shape and crop_shape get [(pad_left, pad_right)] paddings"""
+
+        image_shape = np.array(image_shape)
+        crop_shape = np.array(crop_shape)
+        
+        if not (crop_shape % 2 == 0).all():
+            raise ValueError("crop_shape should be divisible by 2")
+        
         image_shape_spatial = image_shape[:3]
         pad_list = [(0, 0) for idx in range(len(image_shape_spatial))]
 
-        mod = np.array(image_shape_spatial) % np.array(crop_shape)
-        nonzero_idxs = np.nonzero(mod)
-
-        for nonzero_idx in nonzero_idxs:
-            if len(nonzero_idx) > 0:
+        # mod = np.array(image_shape_spatial) % np.array(crop_shape)
+        step = crop_shape // 2
+        mod = (image_shape_spatial - crop_shape) % step
+        
+        nonzero_idxs = np.nonzero(mod)[0]
+        
+        if len(nonzero_idxs) > 0:
+            for nonzero_idx in nonzero_idxs:
                 idx = int(nonzero_idx)
-                total_pad = mod[idx]
+                total_pad = (step - mod)[idx]
                 left_pad = total_pad % 2
                 right_pad = total_pad - left_pad
 
@@ -88,12 +103,14 @@ class TiledPredictor3D:
     @staticmethod
     def pad_image(img, pad_widths, mode="constant"):
         img_shape = img.shape
+        pad_width_list = list(pad_widths)
         """performing the padding"""
         # adding dims
-        while len(pad_widths) != len(img_shape):
-            pad_widths.append((0, 0))
-
-        img = pad(img, pad_widths, mode=mode)
+        if len(pad_width_list) < len(img_shape):
+            while len(pad_width_list) != len(img_shape):
+                pad_width_list.append((0, 0))
+            
+        img = pad(img, pad_width_list, mode=mode)
         return img
 
     @classmethod
@@ -270,7 +287,7 @@ class DataPredictor3D(DataPredictorBase):
 
         )
 
-        self.predicted_data = self.tiledpredictor.output_volume
+        self.predicted_data = self.tiledpredictor.predict()
         return self.predicted_data
 
 

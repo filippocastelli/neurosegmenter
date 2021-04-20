@@ -1,7 +1,7 @@
-from pathlib import Path
-import shutil
-from itertools import product
-import pickle
+# from pathlib import Path
+# import shutil
+# from itertools import product
+# import pickle
 
 import numpy as np
 import scipy.signal as signal
@@ -19,16 +19,16 @@ class DataPredictor2D(DataPredictorBase):
         self.tiledpredictor = TiledPredictor2D(
             input_volume=self.input_data,
             batch_size=self.batch_size,
+            chunk_size=self.chunk_size,
+            n_output_classes=self.n_output_classes,
             window_size=self.window_size,
             model=self.prediction_model,
             padding_mode=self.padding_mode,
-            chunk_size=self.chunk_size,
             tmp_folder=self.temp_path,
             keep_tmp=self.keep_tmp,
-            n_output_classes=self.n_output_classes,
         )
 
-        self.predicted_data = self.tiledpredictor.output_volume
+        self.predicted_data = self.predict()
         return self.predicted_data
 
 
@@ -38,7 +38,7 @@ class MultiVolumeDataPredictor2D(DataPredictorBase):
 
     def predict(self):
         tiled_predictors = {}
-        for idx, volume in enumerate(self.input_data):
+        for idx, volume in enumerate(tqdm(self.input_data)):
 
             volume_name = self.data_paths[idx].name
 
@@ -57,7 +57,7 @@ class MultiVolumeDataPredictor2D(DataPredictorBase):
             tiled_predictors[volume_name] = tiled_predictor
 
         self.predicted_data = {
-            name: pred.output_volume for name, pred in tiled_predictors.items()
+            name: pred.predict() for name, pred in tiled_predictors.items()
         }
 
         # self.predicted_data = [tiledpredictor.output_volume for tiledpredictor in tiled_predictors]
@@ -68,20 +68,23 @@ class TiledPredictor2D:
     def __init__(
         self,
         input_volume,
+        is_volume=True,
         batch_size=5,
         chunk_size=100,
-        crop_shape=(128, 128),
+        window_size=(128, 128),
         n_output_classes=1,
         model=None,
         padding_mode="reflect",
-        # tmp_folder="tmp",
-        # keep_tmp=False,
+        tmp_folder="tmp",
+        keep_tmp=False,
     ):
 
+        self.sticazzi="NON MOCKED"
         self.input_volume = input_volume
+        self.is_volume = is_volume
         self.batch_size = batch_size
         self.chunk_size = chunk_size
-        self.crop_shape = np.array(crop_shape)
+        self.crop_shape = np.array(window_size)
         self.padding_mode = padding_mode
         # self.tmp_folder = Path(tmp_folder)
         # self.keep_tmp = keep_tmp
@@ -91,23 +94,53 @@ class TiledPredictor2D:
         # asserting divisibility by 2
         if not (self.crop_shape % 2 == 0).all():
             raise ValueError("crop shape must be divisible by 2 along all dims")
-
         # calculating steps
         self.step = self.crop_shape // 2
-        self.input_volume_shape = self.input_volume.shape
-
-        self.paddings = self.get_paddings(self.input_volume.shape, self.crop_shape)
+        
+        # self.check_distortion_condition(self.input_volume.shape, self.crop_shape, self.step)
+    
+    def predict(self):
+        if self.is_volume:
+            self.predict_volume()
+        else:
+            self.predict_image()
+            
+    def predict_volume(self):
+        self.paddings = self.get_paddings_iamge(self.input_volume[0].shape, self.crop_shape)
+        # not padding z
+        self.paddings.insert(0, (0,0))
+        self.padded_volume = self.pad_image(self.input_volume, self.paddings, mode=self.padding_mode)
+        self.padded_volume_shape = self.padded_volume.shape
+        self.padded_img_shape = self.padded_volume[0].shape
+        
+        self.prediction_volume = np.zeros_like(self.padded_volume_shape)
+        
+        for idx, img in tqdm(self.padded_volume):
+            img_windows = self.get_patch_windows(img=img,
+                                                 crop_shape=self.crop_shape,
+                                                 step=self.step)
+            
+            self.prediction_volume[idx] = self.predict_tiles(img_windows=img_windows,
+                                                         frame_shape=self.padded_img_shape,
+                                                         model=self.mode,
+                                                         batch_size=self.batch_size,
+                                                         n_output_classes=self.n_output_classes,
+                                                         chunk_size=None,
+                                                         weight_window=True)
+        
+        self.prediction_volume = self.unpad_volume(self.prediction_volume, self.paddings)
+        return self.prediction_volume
+        
+    def predict_image(self):
+        self.paddings = self.get_paddings_image(self.input_volume.shape, self.crop_shape)
         self.padded_volume = self.pad_image(
             self.input_volume, self.paddings, mode=self.padding_mode
         )
         self.padded_volume_shape = self.padded_volume.shape
         
-        
         self.patch_window_view = self.get_patch_windows(
             img=self.padded_volume, crop_shape=self.crop_shape, step=self.step
         )
-
-    def predict(self):
         self.prediction_volume_padded = self.predict_tiles(img_windows=self.patch_window_view,
                                        frame_shape=self.padded_volume_shape,
                                        model=self.model,
@@ -120,18 +153,27 @@ class TiledPredictor2D:
         return self.prediction_volume
 
     @staticmethod
-    def get_paddings(image_shape, crop_shape):
+    def get_paddings_image(image_shape, crop_shape):
         """given image_shape and crop_shape get [(pad_left, pad_right)] paddings"""
+        
+        image_shape = np.array(image_shape)
+        crop_shape = np.array(crop_shape)
+        
+        if not (crop_shape % 2 == 0).all():
+            raise ValueError("crop_shape should be divisible by 2")
+            
         image_shape_spatial = image_shape[:2]
         pad_list = [(0, 0) for idx in range(len(image_shape_spatial))]
 
-        mod = np.array(image_shape_spatial) % np.array(crop_shape)
-        nonzero_idxs = np.nonzero(mod)
-
-        for nonzero_idx in nonzero_idxs:
-            if len(nonzero_idx) > 0:
+        # mod = np.array(image_shape_spatial) % np.array(crop_shape)
+        step = crop_shape // 2
+        mod = (image_shape_spatial - crop_shape) % step
+        nonzero_idxs = np.nonzero(mod)[0]
+        
+        if len(nonzero_idxs) > 0:
+            for nonzero_idx in nonzero_idxs:
                 idx = int(nonzero_idx)
-                total_pad = mod[idx]
+                total_pad = (step - mod)[idx]
                 left_pad = total_pad % 2
                 right_pad = total_pad - left_pad
 
@@ -142,14 +184,17 @@ class TiledPredictor2D:
     @staticmethod
     def pad_image(img, pad_widths, mode="constant"):
         img_shape = img.shape
+        pad_width_list = list(pad_widths)
         """performing the padding"""
         # adding dims
-        while len(pad_widths) != len(img_shape):
-            pad_widths.append((0, 0))
-
-        img = pad(img, pad_widths, mode=mode)
+        
+        if len(pad_width_list) < len(img_shape):
+            while len(pad_width_list) != len(img_shape):
+                pad_width_list.append((0, 0))
+            
+        img = pad(img, pad_width_list, mode=mode)
         return img
-
+ 
     @classmethod
     def get_patch_windows(cls, img, crop_shape, step):
         crop_shape = list(crop_shape)
@@ -182,7 +227,7 @@ class TiledPredictor2D:
             raise ValueError(
                 "(img_shape - crop_shape) % step must be zeros to avoid reconstruction distorsions"
             )
-            
+
     @classmethod
     def predict_tiles(
         cls,
@@ -282,14 +327,22 @@ class TiledPredictor2D:
     
     @staticmethod
     def unpad_image(img, pad_widths):
-
-        unpadded = img
         img_shape = img.shape
 
         unpadded = img[
             pad_widths[0][0]: img_shape[0]-pad_widths[0][1],
             pad_widths[1][0]: img_shape[1]-pad_widths[1][1]]
         
+        return unpadded
+    
+    @staticmethod
+    def unpad_volume(vol, pad_widths):
+        vol_shape = vol.shape
+        unpadded = vol[
+            pad_widths[0][0]: vol_shape[0]-pad_widths[0][1],
+            pad_widths[1][0]: vol_shape[1]-pad_widths[1][1],
+            pad_widths[2][0]: vol_shape[2]-pad_widths[2][1]
+            ]
         return unpadded
 
 

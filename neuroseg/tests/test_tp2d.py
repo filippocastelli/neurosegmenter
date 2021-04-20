@@ -1,4 +1,5 @@
 import pytest
+import mock
 from pathlib import Path
 import os, sys, inspect
 import pudb
@@ -40,9 +41,17 @@ TRAIN_CFG_PATH = CONFIG_PATH.joinpath("test_train_cfg_3d.yml")
 FRAME_SHAPES = [
     (512,512),
     (513, 512),
+    (513, 513),
     (512,512,2)
     ]
 FRAME_SHAPES_IDS = gen_ids(FRAME_SHAPES, "frame")
+
+VOLUME_SHAPES = [
+    (512,512,2),
+    (513, 512, 2),
+    (512,512,2, 2)
+    ]
+VOLUME_SHAPES_IDS = gen_ids(FRAME_SHAPES, "volume")
 
 BATCH_SIZES = [1,2,3]
 BATCH_SIZES_IDS = gen_ids(BATCH_SIZES, name="batch_size")
@@ -63,12 +72,15 @@ PAD_MODES = [
     ]
 
 PAD_WIDTHS = [
-    [(0,0), (0,0)],
-    [(0,1), (0,0)],
+    ((0,0), (0,0)),
+    ((0,1), (0,0)),
     ]
 
 WINDOW_STEPS = [1, 2, 3, (1,1), (2,2)]
 WINDOW_STEP_IDS = gen_ids(WINDOW_STEPS, name="window_step")
+
+
+
 
 class mockModel:
     def __init__(
@@ -97,13 +109,11 @@ class TestDataPredictor2D:
     @pytest.mark.parametrize("chunk_size", CHUNK_SIZES, ids=CHUNK_SIZES_IDS)
     @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
     def test_init_tiledpredictor2D(self, input_volume_fixture, batch_size, chunk_size, crop_shape):
-        img_spatial_shape = input_volume_fixture.shape[:2]
-        step = (np.array(crop_shape) // 2)[:2]
-        mod = (np.array(img_spatial_shape)- np.array(crop_shape)) % step    
-        fail_condition = not (mod==0).all()
-        
-        if crop_shape == (65, 64) or fail_condition:
+        fail_condition = not all((np.array(crop_shape) % 2) == 0)
+
+        if fail_condition:
             context = pytest.raises(ValueError)
+            # pudb.set_trace()
         else:
             context = nullcontext()
         with context:
@@ -111,7 +121,7 @@ class TestDataPredictor2D:
                 input_volume=input_volume_fixture,
                 batch_size=batch_size,
                 chunk_size=chunk_size,
-                crop_shape=crop_shape,
+                window_size=crop_shape,
                 padding_mode="reflect",
                 # tmp_folder="tmp",
                 # keep_tmp=False
@@ -120,23 +130,27 @@ class TestDataPredictor2D:
     @pytest.mark.neuroseg_datapredictor2d
     @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
     @pytest.mark.parametrize("frame_shape", FRAME_SHAPES, ids=FRAME_SHAPES_IDS)
-    def test_get_paddings(self, crop_shape, frame_shape):
+    def test_get_paddings_image(self, crop_shape, frame_shape):
         crop_shape_array = np.array(crop_shape)
         frame_shape_array = np.array(frame_shape)
         frame_shape_spatial = frame_shape_array[:2]
         
-        # if crop_shape == (65,64):
-        #     pudb.set_trace()
-        paddings = TiledPredictor2D.get_paddings(frame_shape, crop_shape)
+        fail_condition = not all((crop_shape_array % 2)==0)
+        context = pytest.raises(ValueError) if fail_condition else nullcontext()
         
-        assert len(paddings) == len(frame_shape_spatial), "Paddings ahve different length than expected"
-        pad_lengths = np.array([len(padding) for padding in paddings])
-        assert all(pad_lengths==2), "Some paddings don't have length == 2"
+        with context:
+            paddings = TiledPredictor2D.get_paddings_image(frame_shape, crop_shape)
+            
+            assert len(paddings) == len(frame_shape_spatial), "Paddings ahve different length than expected"
+            pad_lengths = np.array([len(padding) for padding in paddings])
+            assert all(pad_lengths==2), "Some paddings don't have length == 2"
         
-        total_pads_expected = frame_shape_spatial % crop_shape_array
-        total_pads = np.array([sum(padding) for padding in paddings])
-        
-        assert (total_pads_expected == total_pads).all(), "padding sums are different than expected"
+            pad_elem_types = [type(elem) for elem in paddings]
+            assert len(set(pad_elem_types)) == 1, "paddings have different types"
+        # total_pads_expected = frame_shape_spatial % crop_shape_array
+        # total_pads = np.array([sum(padding) for padding in paddings])
+        # 
+        # assert (total_pads_expected == total_pads).all(), "padding sums are different than expected"
                       
     @pytest.mark.neuroseg_datapredictor2d
     @pytest.mark.parametrize("pad_widths", PAD_WIDTHS)
@@ -156,7 +170,7 @@ class TestDataPredictor2D:
         expected_total_shape = input_volume_fixture.shape + total_pads
         
         assert (np.array(padded_img.shape) == expected_total_shape).all(), "padded image has wrong shape"
-        
+    
     @pytest.mark.neuroseg_datapredictor2d
     @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
     @pytest.mark.parametrize("step", WINDOW_STEPS, ids=WINDOW_STEP_IDS)
@@ -221,14 +235,14 @@ class TestDataPredictor2D:
     @pytest.mark.neuroseg_datapredictor2d
     @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
     def test_unpad_img(self, input_volume_fixture, crop_shape):
-        frame_shape = input_volume_fixture.shape
-        paddings = TiledPredictor2D.get_paddings(frame_shape, crop_shape)
-        padded_img = TiledPredictor2D.pad_image(input_volume_fixture, paddings)
-        unpadded_img = TiledPredictor2D.unpad_image(padded_img, paddings)
+        fail_condition = not all((np.array(crop_shape) % 2)==0)
+        context = pytest.raises(ValueError) if fail_condition else nullcontext()
+        with context:
+            frame_shape = input_volume_fixture.shape
+            paddings = TiledPredictor2D.get_paddings_image(frame_shape, crop_shape)
+            padded_img = TiledPredictor2D.pad_image(input_volume_fixture, paddings)
+            unpadded_img = TiledPredictor2D.unpad_image(padded_img, paddings)
+            
+            print(paddings)
+            assert unpadded_img.shape == frame_shape, "unpadded and original image have different shapes"
         
-        print(paddings)
-        assert unpadded_img.shape == frame_shape, "unpadded and original image have different shapes"
-        
-        
-        
-    

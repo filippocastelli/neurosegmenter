@@ -86,7 +86,7 @@ class DataPredictorBase:
 
         vol = load_volume(
             data_path,
-            drop_last_channel=drop_last_channel,
+            ignore_last_channel=drop_last_channel,
             data_mode=data_mode,
         )
         if normalize_data:
