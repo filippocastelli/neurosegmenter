@@ -82,14 +82,11 @@ class DataPredictorBase:
 
     @staticmethod
     def _load_single_volume(data_path, n_channels, data_mode, normalize_data=True):
-
         drop_last_channel = True if (n_channels == 2) else False
-        expand_last_dim = True if n_channels == 1 else False
 
         vol = load_volume(
             data_path,
-            drop_last_channel,
-            expand_last_dim=expand_last_dim,
+            ignore_last_channel=drop_last_channel,
             data_mode=data_mode,
         )
         if normalize_data:
@@ -103,19 +100,7 @@ class DataPredictorBase:
             self.input_data = self._load_single_volume(
                 self.data_path, self.n_channels, self.data_mode
             )
-            # drop_last_channel = True if (self.n_channels == 2) else False
-            # expand_last_dim = True if self.n_channels == 1 else False
 
-            # vol = load_volume(self.data_path,
-            #                   drop_last_channel,
-            #                   expand_last_dim=expand_last_dim,
-            #                   data_mode=self.data_mode)
-
-            # if self.normalize_data:
-            #     max_norm = np.iinfo(vol.dtype).max
-            #     vol = vol / max_norm
-
-            # self.input_data = vol
         elif self.data_mode == "multi_stack":
             self.data_paths = glob_imgs(self.data_path, mode="stack")
             loaded_vols = []

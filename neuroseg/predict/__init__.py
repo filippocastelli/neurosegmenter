@@ -1,0 +1,1 @@
+from neuroseg.predict.predict import predict

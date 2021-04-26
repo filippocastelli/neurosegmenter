@@ -15,7 +15,8 @@ from batchgenerators.transforms.crop_and_pad_transforms import RandomCropTransfo
 from batchgenerators.transforms.color_transforms import (
     BrightnessTransform,
     BrightnessMultiplicativeTransform,
-    GammaTransform)
+    GammaTransform,
+    ClipValueRange)
 from batchgenerators.transforms.noise_transforms import (
     GaussianNoiseTransform,
     GaussianBlurTransform)
@@ -119,31 +120,10 @@ class datagen3DSingle(dataGenBase):
             # TODO: MOVE ALL THIS PREPROCESSING INSIDE CROPPED DATA LOADER
             # ONLY data = {img: img_path, label: label_path} must be here
             
-            
             # for processing purposes we use "stack" instead of "multi_stack"
-            data_mode = self.dataset_mode if self.dataset_mode != "multi_stack" else "stack"
-            
-            #TODO: check if need drop_last_dim or expand_last_dim
-            # self.frames_volume = load_volume(str(self.frames_path),
-            #                                  data_mode=data_mode,
-            #                                  drop_last_dim=False)
-            # self.masks_volume = load_volume(str(self.masks_path),
-            #                                 data_mode=data_mode,
-            #                                 drop_last_dim=False)
-            
-            # self.frames_volume = tifffile.imread(str(self.frames_path)).astype(np.float32)
-            # self.masks_volume = tifffile.imread(str(self.masks_path)).astype(np.float32)
+            # data_mode = self.dataset_mode if self.dataset_mode != "multi_stack" else "stack"
             
             logging.debug("reading from disk, dataset mode: {}...".format(self.dataset_mode))
-            
-            # if self.normalize_inputs:
-            #     #TODO check normalization constant
-            #     self.frames_volume = self._normalize_stack(self.frames_volume,
-            #                                                norm=np.iinfo(self.frames_volume.dtype).max)
-            #     self.masks_volume = self._normalize_stack(self.masks_volume,
-            #                                               norm=np.iinfo(self.masks_volume.dtype).max)
-                
-            # self._adjust_stack_dims()
             
             self.data_dict = {
                 "img" : self.frames_volume,
@@ -165,45 +145,6 @@ class datagen3DSingle(dataGenBase):
         else:
             raise NotImplementedError(self.dataset_mode)
 
-            
-    
-    def _adjust_stack_dims(self):
-        """uniform stack dimensions
-        target dimensions are [z, y, x, ch]"""
-        frames_shape = self.frames_volume.shape
-        masks_shape = self.masks_volume.shape
-        
-        # transform to [z, y, x, ch]
-        
-        if len(np.unique(self.frames_volume[...,2])) == 1:
-            # if samples are two-colors, third rgb dim should not be included
-            self.frames_volume = self.frames_volume[...,-1]
-        
-        if len(frames_shape) == 4 and len(masks_shape) == 4:
-            # this should be ok except when labels are multichannel
-            # check if labels are monochrome
-            
-            if masks_shape[-1] != 1:
-                raise Exception(
-                    "Labels must be monochrome for single-class semantic segmentation")
-                
-        elif len(frames_shape) == 4 and len(masks_shape) == 4:
-            # frames are multichannel but labels are monochrome
-            # expand dimensions for labels
-            self.masks_volume = np.expand_dims(self.masks_volume, axis=-1)
-        
-        elif len(frames_shape) == 3 and len(masks_shape) == 3:
-            # both stacks are monochrome
-            # expand dimensions_for both
-            
-            self.frames_volume = np.expand_dims(self.frames_volume, axis=-1)
-            self.masks_volume = np.expand_dims(self.masks_volume, axis=-1)
-        
-        self.volume_shape = self.frames_volume.shape[:-1]
-        
-        # convert to [ch, z, y, x]
-        self.frames_volume = np.moveaxis(self.frames_volume, -1, 0)
-        self.masks_volume = np.moveaxis(self.masks_volume, -1, 0)
         
     def _spatial_transform_cfg(self):
         """spatial transform"""
@@ -309,7 +250,7 @@ class datagen3DSingle(dataGenBase):
         
         gaussian_blur_transform_cfg.update(self.transform_cfg["gaussian_blur_transform"])
         return gaussian_blur_transform_cfg
-    
+        
     @classmethod
     def _get_transform_fn(cls, transform):
         """convert transform string to transform function"""
@@ -321,7 +262,7 @@ class datagen3DSingle(dataGenBase):
             "gaussian_blur_transform" : GaussianBlurTransform,
             "mirror_transform" : MirrorTransform,
             "rot90_transform" : Rot90Transform,
-            "spatial_transform" : SpatialTransform_2
+            "spatial_transform" : SpatialTransform_2,
             }
         
         if transform not in TRANSFORM_FNS:
@@ -339,7 +280,7 @@ class datagen3DSingle(dataGenBase):
             "gaussian_blur_transform" : self._gaussian_blur_transform_cfg(),
             "mirror_transform" : self._mirror_transform_cfg(),
             "rot90_transform" : self._rot90_transform_cfg(),
-            "spatial_transform" : self._spatial_transform_cfg()
+            "spatial_transform" : self._spatial_transform_cfg(),
             }
         if transform not in TRANSFORM_CFGS:
             raise NotImplementedError("transform {} not supported".format(transform))
@@ -364,7 +305,12 @@ class datagen3DSingle(dataGenBase):
             transforms = self._get_augment_transforms()
         else:
             transforms = [RandomCropTransform(crop_size=self.crop_shape)]
+            
+        # clip data values to [0. 1.]
+        clip_min = 0. if self.normalize_inputs else np.finfo(np.float32).min
+        clip_max = 1. if self.normalize_inputs else np.finfo(np.float32).max
         
+        transforms.append(ClipValueRange(min=clip_min, max=clip_max))
         return Compose(transforms)
     
     def _setup_gen(self):
@@ -467,7 +413,8 @@ class MultiCroppedDataLoaderBG(DataLoader):
             shuffle=False,
             seed_for_shuffle=12,
             infinite=False,
-            normalize_inputs=True):
+            normalize_inputs=True,
+            positive_class_value=255):
         
         # data = {"img": [img_paths], "label": [label_paths]}}
         super().__init__(
@@ -483,6 +430,7 @@ class MultiCroppedDataLoaderBG(DataLoader):
         self.label_paths = self._data["label"]
         self.rng_seed = seed_for_shuffle
         self.normalize_inputs = normalize_inputs
+        self.positive_class_value = positive_class_value
         
         if self.rng_seed is not None:
             np.random.seed(self.rng_seed)
@@ -522,7 +470,8 @@ class MultiCroppedDataLoaderBG(DataLoader):
             # NOTE LOAD_VOLUME_COUPLE IS NOW IN SINGLE CROPPED DATA LOADER
             img_volume, label_volume = CroppedDataLoaderBG._load_volume_couple(img_path,
                                                                                label_path,
-                                                                               self.normalize_inputs)
+                                                                               self.normalize_inputs,
+                                                                               label_positive_class_value=self.positive_class_value)
             key_volume_dict = {
                 "img": img_volume,
                 "label": label_volume}
@@ -570,7 +519,8 @@ class CroppedDataLoaderBG(DataLoader):
             shuffle=False,
             seed_for_shuffle=123,
             infinite=False,
-            normalize_inputs=True):
+            normalize_inputs=True,
+            positive_class_value=255):
         """
         CroppedDataLoaderBG
         
@@ -604,14 +554,12 @@ class CroppedDataLoaderBG(DataLoader):
             infinite=infinite
             )
         
-        # self.volume_shape = data["img"].shape[1:]
-        # self.frames_volume = data["img"]
-        # self.masks_volume = data["label"]
         self.img_path = data["img"]
         self.labels_path = data["label"]
         
         self.data_mode = data_mode
         self.normalize_inputs = normalize_inputs
+        self.positive_class_value = positive_class_value
         
         if self.data_mode not in ["single_images", "stack"]:
             raise ValueError("CroppedDataLoaderBG does not suppport data mode {} \
@@ -621,7 +569,8 @@ class CroppedDataLoaderBG(DataLoader):
             img_path=self.img_path,
             label_path=self.labels_path,
             normalize_inputs=self.normalize_inputs,
-            data_mode=self.data_mode)
+            data_mode=self.data_mode,
+            label_positive_class_value=self.positive_class_value)
         
         self.volume_shape = self.frames_volume.shape[1:]
         self.crop_shape = crop_shape
@@ -632,19 +581,24 @@ class CroppedDataLoaderBG(DataLoader):
             np.random.seed(self.rng_seed)
         
     @classmethod
-    def _load_volume_couple(cls, img_path, label_path, normalize_inputs, data_mode="stack"):
+    def _load_volume_couple(cls, img_path, label_path,
+                            normalize_inputs,
+                            data_mode="stack",
+                            label_positive_class_value=255):
+        
         img_volume = load_volume(img_path,
                                  data_mode=data_mode,
-                                 drop_last_dim=False)
+                                 ignore_last_channel=False).astype(np.float32)
         
         label_volume = load_volume(label_path,
                                    data_mode=data_mode,
-                                   drop_last_dim=False)
+                                   ignore_last_channel=False)
+        
+        label_volume = np.where(label_volume > label_positive_class_value, 1,0).astype(img_volume.dtype)
+        
         if normalize_inputs:
             img_volume = cls._normalize_stack(img_volume,
-                                               norm=np.iinfo(img_volume.dtype).max)
-            label_volume = cls._normalize_stack(label_volume,
-                                                 norm=np.iinfo(label_volume.dtype).max)
+                                               norm=np.finfo(img_volume.dtype).max)
             
         img_volume, label_volume = cls._adjust_stack_dims(img_volume, label_volume, to_channel_first=True)
         return img_volume, label_volume
@@ -653,11 +607,18 @@ class CroppedDataLoaderBG(DataLoader):
     def _adjust_stack_dims(cls, img_volume, labels_volume, to_channel_first=True):
 
         # determine if third channel is empty
-        if len(np.unique(img_volume[...,2])) == 1:
-            img_volume = img_volume[...,:-1]
+        img_volume_shape = img_volume.shape
+        
+        assert len(img_volume_shape) == 4, f"Image volume has shape {img_volume_shape}, it should be [z, y, x, ch]"
+        
+        if img_volume_shape[-1] == 3:
+            if len(np.unique(img_volume[...,2])) == 1:
+                logging.warning("last channel of input volume is empty, you should use ignore_last_channel: true in config to avoid this warning")
+                logging.warning("ignoring last channel")
+                img_volume = img_volume[...,:-1]
 
-        img_volume = cls._expand_dims_if_needed(img_volume)
-        labels_volume = cls._expand_dims_if_needed(labels_volume)
+        # img_volume = cls._expand_dims_if_needed(img_volume)
+        # labels_volume = cls._expand_dims_if_needed(labels_volume)
         
         if to_channel_first:
             img_volume = np.moveaxis(img_volume, -1 , 0)
@@ -666,18 +627,18 @@ class CroppedDataLoaderBG(DataLoader):
         return img_volume, labels_volume
 
             
-    @staticmethod
-    def _expand_dims_if_needed(stack):
-        stack_shape = stack.shape
+    # @staticmethod
+    # def _expand_dims_if_needed(stack):
+    #     stack_shape = stack.shape
         
-        if len(stack_shape) == 4:
-            pass
-        elif len(stack_shape) == 3:
-            stack = np.expand_dims(stack, axis=-1)
-        else:
-            raise ValueError("invalid stack_shape {}".format(stack_shape))
+    #     if len(stack_shape) == 4:
+    #         pass
+    #     elif len(stack_shape) == 3:
+    #         stack = np.expand_dims(stack, axis=-1)
+    #     else:
+    #         raise ValueError("invalid stack_shape {}".format(stack_shape))
             
-        return stack
+    #     return stack
     
 
     @staticmethod
@@ -725,8 +686,14 @@ class CroppedDataLoaderBG(DataLoader):
      
     @staticmethod
     def _get_random_crop(frames_volume, masks_volume, volume_shape, crop_shape):
+        volume_shape = list(volume_shape) # casting to list
+        crop_shape = list(crop_shape)
         """get a random crop_img, crop_label tuple"""
         z_shape, y_shape, x_shape = volume_shape
+    
+        assert len(crop_shape) == len(volume_shape), f"crop_shape {crop_shape} and volume_shape {volume_shape} have different dimensionalities"
+        # assert we're not trying to crop something larger than volume 
+        assert volume_shape > crop_shape, f"crop_shape {crop_shape} > volume_shape {volume_shape}"
         
         z_0 = np.random.randint(low=0, high=z_shape - crop_shape[0])
         y_0 = np.random.randint(low=0, high=y_shape - crop_shape[1])

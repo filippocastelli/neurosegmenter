@@ -14,6 +14,7 @@ setup(
       version=__version__,
       description="NeuroSeg",
       packages=find_packages(exclude=("tests",)),
+      package_data={"": ["version", "utils/animals.txt", "utils/adjectives.txt"]},
       # py_modules = ["omereader", "omewriter", "omexml"],
       # package_dir = {"": "pyometiff"},
       classifiers=[

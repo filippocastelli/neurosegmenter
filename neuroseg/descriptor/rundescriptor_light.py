@@ -50,7 +50,9 @@ class RunDescriptorLight:
     def _copy_logs(self):
         """copy logs path"""
         self.log_dir_local_path = self.descriptor_local_path.joinpath("logs")
-        shutil.copytree(str(self.original_logs_path), str(self.log_dir_local_path), dirs_exist_ok=True)
+        shutil.copytree(str(self.original_logs_path), str(self.log_dir_local_path))
+        #python 3.6 is not compatible with dirs_exist_ok argument, only 3.8
+        # shutil.copytree(str(self.original_logs_path), str(self.log_dir_local_path), dirs_exist_ok=True)
         
     def _copy_config(self):
         """copy yml config""" 

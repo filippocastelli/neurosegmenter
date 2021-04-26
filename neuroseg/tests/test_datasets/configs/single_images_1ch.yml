@@ -1,0 +1,8 @@
+# SINGLE_IMAGES_DATASET
+dataset_cfg:
+    dataset_path: "test_datasets/single_images_1ch"
+    mode: "single_images"
+    n_channels: 1
+    positive_class_value: 255
+    negative_class_value: 0
+    ignore_last_channel: false

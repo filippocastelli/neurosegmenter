@@ -35,9 +35,7 @@ class MultiVolumePerformanceEvaluator:
         for idx, gt_fpath in enumerate(self.ground_truth_volume_fpaths):
             volume_name = gt_fpath.name
             gt_volume = load_volume(gt_fpath,
-                    drop_last_dim=False,
-                    expand_last_dim=False,
-                    squeeze=True,
+                    ignore_last_channel=False,
                     data_mode="stack")
             norm_constant = np.iinfo(gt_volume.dtype).max
             gt_volume = gt_volume / norm_constant
@@ -117,10 +115,7 @@ class SingleVolumePerformanceEvaluator:
         
     def _load_gt(self):
         gt_vol = (load_volume(self.ground_truth_path,
-                             drop_last_dim=False,
-                             expand_last_dim=False,
-                             squeeze=True,
-                             # data_mode=self.ground_truth_mode) / 255
+                             ignore_last_channel=False,
                              data_mode=self.ground_truth_mode) / 255).astype(np.uint8)
         self.ground_truth = gt_vol
         
