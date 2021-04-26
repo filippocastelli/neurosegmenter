@@ -29,7 +29,3 @@ if __name__ == "__main__":
     cfg_path = Path(args.configuration_path_str)
     
     main(cfg_path)
-    
-    
-
-        
