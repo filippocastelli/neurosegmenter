@@ -6,3 +6,4 @@ __pycache__
 /neuroseg/tests/tmp
 clean_build.sh
 /.idea
+/neuroseg/.idea
