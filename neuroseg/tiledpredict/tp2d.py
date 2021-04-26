@@ -4,8 +4,8 @@
 # import pickle
 
 import numpy as np
-import scipy.signal as signal
-from skimage.util import view_as_windows, pad
+import scipy
+from skimage.util import view_as_windows
 from tqdm import tqdm
 
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
@@ -192,7 +192,7 @@ class TiledPredictor2D:
             while len(pad_width_list) != len(img_shape):
                 pad_width_list.append((0, 0))
             
-        img = pad(img, pad_width_list, mode=mode)
+        img = np.pad(img, pad_width_list, mode=mode)
         return img
  
     @classmethod
@@ -314,10 +314,10 @@ class TiledPredictor2D:
     def spline_window(window_linear_size, power=2):
         """ generates 1D spline window profile"""
         intersection = int(window_linear_size / 4)
-        wind_outer = (abs(2 * (signal.triang(window_linear_size))) ** power) / 2
+        wind_outer = (abs(2 * (scipy.signal.triang(window_linear_size))) ** power) / 2
         wind_outer[intersection:-intersection] = 0
 
-        wind_inner = 1 - (abs(2 * (signal.triang(window_linear_size) - 1)) ** power) / 2
+        wind_inner = 1 - (abs(2 * (scipy.signal.triang(window_linear_size) - 1)) ** power) / 2
         wind_inner[:intersection] = 0
         wind_inner[-intersection:] = 0
 
