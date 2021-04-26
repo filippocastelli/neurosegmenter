@@ -28,6 +28,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     install_requires=requirements,
+    test_requirements = ["pytest", "mock", "pudb"],
     url="https://github.com/filippocastelli/neuroseg",
     author="Filippo Maria Castelli",
     author_email="castelli@lens.unifi.it",
