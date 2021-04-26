@@ -103,6 +103,7 @@ def save_volume(volume,
                 output_path,
                 fname="predictions",
                 save_tiff=True,
+                save_8bit=True,
                 save_pickle=True):
     
     if save_pickle:
@@ -110,21 +111,25 @@ def save_volume(volume,
 
         with pickle_out_path.open(mode="wb") as out_file:
             pickle.dump(volume, out_file)
-    
-    if save_tiff:
-        
+
+    def exp_tiff(out_volume, name):
         if volume.shape[-1] == 2:
             pass
             # zeros = np.zeros_like(volume[...,0])
             # zeros = np.expand_dims(zeros, axis=-1)
             # volume = np.concatenate([volume, zeros], axis=-1)
-        
-        tiff_path = output_path.joinpath(fname + ".tif")
+
+        tiff_path = output_path.joinpath(name + ".tif")
         # skio.imsave(tiff_path, volume, plugin="pil", check_contrast=False)
         # tifffile.imsave(tiff_path, volume.astype(np.float32), photometric="minisblack")
         with tifffile.TiffWriter(str(tiff_path)) as stack:
-            for img_plane in volume:
+            for img_plane in out_volume:
                 stack.save(img_plane)
+    if save_tiff:
+        exp_tiff(volume, name=fname)
+    if save_8bit:
+        vol_8bit = (volume*255).astype(np.uint8)
+        exp_tiff(vol_8bit, name=fname+"_8bit")
         
 def is_supported_ext(path, mode="img"):
     suffix = path.suffix
