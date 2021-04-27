@@ -153,6 +153,16 @@ class TrainConfig(Config):
         self.loss = training_cfg["loss"]
         self.batch_size = training_cfg["batch_size"]
         self.track_metrics = training_cfg["track_metrics"]
+        self.pos_weight = training_cfg["pos_weight"] if "pos_weight" in training_cfg else None
+
+        # class_weights = training_cfg["class_weights"] if "class_weights" in training_cfg else None
+        # if type(class_weights) is dict:
+        #     class_weights = {float(key): float(value) for key, value in class_weights.items()}
+        #     self.class_weights = class_weights
+        # elif class_weights is None:
+        #     self.class_weights = class_weights
+        # else:
+        #     raise ValueError("unsupported class_weights mode {class_weights}")
         
     def _parse_dataset_cfg(self, dataset_cfg):
         self.dataset_path = self._decode_path(dataset_cfg["dataset_path"])

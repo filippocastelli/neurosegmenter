@@ -3,6 +3,10 @@ training_cfg:
     epochs: 1
     batch_size: 10
     loss: "binary_crossentropy"
+#    class_weights:
+#        0: 05966296
+#        1: 1.0
+    pos_weight: 1.
     track_metrics:
         - "accuracy"
         - "jaccard_index"
@@ -19,7 +23,7 @@ optimizer_cfg:
 
 model_cfg:
     model: "resunet3d"
-    crop_shape: [64, 64, 64]
+    crop_shape: [32, 128, 128]
     unet_depth: 2
     base_filters: 16
     batch_normalization: true
@@ -30,13 +34,13 @@ dataset_cfg:
      dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
      mode: "stack"
      n_channels: 1
-     positive_class_value: 1
-     negative_class_value: 255
+     positive_class_value: 255
+     negative_class_value: 0
      ignore_last_channel: false
 
 output_cfg:
-    output_path: "/mnt/ssd1/datasets/em_training"
-    descriptor_path: "/mnt/ssd1/datasets/em_training/descr"
+    output_path: "/mnt/ssd1/em_training"
+    descriptor_path: "/mnt/ssd1/em_training/descr"
     enable_wandb_tracking: false
 
 data_augmentation_cfg:
