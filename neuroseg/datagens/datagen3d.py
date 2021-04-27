@@ -26,10 +26,11 @@ import numpy as np
 from neuroseg.datagens.datagenbase import dataGenBase
 from neuroseg.utils import load_volume
 
-   
+
 class datagen3DSingle(dataGenBase):
     """3D data pipeline, inherits from dataGenBase
     based on BatchGenerators"""
+
     def __init__(self,
                  config,
                  partition="train",
@@ -68,36 +69,35 @@ class datagen3DSingle(dataGenBase):
             defines the number of steps to complete an epoch
             to be used in model.fit()
         """
-        
+
         super().__init__(config=config,
                          partition=partition,
                          data_augmentation=data_augmentation,
                          normalize_inputs=normalize_inputs,
                          verbose=verbose)
-        
+
         # self._parse_single_stack_paths()
         # self._load_volumes()
-        
+
         self.shuffle = self.config.da_shuffle
         self.seed = self.config.da_seed
         # self.pre_crop_scales = self.config.da_pre_crop_scales
-        
+
         self.data = self._setup_gen()
         self.iter = self.data.__iter__
         self.steps_per_epoch = self._get_steps_per_epoch(self.volume_shape, self.crop_shape, self.batch_size)
 
-
     @staticmethod
     def _normalize_stack(stack_arr, norm=255):
         """divide stack by normalization constant"""
-        return (stack_arr/norm).astype(np.float32)
-    
+        return (stack_arr / norm).astype(np.float32)
+
     def _get_data_dict(self):
-        
+
         if self.dataset_mode == "stack":
             self.frames_path = self.frames_paths[0]
             self.masks_path = self.masks_paths[0]
-            
+
             data = {"img": self.frames_path,
                     "label": self.masks_path}
         elif self.dataset_mode == "multi_stack":
@@ -107,45 +107,43 @@ class datagen3DSingle(dataGenBase):
             data = {"img": self.frames_paths,
                     "label": self.masks_paths}
         return data
-        
-        
+
     def _load_volumes(self):
         """load images from file,
         apply normalizations,
         fix stack dimensions,,
         create {"img: img_volume, "label": label_volume} data dict"""
-                
+
         if self.dataset_mode in ["single_images", "stack"]:
-            
+
             # TODO: MOVE ALL THIS PREPROCESSING INSIDE CROPPED DATA LOADER
             # ONLY data = {img: img_path, label: label_path} must be here
-            
+
             # for processing purposes we use "stack" instead of "multi_stack"
             # data_mode = self.dataset_mode if self.dataset_mode != "multi_stack" else "stack"
-            
+
             logging.debug("reading from disk, dataset mode: {}...".format(self.dataset_mode))
-            
+
             self.data_dict = {
-                "img" : self.frames_volume,
-                "label": self.masks_volume }
+                "img": self.frames_volume,
+                "label": self.masks_volume}
             # self.frames_volume and self.masks_volume are redundant at this point
             # they might need to be deleted to free space
-            
+
             del self.frames_volume
             del self.masks_volume
             gc.collect()
-        
-        
+
+
         elif self.dataset_mode == "multi_stack":
-            
+
             self.data_dict = {
                 "img": self.frames_paths,
                 "label": self.masks_paths}
-          
+
         else:
             raise NotImplementedError(self.dataset_mode)
 
-        
     def _spatial_transform_cfg(self):
         """spatial transform"""
         # default options
@@ -163,130 +161,130 @@ class datagen3DSingle(dataGenBase):
             "border_mode_data": "nearest",
             "random_crop": True,
         }
-        
+
         # user-defined options
         spatial_transform_cfg.update(self.transform_cfg["spatial_transform"])
         return spatial_transform_cfg
-    
+
     def _brightness_multiplicative_transform_cfg(self):
         """brightness multiplicative transform configurator"""
         brightness_multiplicative_transform_cfg = {
             "multiplier_range": (0.9, 1.1),
-            "per_channel" : True,
-            "p_per_sample" : 0.15}
-        
-        brightness_multiplicative_transform_cfg.update(self.transform_cfg["brightness_multiplicative_transform"])    
+            "per_channel": True,
+            "p_per_sample": 0.15}
+
+        brightness_multiplicative_transform_cfg.update(self.transform_cfg["brightness_multiplicative_transform"])
         return brightness_multiplicative_transform_cfg
-    
+
     def _brightness_transform_cfg(self):
         """brightness additive transform configurator"""
         brightness_transform_cfg = {
-            "p_per_sample" : 0.15,
-            "mu" : 0,
-            "sigma" : 0.01,
-            }
-        
+            "p_per_sample": 0.15,
+            "mu": 0,
+            "sigma": 0.01,
+        }
+
         brightness_transform_cfg.update(self.transform_cfg["brightness_transform"])
         return brightness_transform_cfg
-    
+
     def _rot90_transform_cfg(self):
         """rigid 90 degree rotation transform configurator"""
-        
+
         if len(set(self.crop_shape)) == 1:
-            rotation_axes = (0,1,2)
+            rotation_axes = (0, 1, 2)
         else:
-            rotation_axes = (1,2)
-            
+            rotation_axes = (1, 2)
+
         rot90_transform_cfg = {
-            "num_rot" : (1,2,3),
+            "num_rot": (1, 2, 3),
             # "axes": (0,1,2),
             "axes": rotation_axes,
-            "p_per_sample" : 0.15
-            }
-        
+            "p_per_sample": 0.15
+        }
+
         rot90_transform_cfg.update(self.transform_cfg["rot90_transform"])
         return rot90_transform_cfg
-    
+
     def _mirror_transform_cfg(self):
         """mirror transform configurator"""
         mirror_transform_cfg = {
-            "axes" : (0, 1, 2)
-            }
-        
+            "axes": (0, 1, 2)
+        }
+
         mirror_transform_cfg.update(self.transform_cfg["mirror_transform"])
         return mirror_transform_cfg
-        
+
     def _gamma_transform_cfg(self):
         """gamma trasnform configurator"""
         gamma_transform_cfg = {
-            "p_per_sample" : 0.15,
-            "per_channel" : True,
-            "invert_image" : False,
+            "p_per_sample": 0.15,
+            "per_channel": True,
+            "invert_image": False,
             "retain_stats": True,
             "gamma_range": (0.9, 1.1)
-            }
-        
+        }
+
         gamma_transform_cfg.update(self.transform_cfg["gamma_transform"])
         return gamma_transform_cfg
-    
+
     def _gaussian_noise_transform_cfg(self):
         """gaussian noise additive transform configurator"""
         gaussian_noise_transform_cfg = {
             "p_per_sample": 0.15,
-            "noise_variance" : [0, 0.0005]
-            }
-        
+            "noise_variance": [0, 0.0005]
+        }
+
         gaussian_noise_transform_cfg.update(self.transform_cfg["gaussian_noise_transform"])
         return gaussian_noise_transform_cfg
-    
+
     def _gaussian_blur_transform_cfg(self):
         """gaussian filtering transform configurator"""
         gaussian_blur_transform_cfg = {
             "p_per_sample": 0.15,
-            "blur_sigma": (1,5),
+            "blur_sigma": (1, 5),
             "different_sigma_per_channel": True,
             "p_per_channel": True
-            }
-        
+        }
+
         gaussian_blur_transform_cfg.update(self.transform_cfg["gaussian_blur_transform"])
         return gaussian_blur_transform_cfg
-        
+
     @classmethod
     def _get_transform_fn(cls, transform):
         """convert transform string to transform function"""
         TRANSFORM_FNS = {
-            "brightness_transform" : BrightnessTransform,
-            "brightness_multiplicative_transform" : BrightnessMultiplicativeTransform,
-            "gamma_transform" : GammaTransform,
-            "gaussian_noise_transform" : GaussianNoiseTransform,
-            "gaussian_blur_transform" : GaussianBlurTransform,
-            "mirror_transform" : MirrorTransform,
-            "rot90_transform" : Rot90Transform,
-            "spatial_transform" : SpatialTransform_2,
-            }
-        
+            "brightness_transform": BrightnessTransform,
+            "brightness_multiplicative_transform": BrightnessMultiplicativeTransform,
+            "gamma_transform": GammaTransform,
+            "gaussian_noise_transform": GaussianNoiseTransform,
+            "gaussian_blur_transform": GaussianBlurTransform,
+            "mirror_transform": MirrorTransform,
+            "rot90_transform": Rot90Transform,
+            "spatial_transform": SpatialTransform_2,
+        }
+
         if transform not in TRANSFORM_FNS:
             raise NotImplementedError("transform {} not supported".format(transform))
-            
+
         return TRANSFORM_FNS[transform] if transform in TRANSFORM_FNS else None
-    
+
     def _get_transform_cfg(self, transform):
         """convert transform string to transform configurator function"""
         TRANSFORM_CFGS = {
-            "brightness_transform" : self._brightness_transform_cfg(),
-            "brightness_multiplicative_transform" : self._brightness_multiplicative_transform_cfg(),
-            "gamma_transform" : self._gamma_transform_cfg(), 
-            "gaussian_noise_transform" : self._gaussian_noise_transform_cfg(),
-            "gaussian_blur_transform" : self._gaussian_blur_transform_cfg(),
-            "mirror_transform" : self._mirror_transform_cfg(),
-            "rot90_transform" : self._rot90_transform_cfg(),
-            "spatial_transform" : self._spatial_transform_cfg(),
-            }
+            "brightness_transform": self._brightness_transform_cfg(),
+            "brightness_multiplicative_transform": self._brightness_multiplicative_transform_cfg(),
+            "gamma_transform": self._gamma_transform_cfg(),
+            "gaussian_noise_transform": self._gaussian_noise_transform_cfg(),
+            "gaussian_blur_transform": self._gaussian_blur_transform_cfg(),
+            "mirror_transform": self._mirror_transform_cfg(),
+            "rot90_transform": self._rot90_transform_cfg(),
+            "spatial_transform": self._spatial_transform_cfg(),
+        }
         if transform not in TRANSFORM_CFGS:
             raise NotImplementedError("transform {} not supported".format(transform))
-            
+
         return TRANSFORM_CFGS[transform] if transform in TRANSFORM_CFGS else None
-        
+
     def _get_augment_transforms(self):
         """returns a list of pre-configured transform functions
         basically generates a pipeline of sequential transforms"""
@@ -294,31 +292,31 @@ class datagen3DSingle(dataGenBase):
         for transform in self.transforms:
             transform_fn = self._get_transform_fn(transform)
             transform_cfg = self._get_transform_cfg(transform)
-            
+
             transforms.append(transform_fn(**transform_cfg))
-        
+
         return transforms
-    
+
     def _get_transform_chain(self):
         """generate a Compose() global transform"""
         if self.data_augmentation:
             transforms = self._get_augment_transforms()
         else:
             transforms = [RandomCropTransform(crop_size=self.crop_shape)]
-            
+
         # clip data values to [0. 1.]
         clip_min = 0. if self.normalize_inputs else np.finfo(np.float32).min
         clip_max = 1. if self.normalize_inputs else np.finfo(np.float32).max
-        
+
         transforms.append(ClipValueRange(min=clip_min, max=clip_max))
         return Compose(transforms)
-    
+
     def _setup_gen(self):
         """returns a python generator to be used with keras
         supports both SingleThread and MultiThread BatchGenerators augmenters"""
-        
+
         self.data_dict = self._get_data_dict()
-        
+
         if self.dataset_mode in ["single_images", "stack"]:
             self.dataLoader = CroppedDataLoaderBG(
                 data=self.data_dict,
@@ -330,7 +328,7 @@ class datagen3DSingle(dataGenBase):
                 seed_for_shuffle=self.seed,
                 infinite=False,
                 # pre_crop_scales=self.pre_crop_scales
-                )
+            )
         elif self.dataset_mode == "multi_stack":
             self.dataLoader = MultiCroppedDataLoaderBG(
                 data=self.data_dict,
@@ -343,28 +341,30 @@ class datagen3DSingle(dataGenBase):
                 infinite=False)
         else:
             raise NotImplementedError(self.dataset_mode)
-            
+
         self.volume_shape = self.dataLoader.volume_shape
         self.composed_transform = self._get_transform_chain()
-        
+
         if self.single_thread:
             self.gen = SingleThreadedAugmenter(self.dataLoader, self.composed_transform)
         else:
             self.gen = MultiThreadedAugmenter(self.dataLoader,
-                                         self.composed_transform,
-                                         self.threads)
-            
-        return self._get_keras_gen(self.gen, channel_last=True)
-        
+                                              self.composed_transform,
+                                              self.threads)
+
+        return self._get_keras_gen(self.gen, channel_last=True, flatten=self.flatten)
+
     @staticmethod
     def _get_steps_per_epoch(frame_shape, crop_shape, batch_size):
         """calculate the number of steps per epoch"""
         frame_px = np.prod(frame_shape)
         crop_px = np.prod(crop_shape)
-        return int( np.ceil( (frame_px / crop_px) / float(batch_size)))
-    
+        return int(np.ceil((frame_px / crop_px) / float(batch_size)))
+
     @classmethod
-    def _get_keras_gen(cls, batchgen, channel_last=True):
+    def _get_keras_gen(cls,
+                       batchgen,
+                       channel_last=True):
         """
         Adapter for BatchGenerator generators to be used with keras
         yields (frames, masks) batched pairs
@@ -389,13 +389,13 @@ class datagen3DSingle(dataGenBase):
             batch_dict = next(batchgen)
             frames = batch_dict["data"]
             masks = batch_dict["seg"]
-            
+
             if channel_last:
                 frames = cls._to_channel_last(frames)
                 masks = cls._to_channel_last(masks)
-            
+
             yield frames, masks
-            
+
     @staticmethod
     def _to_channel_last(input_tensor):
         """convert (batch, ch, z, y, x) tensor to (batch, z, y, x, ch) tensor"""
@@ -403,7 +403,7 @@ class datagen3DSingle(dataGenBase):
 
 
 class MultiCroppedDataLoaderBG(DataLoader):
-    
+
     def __init__(
             self,
             data,
@@ -415,7 +415,7 @@ class MultiCroppedDataLoaderBG(DataLoader):
             infinite=False,
             normalize_inputs=True,
             positive_class_value=255):
-        
+
         # data = {"img": [img_paths], "label": [label_paths]}}
         super().__init__(
             data=data,
@@ -424,32 +424,33 @@ class MultiCroppedDataLoaderBG(DataLoader):
             shuffle=shuffle,
             seed_for_shuffle=seed_for_shuffle,
             infinite=infinite)
-        
+
         self.crop_shape = crop_shape
         self.img_paths = self._data["img"]
         self.label_paths = self._data["label"]
         self.rng_seed = seed_for_shuffle
         self.normalize_inputs = normalize_inputs
         self.positive_class_value = positive_class_value
-        
+
         if self.rng_seed is not None:
             np.random.seed(self.rng_seed)
-        
+
         if len(self.img_paths) != len(self.label_paths):
             raise ValueError("img and labels have different length, check dataset")
-            
-        self.img_path_dict = {Path(fpath).name : fpath for fpath in self.img_paths}
-        self.label_path_dict = {Path(fpath).name : fpath  for fpath in self.label_paths}
-        
+
+        self.img_path_dict = {Path(fpath).name: fpath for fpath in self.img_paths}
+        self.label_path_dict = {Path(fpath).name: fpath for fpath in self.label_paths}
+
         if set(self.img_path_dict.keys()) != set(self.label_path_dict.keys()):
             raise ValueError("imag and labels have different names")
-            
+
         self.path_dict = self._get_nested_path_dict()
         self.volume_dict = self._load_volumes()
-        self.volume_names = list(self.volume_dict.keys())        
-        self.volume_shape_dict = {key: vol_dict_item["img"].shape[1:] for key, vol_dict_item in self.volume_dict.items()}
+        self.volume_names = list(self.volume_dict.keys())
+        self.volume_shape_dict = {key: vol_dict_item["img"].shape[1:] for key, vol_dict_item in
+                                  self.volume_dict.items()}
         self.volume_shape = self.volume_shape_dict[list(self.volume_shape_dict.keys())[0]][1:]
-        
+
     def _get_nested_path_dict(self):
         nested_dict = {}
         for key in self.img_path_dict.keys():
@@ -458,15 +459,13 @@ class MultiCroppedDataLoaderBG(DataLoader):
                 "label": self.label_path_dict[key]}
             nested_dict[key] = key_dict
         return nested_dict
-        
 
     def _load_volumes(self):
         volume_dict = {}
         for key, vol_path_dict in self.path_dict.items():
-            
             img_path = vol_path_dict["img"]
             label_path = vol_path_dict["label"]
-            
+
             # NOTE LOAD_VOLUME_COUPLE IS NOW IN SINGLE CROPPED DATA LOADER
             img_volume, label_volume = CroppedDataLoaderBG._load_volume_couple(img_path,
                                                                                label_path,
@@ -475,14 +474,14 @@ class MultiCroppedDataLoaderBG(DataLoader):
             key_volume_dict = {
                 "img": img_volume,
                 "label": label_volume}
-            
+
             volume_dict[key] = key_volume_dict
         return volume_dict
-    
+
     @staticmethod
     def _normalize_stack(stack_arr, norm=255):
-        return (stack_arr/norm).astype(np.float32)
-    
+        return (stack_arr / norm).astype(np.float32)
+
     def generate_train_batch(self):
         img_batch = []
         label_batch = []
@@ -490,12 +489,12 @@ class MultiCroppedDataLoaderBG(DataLoader):
             crop_img, crop_label = self._get_random_crop_multi()
             img_batch.append(crop_img)
             label_batch.append(crop_label)
-            
+
         stack_img = np.stack(img_batch, axis=0)
         stack_label = np.stack(label_batch, axis=0)
-        
+
         return {"data": stack_img, "seg": stack_label}
-    
+
     def _get_random_crop_multi(self):
         vol_name = np.random.choice(self.volume_names)
 
@@ -504,11 +503,12 @@ class MultiCroppedDataLoaderBG(DataLoader):
             masks_volume=self.volume_dict[vol_name]["label"],
             volume_shape=self.volume_shape_dict[vol_name],
             crop_shape=self.crop_shape)
-        
+
+
 class CroppedDataLoaderBG(DataLoader):
     """expands DataLoader class
     used for loading pre-applied random cropping to data"""
-    
+
     def __init__(
             self,
             data,
@@ -544,7 +544,7 @@ class CroppedDataLoaderBG(DataLoader):
         infinite : bool, optional
             create an infinite generator. The default is False.
         """
-        
+
         super().__init__(
             data=data,
             batch_size=batch_size,
@@ -552,124 +552,124 @@ class CroppedDataLoaderBG(DataLoader):
             shuffle=shuffle,
             seed_for_shuffle=seed_for_shuffle,
             infinite=infinite
-            )
-        
+        )
+
         self.img_path = data["img"]
         self.labels_path = data["label"]
-        
+
         self.data_mode = data_mode
         self.normalize_inputs = normalize_inputs
         self.positive_class_value = positive_class_value
-        
+
         if self.data_mode not in ["single_images", "stack"]:
             raise ValueError("CroppedDataLoaderBG does not suppport data mode {} \
                              maybe you wanted to use MultiVolumeDataLoaderBG?".format(self.data_mode))
-        
+
         self.frames_volume, self.masks_volume = self._load_volume_couple(
             img_path=self.img_path,
             label_path=self.labels_path,
             normalize_inputs=self.normalize_inputs,
             data_mode=self.data_mode,
             label_positive_class_value=self.positive_class_value)
-        
+
         self.volume_shape = self.frames_volume.shape[1:]
         self.crop_shape = crop_shape
         # self.pre_crop_scales = pre_crop_scales
         self.rng_seed = seed_for_shuffle
-        
+
         if self.rng_seed is not None:
             np.random.seed(self.rng_seed)
-        
+
     @classmethod
     def _load_volume_couple(cls, img_path, label_path,
                             normalize_inputs,
                             data_mode="stack",
                             label_positive_class_value=255):
-        
-        img_volume = load_volume(img_path,
-                                 data_mode=data_mode,
-                                 ignore_last_channel=False).astype(np.float32)
-        
+
+        img_volume, norm = load_volume(img_path,
+                                       data_mode=data_mode,
+                                       ignore_last_channel=False,
+                                       return_norm=True)
+
         label_volume = load_volume(label_path,
                                    data_mode=data_mode,
                                    ignore_last_channel=False)
-        
-        label_volume = np.where(label_volume > label_positive_class_value, 1,0).astype(img_volume.dtype)
-        
+
+        label_volume = np.where(label_volume >= label_positive_class_value, 1, 0).astype(img_volume.dtype)
+
         if normalize_inputs:
             img_volume = cls._normalize_stack(img_volume,
-                                               norm=np.finfo(img_volume.dtype).max)
-            
+                                              norm=norm)
+
         img_volume, label_volume = cls._adjust_stack_dims(img_volume, label_volume, to_channel_first=True)
         return img_volume, label_volume
-    
+
     @classmethod
     def _adjust_stack_dims(cls, img_volume, labels_volume, to_channel_first=True):
 
         # determine if third channel is empty
         img_volume_shape = img_volume.shape
-        
+
         assert len(img_volume_shape) == 4, f"Image volume has shape {img_volume_shape}, it should be [z, y, x, ch]"
-        
+
         if img_volume_shape[-1] == 3:
-            if len(np.unique(img_volume[...,2])) == 1:
-                logging.warning("last channel of input volume is empty, you should use ignore_last_channel: true in config to avoid this warning")
+            if len(np.unique(img_volume[..., 2])) == 1:
+                logging.warning(
+                    "last channel of input volume is empty, you should use ignore_last_channel: true in config to avoid this warning")
                 logging.warning("ignoring last channel")
-                img_volume = img_volume[...,:-1]
+                img_volume = img_volume[..., :-1]
 
         # img_volume = cls._expand_dims_if_needed(img_volume)
         # labels_volume = cls._expand_dims_if_needed(labels_volume)
-        
+
         if to_channel_first:
-            img_volume = np.moveaxis(img_volume, -1 , 0)
+            img_volume = np.moveaxis(img_volume, -1, 0)
             labels_volume = np.moveaxis(labels_volume, -1, 0)
-            
+
         return img_volume, labels_volume
 
-            
     # @staticmethod
     # def _expand_dims_if_needed(stack):
     #     stack_shape = stack.shape
-        
+
     #     if len(stack_shape) == 4:
     #         pass
     #     elif len(stack_shape) == 3:
     #         stack = np.expand_dims(stack, axis=-1)
     #     else:
     #         raise ValueError("invalid stack_shape {}".format(stack_shape))
-            
+
     #     return stack
-    
 
     @staticmethod
     def _normalize_stack(stack_arr, norm=255):
-        return (stack_arr/norm).astype(np.float32)
-    
+        return (stack_arr / norm).astype(np.float32)
+
     # TODO: consider if reviving pre-scaling is worth it or not
-    
+
     #     self.scaled_crop_shape = self._get_scaled_crop_shape(self.crop_shape,
     #                                                          self.pre_crop_scales)
-        
+
     #     assert (self.scaled_crop_shape < self.volume_shape), "pre_crop_scale is too large, cannot crop inside volume"
-        
+
     # @staticmethod
     # def _get_scaled_crop_shape(crop_shape, pre_crop_scales):
     #     assert (np.array(pre_crop_scales) >= 1).all(), "pre_crop_scale must be >1"
     #     scaled_crop_shape = np.multiply(np.array(crop_shape), np.array(pre_crop_scales))
     #     scaled_crop_shape = np.ceil(scaled_crop_shape).astype(np.uint8)
     #     return tuple(scaled_crop_shape)
-    
+
     # def get_len(self):
     #     img_pixels = np.prod(self.volume_shape)
     #     crop_pixels = np.prod(self.crop_shape)
     #     return int(np.ceil((img_pixels/crop_pixels)/float(self.batch_size)))
-    
+
     def generate_train_batch(self):
         """return a {"data": crooped_data, "seg": crooped_seg} dict"""
-        
+
         img_batch = []
         label_batch = []
-        
+
         for i in range(self.batch_size):
             crop_img, crop_label = self._get_random_crop(
                 frames_volume=self.frames_volume,
@@ -678,42 +678,40 @@ class CroppedDataLoaderBG(DataLoader):
                 crop_shape=self.crop_shape)
             img_batch.append(crop_img)
             label_batch.append(crop_label)
-        
+
         stack_img = np.stack(img_batch, axis=0)
         stack_label = np.stack(label_batch, axis=0)
-        
+
         return {"data": stack_img, "seg": stack_label}
-     
+
     @staticmethod
     def _get_random_crop(frames_volume, masks_volume, volume_shape, crop_shape):
-        volume_shape = list(volume_shape) # casting to list
+        volume_shape = list(volume_shape)  # casting to list
         crop_shape = list(crop_shape)
         """get a random crop_img, crop_label tuple"""
         z_shape, y_shape, x_shape = volume_shape
-    
-        assert len(crop_shape) == len(volume_shape), f"crop_shape {crop_shape} and volume_shape {volume_shape} have different dimensionalities"
+
+        assert len(crop_shape) == len(
+            volume_shape), f"crop_shape {crop_shape} and volume_shape {volume_shape} have different dimensionalities"
         # assert we're not trying to crop something larger than volume 
         assert volume_shape > crop_shape, f"crop_shape {crop_shape} > volume_shape {volume_shape}"
-        
+
         z_0 = np.random.randint(low=0, high=z_shape - crop_shape[0])
         y_0 = np.random.randint(low=0, high=y_shape - crop_shape[1])
         x_0 = np.random.randint(low=0, high=x_shape - crop_shape[2])
-        
+
         crop_img = frames_volume[
-            :,
-            z_0 : z_0 + crop_shape[0],
-            y_0 : y_0 + crop_shape[1],
-            x_0 : x_0 + crop_shape[2]
-            ]
-        
+                   :,
+                   z_0: z_0 + crop_shape[0],
+                   y_0: y_0 + crop_shape[1],
+                   x_0: x_0 + crop_shape[2]
+                   ]
+
         crop_label = masks_volume[
-            :,
-            z_0 : z_0 + crop_shape[0],
-            y_0 : y_0 + crop_shape[1],
-            x_0 : x_0 + crop_shape[2]
-            ]
-        
+                     :,
+                     z_0: z_0 + crop_shape[0],
+                     y_0: y_0 + crop_shape[1],
+                     x_0: x_0 + crop_shape[2]
+                     ]
+
         return crop_img, crop_label
-        
-        
-        

@@ -10,13 +10,14 @@ import tifffile
 SUPPORTED_IMG_FORMATS = ["tif", "tiff", "png", "jpg", "jpeg"]
 SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
 
+
 def load_volume(imgpath,
                 ignore_last_channel=False,
-                data_mode="stack"):
-    
+                data_mode="stack",
+                return_norm=False):
     # if not is_supported_ext(imgpath):
     #     raise ValueError(imgpath, "unsupported image format")
-        
+
     def glob_if_needed(imgpath):
         if type(imgpath) is list:
             img_paths = imgpath
@@ -28,7 +29,7 @@ def load_volume(imgpath,
         else:
             raise TypeError("invalid type for imgpath")
         return img_paths
-    
+
     def adjust_dimensions(vol):
         vol_shape = vol.shape
         # my target is [z, y, x, ch]
@@ -36,8 +37,8 @@ def load_volume(imgpath,
             # this is a single monochromatic image
             # [y, x]
             # shoudln't happen that a dataset has only 1 image
-            vol = np.expand_dims(vol, axis=0) # adding z
-            vol = np.expand_dims(vol, axis=-1) # adding ch
+            vol = np.expand_dims(vol, axis=0)  # adding z
+            vol = np.expand_dims(vol, axis=-1)  # adding ch
         elif len(vol_shape) == 3:
             # 3d tensor without channels or 2D tensor with channel
             # [z, y, x] OR [y, x, ch]
@@ -45,7 +46,7 @@ def load_volume(imgpath,
                 z_len = len(img_paths)
                 if z_len > 1:
                     # [z, y, x] case
-                    vol = np.expand_dims(vol, axis=-1) # adding ch
+                    vol = np.expand_dims(vol, axis=-1)  # adding ch
                 else:
                     # [y, x, ch] case
                     vol = np.expand_dims(vol, axis=0)
@@ -68,18 +69,31 @@ def load_volume(imgpath,
             # cursed you are among your fellow tensors
             raise ValueError("input volume has too many dims")
         return vol
-        
+
     def postprocess_vol(vol):
         vol = adjust_dimensions(vol)
         if ignore_last_channel:
             vol_shape = vol.shape
             assert len(vol_shape) >= 3, "this image does not have a channel dim"
-            vol = vol[...,:2]
+            vol = vol[..., :2]
         return vol
-    
+
+    def get_norm(vol):
+        dtype = vol.dtype
+        if dtype in [float, np.float, np.float16, np.float32, np.float64]:
+            norm = np.finfo(dtype).max
+        elif dtype in [int, np.int8, np.int16, np.int32, np.int64, np.uint8, np.uint16, np.uint32, np.uint64]:
+            norm = np.iinfo(dtype).max
+        return norm
+
     if data_mode == "stack":
         vol = skio.imread(str(imgpath), plugin="pil")
-        return postprocess_vol(vol)
+        if return_norm:
+            norm = get_norm(vol)
+            return postprocess_vol(vol), norm
+        else:
+            return postprocess_vol(vol)
+
     elif data_mode == "single_images":
         img_paths = glob_if_needed(imgpath)
         vol_list = []
@@ -87,7 +101,11 @@ def load_volume(imgpath,
             img = skio.imread(slice_path, plugin="pil")
             vol_list.append(img)
         vol = np.array(vol_list)
-        return postprocess_vol(vol)
+        if return_norm:
+            norm = get_norm(vol)
+            return postprocess_vol(vol), norm
+        else:
+            return postprocess_vol(vol)
     elif data_mode == "multi_stack":
         img_paths = glob_if_needed(imgpath)
         vols_list = []
@@ -95,9 +113,15 @@ def load_volume(imgpath,
             vol = skio.imread(vol_path, plugin="pil")
             vol = postprocess_vol(vol)
             vols_list.append(vol)
-        return vols_list
+
+        if return_norm:
+            norm = get_norm(vols_list[0])
+            return vols_list, norm
+        else:
+            return vols_list
     else:
         raise ValueError(f"unsupported data_mode {data_mode}")
+
 
 def save_volume(volume,
                 output_path,
@@ -105,7 +129,6 @@ def save_volume(volume,
                 save_tiff=True,
                 save_8bit=True,
                 save_pickle=True):
-    
     if save_pickle:
         pickle_out_path = output_path.joinpath(fname + ".pickle")
 
@@ -125,12 +148,14 @@ def save_volume(volume,
         with tifffile.TiffWriter(str(tiff_path)) as stack:
             for img_plane in out_volume:
                 stack.save(img_plane)
+
     if save_tiff:
         exp_tiff(volume, name=fname)
     if save_8bit:
-        vol_8bit = (volume*255).astype(np.uint8)
-        exp_tiff(vol_8bit, name=fname+"_8bit")
-        
+        vol_8bit = (volume * 255).astype(np.uint8)
+        exp_tiff(vol_8bit, name=fname + "_8bit")
+
+
 def is_supported_ext(path, mode="img"):
     suffix = path.suffix
     extension = suffix.split(".")[1]
@@ -140,14 +165,13 @@ def is_supported_ext(path, mode="img"):
         return extension in SUPPORTED_STACK_FORMATS
     else:
         raise ValueError("mode {} is not a valid input mode".format(mode))
-        
-        
+
+
 def glob_imgs(dir_path, mode="stack", to_string=False):
     dir_path = Path(dir_path)
     paths = [imgpath for imgpath in sorted(dir_path.glob("*.*")) if is_supported_ext(imgpath, mode=mode)]
-    
+
     if to_string:
         paths = [str(path) for path in paths]
-        
+
     return paths
-    
