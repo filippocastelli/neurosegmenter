@@ -126,6 +126,7 @@ def load_volume(imgpath,
 def save_volume(volume,
                 output_path,
                 fname="predictions",
+                clip=True,
                 save_tiff=True,
                 save_8bit=True,
                 save_pickle=True):
@@ -134,6 +135,9 @@ def save_volume(volume,
 
         with pickle_out_path.open(mode="wb") as out_file:
             pickle.dump(volume, out_file)
+
+    if clip:
+        volume = np.clip(volume, a_min=0., a_max=1.)
 
     def exp_tiff(out_volume, name):
         if volume.shape[-1] == 2:
@@ -152,6 +156,7 @@ def save_volume(volume,
     if save_tiff:
         exp_tiff(volume, name=fname)
     if save_8bit:
+        # vol_clipped = np.clip(volume, a_min=0., a_max=.99999)
         vol_8bit = (volume * 255).astype(np.uint8)
         exp_tiff(vol_8bit, name=fname + "_8bit")
 
