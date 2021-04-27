@@ -352,7 +352,7 @@ class datagen3DSingle(dataGenBase):
                                               self.composed_transform,
                                               self.threads)
 
-        return self._get_keras_gen(self.gen, channel_last=True, flatten=self.flatten)
+        return self._get_keras_gen(self.gen, channel_last=True)
 
     @staticmethod
     def _get_steps_per_epoch(frame_shape, crop_shape, batch_size):
@@ -472,8 +472,8 @@ class MultiCroppedDataLoaderBG(DataLoader):
                                                                                self.normalize_inputs,
                                                                                label_positive_class_value=self.positive_class_value)
             key_volume_dict = {
-                "img": img_volume,
-                "label": label_volume}
+                "img": img_volume.astype(np.float32),
+                "label": label_volume.astype(np.float32)}
 
             volume_dict[key] = key_volume_dict
         return volume_dict
@@ -594,12 +594,10 @@ class CroppedDataLoaderBG(DataLoader):
         label_volume = load_volume(label_path,
                                    data_mode=data_mode,
                                    ignore_last_channel=False)
-
-        label_volume = np.where(label_volume >= label_positive_class_value, 1, 0).astype(img_volume.dtype)
-
         if normalize_inputs:
             img_volume = cls._normalize_stack(img_volume,
                                               norm=norm)
+        label_volume = np.where(label_volume >= label_positive_class_value, 1, 0).astype(img_volume.dtype)
 
         img_volume, label_volume = cls._adjust_stack_dims(img_volume, label_volume, to_channel_first=True)
         return img_volume, label_volume
