@@ -1,12 +1,12 @@
 training_cfg:
     mode: "3d"
-    epochs: 1
-    batch_size: 10
-    loss: "binary_crossentropy"
+    epochs: 5
+    batch_size: 5
+    loss: "weighted_binary_crossentropy"
 #    class_weights:
 #        0: 05966296
 #        1: 1.0
-    pos_weight: 1.
+    pos_weight: 10.82
     track_metrics:
         - "accuracy"
         - "jaccard_index"
@@ -23,7 +23,7 @@ optimizer_cfg:
 
 model_cfg:
     model: "resunet3d"
-    crop_shape: [32, 128, 128]
+    crop_shape: [16, 200, 200]
     unet_depth: 2
     base_filters: 16
     batch_normalization: true
@@ -32,11 +32,16 @@ model_cfg:
 
 dataset_cfg:
      dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
+#     dataset_path : "/home/phil/repos/neuroseg/neuroseg/tests/test_datasets/stack_1ch"
      mode: "stack"
      n_channels: 1
      positive_class_value: 255
      negative_class_value: 0
      ignore_last_channel: false
+
+tiled_predictor_cfg:
+    extra_padding_windows: 2
+    use_weighting_window: false
 
 output_cfg:
     output_path: "/mnt/ssd1/em_training"
@@ -45,7 +50,7 @@ output_cfg:
 
 data_augmentation_cfg:
     debug_mode: false
-    single_thread:  true
+    single_thread:  false
     threads: 6
     buffer_size : 1000
     shuffle: false
@@ -78,7 +83,7 @@ data_augmentation_cfg:
         rot90_transform:
             p_per_sample: 0.15
             num_rot : [1, 2, 3]
-            axes: [0, 1, 2]
+#            axes: [0, 1, 2]
 
         mirror_transform:
             axes: [0, 1, 2]
@@ -96,7 +101,7 @@ data_augmentation_cfg:
 
         gaussian_blur_transform:
             p_per_sample: 0.15
-            blur_sigma: [1, 5]
+            blur_sigma: [1, 1.2]
             different_sigma_per_channel: true,
             p_per_channel: 1
 

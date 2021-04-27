@@ -72,6 +72,8 @@ class DataPredictorBase:
             self.keep_tmp = False
             self.n_output_classes = 1
         self.n_channels = self.config.n_channels
+        self.extra_padding_windows = self.config.extra_padding_windows
+        self.use_weighting_window = self.config.use_weighting_window
 
     def _load_model(self):
         return load_model(filepath=str(self.model_path), compile=False)

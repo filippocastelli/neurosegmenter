@@ -145,16 +145,15 @@ class dataGen2D(dataGenBase):
         mask = load_volume(mask_path,
                            ignore_last_channel=False,
                            data_mode="stack")
-        
-        mask = np.where(mask==self.positive_class_value, 1,0).astype(frame.dtype)
-        
+
         if self.normalize_inputs:
             norm_constant_frame = np.iinfo(frame.dtype).max
             frame = frame / norm_constant_frame
             
-            norm_constant_mask = np.iinfo(mask.dtype).max
-            mask = mask / norm_constant_mask
-            
+            # norm_constant_mask = np.iinfo(mask.dtype).max
+            # mask = mask / norm_constant_mask
+
+        mask = np.where(mask == self.positive_class_value, 1, 0).astype(frame.dtype)
         return frame,  mask
     
     def _load_multi_stack(self, frame_paths, mask_paths):

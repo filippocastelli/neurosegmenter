@@ -28,7 +28,11 @@ class Config:
             
             self.output_cfg = self.cfg_dict["output_cfg"]
             self._parse_output_cfg(self.output_cfg)
-            
+
+            # tiling predictor parsing
+            self.tiled_predictor_cfg = self.cfg_dict["tiled_predictor_cfg"]
+            self._parse_tiled_predictor_cfg(self.tiled_predictor_cfg)
+
             # performance evaluation parsing
             self.pe_cfg = self.cfg_dict["performance_evaluation_cfg"] if "performance_evaluation_cfg" in self.cfg_dict else None
             self._parse_performance_evaluation_cfg(self.pe_cfg)
@@ -36,7 +40,12 @@ class Config:
             # notes parsing
             self.notes = self.cfg_dict["notes"]
         
-        
+    def _parse_tiled_predictor_cfg(self, tiled_predictor_cfg):
+        self.extra_padding_windows = tiled_predictor_cfg["extra_padding_windows"] if "extra_padding_windows" in tiled_predictor_cfg else 1
+        assert type(self.extra_padding_windows) == int, "must have an integer number of extra padding windows"
+        self.use_weighting_window = tiled_predictor_cfg["use_weighting_window"] if "use_weighting_window" in tiled_predictor_cfg else False
+        assert type(self.use_weighting_window) == bool, "use_weighting_window must be a bool"
+
     def _parse_output_cfg(self, out_cfg):
         self.output_root_path = self._decode_path(out_cfg["output_path"])
         self.output_path = self.output_root_path.joinpath(self.run_name)
@@ -322,6 +331,7 @@ class PredictConfig(Config):
         self._parse_prediction_cfg(self.prediction_cfg)
         
         self.output_mode = self.output_cfg["output_mode"]
+
         
         self._gen_paths()
         

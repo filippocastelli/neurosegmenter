@@ -306,7 +306,7 @@ class datagen3DSingle(dataGenBase):
 
         # clip data values to [0. 1.]
         clip_min = 0. if self.normalize_inputs else np.finfo(np.float32).min
-        clip_max = 1. if self.normalize_inputs else np.finfo(np.float32).max
+        clip_max = 1.01 if self.normalize_inputs else np.finfo(np.float32).max
 
         transforms.append(ClipValueRange(min=clip_min, max=clip_max))
         return Compose(transforms)
