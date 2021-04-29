@@ -1,8 +1,6 @@
 import pytest
-import mock
 from pathlib import Path
 import os, sys, inspect
-import pudb
 from contextlib import nullcontext
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -17,7 +15,8 @@ from neuroseg.tiledpredict.tp2d import TiledPredictor2D
 # from utils import BatchInspector3D
 
 def gen_ids(elems, name, separator="_"):
-    str_elems = lambda x: [str(elem) for elem in x]
+    def str_elems(x):
+        return [str(elem) for elem in x]
     if isinstance(elems[0], tuple) or isinstance(elems[0], list):
         elem_list = [str_elems(elem) if elem is not None else ["None", ] for elem in elems]
     else:
@@ -219,7 +218,6 @@ class TestDataPredictor2D:
                 frame_shape=input_volume_fixture.shape,
                 model=model,
                 batch_size=batch_size,
-                n_output_classes=1,
                 window_overlap=window_overlap
             )
             # print(predicted_tiles.shape)
