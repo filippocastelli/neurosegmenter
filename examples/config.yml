@@ -1,6 +1,6 @@
 training_cfg:
     mode: "3d"
-    epochs: 5
+    epochs: 1
     batch_size: 5
     loss: "weighted_binary_crossentropy"
 #    class_weights:
@@ -41,7 +41,8 @@ dataset_cfg:
 
 tiled_predictor_cfg:
     extra_padding_windows: 2
-    use_weighting_window: false
+    window_overlap : 20
+    tiling_mode: "drop_borders"
 
 output_cfg:
     output_path: "/mnt/ssd1/em_training"

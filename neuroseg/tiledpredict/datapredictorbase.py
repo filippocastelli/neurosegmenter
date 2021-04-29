@@ -73,7 +73,7 @@ class DataPredictorBase:
             self.n_output_classes = 1
         self.n_channels = self.config.n_channels
         self.extra_padding_windows = self.config.extra_padding_windows
-        self.use_weighting_window = self.config.use_weighting_window
+        self.tiling_mode = self.config.tiling_mode
         self.window_overlap = self.config.window_overlap
 
     def _load_model(self):

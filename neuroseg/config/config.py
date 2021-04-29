@@ -44,8 +44,7 @@ class Config:
         self.window_overlap = tiled_predictor_cfg["window_overlap"] if "window_overlap" in tiled_predictor_cfg else None
         self.extra_padding_windows = tiled_predictor_cfg["extra_padding_windows"] if "extra_padding_windows" in tiled_predictor_cfg else 1
         assert type(self.extra_padding_windows) == int, "must have an integer number of extra padding windows"
-        self.use_weighting_window = tiled_predictor_cfg["use_weighting_window"] if "use_weighting_window" in tiled_predictor_cfg else False
-        assert type(self.use_weighting_window) == bool, "use_weighting_window must be a bool"
+        self.tiling_mode = tiled_predictor_cfg["tiling_mode"] if "tiling_mode" in tiled_predictor_cfg else "average"
 
     def _parse_output_cfg(self, out_cfg):
         self.output_root_path = self._decode_path(out_cfg["output_path"])
