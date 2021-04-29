@@ -41,6 +41,7 @@ class Config:
             self.notes = self.cfg_dict["notes"]
         
     def _parse_tiled_predictor_cfg(self, tiled_predictor_cfg):
+        self.window_overlap = tiled_predictor_cfg["window_overlap"] if "window_overlap" in tiled_predictor_cfg else None
         self.extra_padding_windows = tiled_predictor_cfg["extra_padding_windows"] if "extra_padding_windows" in tiled_predictor_cfg else 1
         assert type(self.extra_padding_windows) == int, "must have an integer number of extra padding windows"
         self.use_weighting_window = tiled_predictor_cfg["use_weighting_window"] if "use_weighting_window" in tiled_predictor_cfg else False

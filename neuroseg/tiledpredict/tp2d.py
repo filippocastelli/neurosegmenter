@@ -24,10 +24,9 @@ class DataPredictor2D(DataPredictorBase):
             window_size=self.window_size,
             model=self.prediction_model,
             padding_mode=self.padding_mode,
-            tmp_folder=self.temp_path,
-            keep_tmp=self.keep_tmp,
             extra_padding_windows=self.extra_padding_windows,
-            weight_window=self.use_weighting_window
+            weight_window=self.use_weighting_window,
+            window_overlap=self.window_overlap,
         )
 
         self.predicted_data = self.tiledpredictor.predict()
@@ -50,11 +49,10 @@ class MultiVolumeDataPredictor2D(DataPredictorBase):
                 model=self.prediction_model,
                 padding_mode=self.padding_mode,
                 chunk_size=self.chunk_size,
-                tmp_folder=self.temp_path,
-                keep_tmp=self.keep_tmp,
                 n_output_classes=self.n_output_classes,
                 extra_padding_windows=self.extra_padding_windows,
-                weight_window=self.use_weighting_window
+                weight_window=self.use_weighting_window,
+                window_overlap=self.window_overlap
             )
 
             tiled_predictors[volume_name] = tiled_predictor
@@ -79,9 +77,8 @@ class TiledPredictor2D:
             model=None,
             padding_mode="reflect",
             extra_padding_windows=0,
-            tmp_folder="tmp",
-            keep_tmp=False,
-            weight_window=False
+            weight_window=False,
+            window_overlap=None
     ):
         self.input_volume = input_volume
         self.is_volume = is_volume
@@ -92,6 +89,11 @@ class TiledPredictor2D:
         self.model = model
         self.weight_window = weight_window
         self.extra_padding_windows = extra_padding_windows
+        self.window_overlap = window_overlap
+
+        if self.window_overlap is not None:
+            assert all(self.window_overlap % 2 == 0), "window overlap must be divisible by 2"
+
         # self.tmp_folder = Path(tmp_folder)
         # self.keep_tmp = keep_tmp
         self.n_output_classes = n_output_classes
@@ -104,7 +106,11 @@ class TiledPredictor2D:
         # if not (self.crop_shape % 2 == 0).all():
         #     raise ValueError("crop shape must be divisible by 2 along all dims")
         # calculating steps
-        self.step = self.crop_shape // 2
+
+        if self.window_overlap is not None:
+            self.step = np.array(self.crop_shape) - np.array(self.window_overlap)
+        else:
+            self.step = np.array(self.crop_shape) // 2
 
         # self.check_distortion_condition(self.input_volume.shape, self.crop_shape, self.step)
 
@@ -137,7 +143,8 @@ class TiledPredictor2D:
                                                  batch_size=self.batch_size,
                                                  n_output_classes=self.n_output_classes,
                                                  chunk_size=None,
-                                                 weight_window=self.weight_window)
+                                                 weight_window=self.weight_window,
+                                                 window_overlap=self.window_overlap)
             self.prediction_volume[idx] = predicted_tiles
 
         self.prediction_volume = self.unpad_volume(self.prediction_volume, self.paddings)
@@ -159,7 +166,8 @@ class TiledPredictor2D:
                                                            batch_size=self.batch_size,
                                                            n_output_classes=self.n_output_classes,
                                                            chunk_size=None,
-                                                           weight_window=self.weight_window)
+                                                           weight_window=self.weight_window,
+                                                           window_overlap=self.window_overlap)
 
         self.prediction_volume = self.unpad_image(self.prediction_volume_padded, self.paddings)
         return self.prediction_volume
@@ -175,7 +183,7 @@ class TiledPredictor2D:
             raise ValueError("crop_shape should be divisible by 2")
 
         image_shape_spatial = image_shape[:2]
-        pad_list = [(0, 0) for idx in range(len(image_shape_spatial))]
+        pad_list = [(0, 0) for _ in range(len(image_shape_spatial))]
 
         # mod = np.array(image_shape_spatial) % np.array(crop_shape)
         step = crop_shape // 2
@@ -249,7 +257,8 @@ class TiledPredictor2D:
             batch_size,
             n_output_classes=1,
             chunk_size=None,
-            weight_window=True
+            weight_window=True,
+            window_overlap=None
     ):
         view_shape = img_windows.shape
         if len(view_shape) == 6:
@@ -267,7 +276,10 @@ class TiledPredictor2D:
         if all((window_shape_spatial % 2) != 0):
             raise ValueError("the first two dimensions of window_shape should be divisible by 2")
 
-        step = np.array(window_shape) // 2
+        if window_overlap is not None:
+            step = np.array(window_shape) - np.array(window_overlap)
+        else:
+            step = np.array(window_shape) // 2
 
         cls.check_distortion_condition(frame_shape, window_shape_spatial, step)
         reshaped_windows = img_windows.reshape((-1, *window_shape))
@@ -289,14 +301,14 @@ class TiledPredictor2D:
                 canvas_index = np.array(np.unravel_index(tile_idx, img_windows.shape[:2]))
 
                 pivot = canvas_index * step[:2]
+                slice_y = slice(pivot[0], pivot[0] + window_shape[0])
+                slice_x = slice(pivot[1], pivot[1] + window_shape[1])
 
-                output_img[
-                pivot[0]:pivot[0] + window_shape[0],
-                pivot[1]:pivot[1] + window_shape[1]] += pred_img
-
-                weight_img[
-                pivot[0]:pivot[0] + window_shape[0],
-                pivot[1]:pivot[1] + window_shape[1]] += weight
+                output_patch_shape = output_img[slice_y, slice_x].shape
+                if output_patch_shape != pred_img.shape:
+                    raise ValueError("incorrect sliding window shape, check padding")
+                output_img[slice_y, slice_x] += pred_img
+                weight_img[slice_y, slice_x] += weight
 
         final_img = output_img / weight_img
         SAVE_DEBUG_TIFFS_FLAG = False
@@ -316,7 +328,7 @@ class TiledPredictor2D:
         ]
 
     @classmethod
-    def get_weighting_window(cls, window_size, power=2, expand_dims=True):
+    def get_weighting_window(cls, window_size, expand_dims=True):
         """Generate a 2D spline-based weighting window"""
         wind_y = cls.spline_window(window_size[1], power=2)
         wind_x = cls.spline_window(window_size[0], power=2)
@@ -332,9 +344,12 @@ class TiledPredictor2D:
     def spline_window(window_linear_size, power=2):
         """ generates 1D spline window profile"""
         intersection = int(window_linear_size / 4)
+
+        # noinspection PyUnresolvedReferences
         wind_outer = (abs(2 * (scipy.signal.triang(window_linear_size))) ** power) / 2
         wind_outer[intersection:-intersection] = 0
 
+        # noinspection PyUnresolvedReferences
         wind_inner = 1 - (abs(2 * (scipy.signal.triang(window_linear_size) - 1)) ** power) / 2
         wind_inner[:intersection] = 0
         wind_inner[-intersection:] = 0
