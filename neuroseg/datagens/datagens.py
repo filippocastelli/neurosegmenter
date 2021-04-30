@@ -1,5 +1,5 @@
 from neuroseg.datagens.datagen2d import dataGen2D
-from neuroseg.datagens.datagen3d import datagen3DSingle
+from neuroseg.datagens.datagen3d import datagen3D
 
 def Datagen(config, partition="train",
                 normalize_inputs=True,
@@ -13,7 +13,7 @@ def Datagen(config, partition="train",
                          verbose=verbose,
                          data_augmentation=data_augmentation)
     elif config.training_mode == "3d":
-        return datagen3DSingle(config=config,
+        return datagen3D(config=config,
                                partition=partition,
                                data_augmentation=data_augmentation,
                                verbose=verbose,

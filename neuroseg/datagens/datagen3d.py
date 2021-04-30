@@ -27,7 +27,7 @@ from neuroseg.datagens.datagenbase import dataGenBase
 from neuroseg.utils import load_volume
 
 
-class datagen3DSingle(dataGenBase):
+class datagen3D(dataGenBase):
     """3D data pipeline, inherits from dataGenBase
     based on BatchGenerators"""
 
