@@ -23,11 +23,11 @@ from batchgenerators.transforms.noise_transforms import (
 
 import numpy as np
 
-from neuroseg.datagens.datagenbase import dataGenBase
+from neuroseg.datagens.datagenbase import DataGenBase
 from neuroseg.utils import load_volume
 
 
-class datagen3D(dataGenBase):
+class DataGen3D(DataGenBase):
     """3D data pipeline, inherits from dataGenBase
     based on BatchGenerators"""
 

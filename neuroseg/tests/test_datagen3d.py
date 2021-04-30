@@ -9,8 +9,7 @@ sys.path.insert(0, parentdir)
 
 import yaml
 
-from neuroseg.datagens.datagen3d import \
-    datagen3D
+from neuroseg.datagens.datagen3d import DataGen3D
 # from utils import BatchInspector3D
 from neuroseg.config import TrainConfig
 
@@ -94,7 +93,7 @@ class TestDatagen3D:
         # pudb.set_trace()
         config = TrainConfig(cfg_dict=cfg_dict)
 
-        datagen = datagen3D(config=config,
+        datagen = DataGen3D(config=config,
                             partition=partition,
                             data_augmentation=data_augmentation,
                             normalize_inputs=normalize_inputs)

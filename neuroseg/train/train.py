@@ -15,7 +15,7 @@ from neuroseg.tiledpredict import DataPredictor
 from neuroseg.performance_eval import PerformanceEvaluator
 from neuroseg.descriptor import RunDescriptorLight
 from neuroseg.config import TrainConfig
-from neuroseg.datagens import dataGen2D, datagen3D
+from neuroseg.datagens import DataGen2D, DataGen3D
 
 
 def setup_logger(logfile_path: Path) -> None:
@@ -28,8 +28,8 @@ def setup_logger(logfile_path: Path) -> None:
 
 
 def debug_train_val_datagens(config: TrainConfig,
-                             train_datagen: Union[datagen3D, datagen3D],
-                             val_datagen: Union[datagen3D, datagen3D]):
+                             train_datagen: Union[DataGen2D, DataGen3D],
+                             val_datagen: Union[DataGen2D, DataGen3D]):
     """datagens debug batch inspector"""
     if config.train_datagen_inspector:
         train_batch = next(train_datagen.data.__iter__())

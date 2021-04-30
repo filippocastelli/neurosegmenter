@@ -1,30 +1,33 @@
 from functools import partial
 import logging
+from typing import Union
 
 import tensorflow as tf
-from tensorflow.data import Dataset
-
-# from tensorflow.python import debug as tf_debug
-# import tensorflow.keras.preprocessing.image as tfk_image
+# from tensorflow.data import Dataset
+# pycharm doesn't like the Dataset autoimport
+from tensorflow.python.data.ops.dataset_ops import DatasetV2 as Dataset
 from tensorflow.keras.preprocessing.image import apply_affine_transform
+
 from skimage import io as skio
 import numpy as np
-#import pudb
 
-from neuroseg.datagens.datagenbase import dataGenBase
+from neuroseg.config import TrainConfig, PredictConfig
+from neuroseg.datagens.datagenbase import DataGenBase
 from neuroseg.utils import load_volume
 
 TFA_INTERPOLATION_MODES = {"nearest": "NEAREST", "bilinear": "BILINEAR"}
 
-class dataGen2D(dataGenBase):
+
+class DataGen2D(DataGenBase):
     """inherits from dataGenBase template class"""
+
     def __init__(
-        self,
-        config,
-        partition="train",
-        data_augmentation=True,
-        normalize_inputs=True,
-        verbose=False
+            self,
+            config: Union[TrainConfig, PredictConfig],
+            partition: str = "train",
+            data_augmentation: bool = True,
+            normalize_inputs: bool = True,
+            verbose: bool = False
     ):
         """
         dataGen2D data generator
@@ -68,18 +71,18 @@ class dataGen2D(dataGenBase):
         self.ignore_last_channel = config.ignore_last_channel
         self.buffer_size = config.da_buffer_size
         self.debug_mode = config.da_debug_mode
-        
+
         self.crop_shape = config.crop_shape
 
         # TODO: Multi_stack support
         # if self.prefetch_volume == True:
         if self.dataset_mode == "stack":
             assert (len(self.frames_paths) == 1) and (len(self.masks_paths) == 1), "More than 1 stack found"
-            
+
             self.frames_volume, self.masks_volume = self._load_single_stack(self.frames_paths[0],
                                                                             self.masks_paths[0])
         elif self.dataset_mode == "multi_stack":
-            
+
             self.frames_volume, self.masks_volume = self._load_multi_stack(self.frames_paths,
                                                                            self.masks_paths)
 
@@ -111,10 +114,10 @@ class dataGen2D(dataGenBase):
             mask_path = self.masks_paths[0]
             frame = self._load_img(frame_path, ignore_last_channel=self.ignore_last_channel)
             mask = self._load_img(mask_path, is_binary_mask=True)
-            
+
             frame_shape = frame.shape
             mask_shape = mask.shape
-            
+
             if len(frame_shape) > len(mask_shape):
                 mask_shape = np.append(mask_shape, [1])
             elif len(mask_shape) < len(frame_shape):
@@ -126,22 +129,21 @@ class dataGen2D(dataGenBase):
             mask_shape = self.masks_volume[0].shape
         else:
             raise NotImplementedError(self.dataset_mode)
-            
+
         return frame_shape, mask_shape
-    
+
     @staticmethod
     def _get_n_channels(frame_shape):
         if len(frame_shape) == 2:
             return 1
         elif len(frame_shape) == 3:
             return frame_shape[-1]
-        
-        
+
     def _load_single_stack(self, frame_path, mask_path):
         frame = load_volume(frame_path,
                             ignore_last_channel=self.ignore_last_channel,
                             data_mode="stack")
-        
+
         mask = load_volume(mask_path,
                            ignore_last_channel=False,
                            data_mode="stack")
@@ -149,35 +151,33 @@ class dataGen2D(dataGenBase):
         if self.normalize_inputs:
             norm_constant_frame = np.iinfo(frame.dtype).max
             frame = frame / norm_constant_frame
-            
+
             # norm_constant_mask = np.iinfo(mask.dtype).max
             # mask = mask / norm_constant_mask
 
         mask = np.where(mask == self.positive_class_value, 1, 0).astype(frame.dtype)
-        return frame,  mask
-    
+        return frame, mask
+
     def _load_multi_stack(self, frame_paths, mask_paths):
         frames = []
         masks = []
         for idx, frame_path in enumerate(frame_paths):
-            
             frame, mask = self._load_single_stack(frame_path, mask_paths[idx])
             frames.append(frame)
             masks.append(mask)
-            
+
         frames_volume = np.concatenate(frames, axis=0)
         masks_volume = np.concatenate(masks, axis=0)
-        
+
         return frames_volume, masks_volume
-        
 
     @staticmethod
     def _load_img(
-        img_to_load_path,
-        normalize_inputs=True,
-        ignore_last_channel=False,
-        is_binary_mask=False,
-        positive_class_value=1,
+            img_to_load_path,
+            normalize_inputs=True,
+            ignore_last_channel=False,
+            is_binary_mask=False,
+            positive_class_value=1,
     ):
         """
         load an image from path, apply basic transforms
@@ -231,12 +231,12 @@ class dataGen2D(dataGenBase):
 
     @classmethod
     def _load_example(
-        cls,
-        frame_path,
-        mask_path,
-        normalize_inputs=True,
-        ignore_last_channel=False,
-        positive_class_value=1,
+            cls,
+            frame_path,
+            mask_path,
+            normalize_inputs=True,
+            ignore_last_channel=False,
+            positive_class_value=1,
     ):
         """
         generate a (frame, mask) data point given frame_path and mask_path
@@ -279,15 +279,15 @@ class dataGen2D(dataGenBase):
             is_binary_mask=True,
             positive_class_value=positive_class_value,
         )
-        
+
         if len(mask.shape) < len(frame.shape):
             mask = np.expand_dims(mask, axis=-1)
         elif len(mask.shape) > len(frame.shape):
-            mask = mask[:,:,0]
-        
+            mask = mask[:, :, 0]
+
         if len(mask.shape) != len(frame.shape):
             raise ValueError("different frame, mask shapes")
-            
+
         return frame, mask
 
     def _load_example_wrapper(self, frame_path, mask_path):
@@ -306,7 +306,7 @@ class dataGen2D(dataGenBase):
     def gen_dataset(self):
         """generate a 2D pipeline tf.Dataset"""
         GEN_DATASET_DEBUGMODE = False
-        
+
         if self.dataset_mode in ["stack", "multi_stack"]:
             ds = Dataset.from_tensor_slices((self.frames_volume, self.masks_volume))
         elif self.dataset_mode == "single_images":
@@ -314,7 +314,7 @@ class dataGen2D(dataGenBase):
                 frame_path = self.frames_paths[0]
                 mask_path = self.masks_paths[0]
                 debug_ex = self._load_example_wrapper(frame_path, mask_path)
-            
+
             ds = Dataset.from_tensor_slices((self.frames_paths, self.masks_paths))
             ds = ds.map(
                 map_func=lambda frame_path, mask_path: self._load_example_wrapper(
@@ -323,7 +323,7 @@ class dataGen2D(dataGenBase):
                 deterministic=True,
                 num_parallel_calls=self.threads,
             )
-        else :
+        else:
             raise NotImplementedError(self.dataset_mode)
         full_frame_shape, full_mask_shape = self._get_img_shape()
         # full_frame_shape = [768, 1024]
@@ -333,9 +333,9 @@ class dataGen2D(dataGenBase):
                 frame, mask, full_frame_shape, full_mask_shape
             )
         )
-        
+
         if GEN_DATASET_DEBUGMODE and self.dataset_mode == "single_images":
-            debug_crop = self._random_crop(debug_ex[0], debug_ex[1], self.crop_shape, batch_crops=True) 
+            debug_crop = self._random_crop(debug_ex[0], debug_ex[1], self.crop_shape, batch_crops=True)
         ds = ds.map(
             map_func=lambda frame, mask: self._random_crop(
                 frame, mask, crop_shape=self.crop_shape, batch_crops=True
@@ -357,11 +357,11 @@ class dataGen2D(dataGenBase):
                 ),
                 num_parallel_calls=self.threads,
             )
-            
+
         frame_channels = self._get_n_channels(full_frame_shape)
         frame_shape = np.append(self.crop_shape, frame_channels)
         mask_shape = np.append(self.crop_shape, 1)
-        
+
         ds = ds.map(
             map_func=lambda frame, mask: self._set_shapes(
                 frame, mask, frame_shape, mask_shape
@@ -381,7 +381,7 @@ class dataGen2D(dataGenBase):
 
     @classmethod
     def _random_crop(
-        cls, frame, mask, crop_shape, batch_crops=True, keep_original_size=False
+            cls, frame, mask, crop_shape, batch_crops=True, keep_original_size=False
     ):
         """
         Get batches of random crops from (frame, mask) tensors
@@ -407,10 +407,10 @@ class dataGen2D(dataGenBase):
             (n_crops, *crop_shape) tensor batch
 
         """
-        
+
         frame, mask = cls._adapt_dims(frame, mask)
         frame_shape = frame.shape.as_list()[:-1]
-        
+
         # print("frame.shape: {} \n mask.shape: {}".format(frame.shape, mask.shape))
         if batch_crops:
             # counting needed crops
@@ -451,30 +451,31 @@ class dataGen2D(dataGenBase):
 
         mask_crop_stack = tf.expand_dims(mask_crop_stack, axis=-1)
         return frame_crop_stack, mask_crop_stack
-    
+
     @staticmethod
     def _adapt_dims(frame, mask, return_shapes=True):
         frame_shape = frame.shape
         mask_shape = mask.shape
-        
+
         if len(frame_shape) == 2:
             frame = tf.expand_dims(frame, axis=-1)
-        elif len(frame_shape) in [3,4]:
+        elif len(frame_shape) in [3, 4]:
             pass
         else:
             raise ValueError("image has too many dims")
-        
+
         if len(mask_shape) == 2:
             mask = tf.expand_dims(mask, axis=-1)
-        elif len(mask_shape) in [3,4]:
+        elif len(mask_shape) in [3, 4]:
             # TODO: adapt for multi-class segmentation
-            assert mask_shape[-1] == 1, f"Single-class segmentation supports only one mask channel. frame_shape = {frame_shape} mask_shape = {mask_shape}"
+            assert mask_shape[
+                       -1] == 1, f"Single-class segmentation supports only one mask channel. frame_shape = {frame_shape} mask_shape = {mask_shape}"
             pass
         else:
             raise ValueError("mask has too many dims")
-            
+
         return frame, mask
-            
+
     @staticmethod
     def _get_bound_boxes(frame_shape, crop_shape, n_crops):
         """get n_crops random bounding boxes in frame_shape"""
@@ -499,7 +500,6 @@ class dataGen2D(dataGenBase):
         crop_boxes = np.column_stack((lower_x, lower_y, upper_x, upper_y))
 
         return crop_boxes
-
 
     @classmethod
     def _augment(cls, frame, mask, transform_cfg):
@@ -616,23 +616,21 @@ class dataGen2D(dataGenBase):
         frame = tf.pow(frame, gamma)
         frame = tf.clip_by_value(frame, clip_value_min=0.0, clip_value_max=1.0)
         return frame, mask
-   
+
     @classmethod
-    def _zoom_transform(cls, frame, mask, scale=[0.95, 1.05], border_mode_data="reflect"):        
+    def _zoom_transform(cls, frame, mask, scale=[0.95, 1.05], border_mode_data="reflect"):
         if scale[0] == 1 and scale[1] == 1:
             zx, zy = 1, 1
         else:
             zx, zy = np.random.uniform(scale[0], scale[1], 2)
-        
-        return cls._apply_affine_transform(frame, mask, zoom=[zx,zy], fill_mode=border_mode_data)
-        
-        
+
+        return cls._apply_affine_transform(frame, mask, zoom=[zx, zy], fill_mode=border_mode_data)
+
     @classmethod
     def _rotation_transform(cls, frame, mask, angle=[-0.314, 0.314], border_mode_data="reflect"):
         rotation_angle = np.random.uniform(angle[0], angle[1])
         return cls._apply_affine_transform(frame, mask, rotation=rotation_angle, fill_mode=border_mode_data)
-    
-    
+
     @classmethod
     def _rotation_zoom_transform(cls, frame, mask,
                                  angle=[-0.314, 0.314],
@@ -644,16 +642,16 @@ class dataGen2D(dataGenBase):
             zx, zy = np.random.uniform(scale[0], scale[1], 2)
         rotation_angle = np.random.uniform(angle[0], angle[1])
         return cls._apply_affine_transform(frame, mask,
-                                           zoom=[zx,zy],
+                                           zoom=[zx, zy],
                                            rotation=rotation_angle,
                                            fill_mode=border_mode_data)
-    
+
     @staticmethod
-    def _apply_affine_transform(frame, mask, shift=[0,0], zoom=[1,1], rotation=0, fill_mode="reflect"):
+    def _apply_affine_transform(frame, mask, shift=[0, 0], zoom=[1, 1], rotation=0, fill_mode="reflect"):
         zx, zy = zoom
         tx, ty = shift
         theta = np.rad2deg(rotation)
-        
+
         transform_partial = partial(apply_affine_transform,
                                     tx=tx, ty=ty,
                                     zx=zx, zy=zy,
@@ -665,52 +663,52 @@ class dataGen2D(dataGenBase):
         # iterating over batch
         frame_npy = frame.numpy()
         mask_npy = mask.numpy()
-        
+
         transformed_batch_frames = []
         transformed_batch_masks = []
-        
+
         for idx, frame_img in enumerate(frame_npy):
             transformed_batch_frames.append(transform_partial(frame_img))
             transformed_mask = transform_partial(mask_npy[idx])
             transformed_mask = np.where(transformed_mask > .5, 1., 0.)
             transformed_batch_masks.append(transformed_mask)
-            
+
         transformed_frame_stack = np.stack(transformed_batch_frames, axis=0)
         transformed_mask_stack = np.stack(transformed_batch_masks, axis=0)
-        
+
         return tf.convert_to_tensor(transformed_frame_stack), tf.convert_to_tensor(transformed_mask_stack)
 
     @classmethod
     def _spatial_transform(
-        cls,
-        frame,
-        mask,
-        do_elastic_deform=False,
-        deformation_scale=[0.25, 0.25],
-        do_rotation=True,
-        p_rot_per_sample=0.15,
-        angle=[-0.314, 0.314],
-        do_scale=True,
-        scale=[0.95, 1.05],
-        p_scale_per_sample=0.15,
-        border_mode_data="nearest",
-        random_crop=False,
-        force_scale=False,
-        force_rotation=False,
-        force_scale_rotation=False
+            cls,
+            frame,
+            mask,
+            do_elastic_deform=False,
+            deformation_scale=[0.25, 0.25],
+            do_rotation=True,
+            p_rot_per_sample=0.15,
+            angle=[-0.314, 0.314],
+            do_scale=True,
+            scale=[0.95, 1.05],
+            p_scale_per_sample=0.15,
+            border_mode_data="nearest",
+            random_crop=False,
+            force_scale=False,
+            force_rotation=False,
+            force_scale_rotation=False
     ):
         """generalized spatial transform"""
-        
-        if (do_scale and np.random.uniform(0,1) > p_scale_per_sample) or force_scale:
+
+        if (do_scale and np.random.uniform(0, 1) > p_scale_per_sample) or force_scale:
             perform_scale = True
         else:
             perform_scale = False
-            
+
         if (do_rotation and np.random.uniform(0, 1) > p_rot_per_sample) or force_rotation:
             perform_rotation = True
         else:
             perform_rotation = False
-            
+
         if (perform_scale and perform_rotation) or force_scale_rotation:
             frame, mask = cls._rotation_zoom_transform(frame, mask,
                                                        angle=angle,
@@ -725,7 +723,7 @@ class dataGen2D(dataGenBase):
                 frame, mask = cls._zoom_transform(frame, mask,
                                                   scale=scale,
                                                   border_mode_data=border_mode_data)
-        
+
         return frame, mask
 
     @staticmethod
@@ -740,4 +738,3 @@ class dataGen2D(dataGenBase):
         crop_shape = np.array(frame_shape_array * crop_scale)
 
         return crop_shape
-
