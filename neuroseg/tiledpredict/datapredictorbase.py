@@ -9,6 +9,7 @@ class DataPredictorBase:
 
         self.config = config
 
+        self.data_path = self.config.data_path
         self.mode = self.config.config_type
         self._parse_settings()
         self._parse_paths()
@@ -22,9 +23,14 @@ class DataPredictorBase:
             if self.data_mode == "single_images":
                 self.data_path = self.config.data_path
             elif self.data_mode == "stack":
-                self.data_path = glob_imgs(
-                    self.config.data_path, mode="stack", to_string=True
-                )[0]
+                if self.config.data_path.is_file():
+                    self.data_path = self.config.data_path
+                elif self.config.data_path.is_dir():
+                    self.data_path = glob_imgs(
+                        self.config.data_path, mode="stack", to_string=True
+                    )[0]
+                else:
+                    raise ValueError(f"invalid data path {str(self.data_path)}")
             elif self.data_mode == "multi_stack":
                 self.data_path = self.config.data_path
                 # raise NotImplementedError(self.data_mode)
@@ -56,10 +62,10 @@ class DataPredictorBase:
             self.window_size = self.config.window_size
             self.output_mode = self.config.output_mode
             self.batch_size = self.config.batch_size
-            self.chunk_size = self.config.chunk_size
+            # self.chunk_size = self.config.chunk_size
             self.padding_mode = self.config.padding_mode
             self.n_output_classes = self.config.n_output_classes
-            self.keep_tmp = self.config.keep_tmp
+            # self.keep_tmp = self.config.keep_tmp
         elif self.mode == "training":
             # self.data_mode = self.config.ground_truth_mode
             self.data_mode = self.config.dataset_mode
@@ -67,9 +73,9 @@ class DataPredictorBase:
             self.output_mode = "stack"
             self.window_size = self.config.crop_shape
             self.batch_size = self.config.batch_size
-            self.chunk_size = self.config.pe_chunk_size
+            # self.chunk_size = self.config.pe_chunk_size
             self.padding_mode = "reflect"
-            self.keep_tmp = False
+            # self.keep_tmp = False
             self.n_output_classes = 1
         self.n_channels = self.config.n_channels
         self.extra_padding_windows = self.config.extra_padding_windows

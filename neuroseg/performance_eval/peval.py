@@ -95,7 +95,12 @@ class SingleVolumePerformanceEvaluator:
         
     def _get_gt_path(self):
         if self.ground_truth_mode == "stack":
-            return glob_imgs(self.config.ground_truth_path, mode="stack", to_string=False)[0]
+            if self.config.ground_truth_path.is_file():
+                return self.config.ground_truth_path
+            elif self.config.ground_truth_path.is_dir():
+                return glob_imgs(self.config.ground_truth_path, mode="stack", to_string=False)[0]
+            else:
+                raise ValueError(f"invalid ground truth path {str(self.config.ground_truth_path)}")
         elif self.ground_truth_mode == "single_images":
             return self.config.ground_truth_path
         else:
