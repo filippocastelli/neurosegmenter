@@ -74,6 +74,7 @@ class TiledPredictor3D:
         )
 
     def predict(self):
+
         prediction_volume_padded = self.predict_tiles(img_windows=self.patch_window_view,
                                                       frame_shape=self.padded_volume_shape,
                                                       model=self.model,
@@ -322,7 +323,6 @@ class DataPredictor3D(DataPredictorBase):
         tiledpredictor = TiledPredictor3D(
             input_volume=self.input_data,
             batch_size=self.batch_size,
-            chunk_size=self.chunk_size,
             window_size=self.window_size,
             n_output_classes=self.n_output_classes,
             model=self.prediction_model,
@@ -347,7 +347,6 @@ class MultiVolumeDataPredictor3D(DataPredictorBase):
             tiledpredictor = TiledPredictor3D(
                 input_volume=volume,
                 batch_size=self.batch_size,
-                chunk_size=self.chunk_size,
                 n_output_classes=self.n_output_classes,
                 window_size=self.window_size,
                 model=self.prediction_model,

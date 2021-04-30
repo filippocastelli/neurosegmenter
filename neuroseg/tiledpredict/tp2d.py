@@ -19,7 +19,6 @@ class DataPredictor2D(DataPredictorBase):
         self.tiledpredictor = TiledPredictor2D(
             input_volume=self.input_data,
             batch_size=self.batch_size,
-            chunk_size=self.chunk_size,
             n_output_classes=self.n_output_classes,
             window_size=self.window_size,
             model=self.prediction_model,
