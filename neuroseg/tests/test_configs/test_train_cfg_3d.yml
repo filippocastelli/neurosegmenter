@@ -94,7 +94,7 @@ data_augmentation_cfg:
         rot90_transform:
             p_per_sample: 0.15
             num_rot : [1, 2, 3]
-            axes: [0, 1, 2]
+#            axes: [0, 1, 2]
         
         mirror_transform:
             axes: [0, 1, 2]
@@ -159,4 +159,8 @@ debug_cfg:
     test_datagen_inspector: false
     train_datagen_inspector: false
     val_datagen_inspector: false
-    
+
+tiled_predictor_cfg:
+    extra_padding_windows: 2
+    window_overlap : 20
+    tiling_mode: "drop_borders"

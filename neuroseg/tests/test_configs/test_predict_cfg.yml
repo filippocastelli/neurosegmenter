@@ -36,4 +36,8 @@ performance_evaluation_cfg:
     add_empty_channel:          true
     
 notes: ""
-run_name:
+
+tiled_predictor_cfg:
+    extra_padding_windows: 2
+    window_overlap : 20
+    tiling_mode: "drop_borders"

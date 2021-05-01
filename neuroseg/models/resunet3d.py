@@ -6,7 +6,7 @@
 # Filippo Maria Castelli
 # castelli@lens.unifi.it
 # =============================================================================
-
+from typing import Tuple, Union
 
 from tensorflow.keras.layers import (
     Input,
@@ -29,12 +29,12 @@ class ResUNET3D(ResUNETBase):
     @classmethod
     def _get_model(
         cls,
-        input_shape=(64, 64, 64, 1),
-        base_filters=16,
-        depth=2,
-        batch_normalization=True,
-        transposed_convolution=False,
-        pre_activation=True,
+        input_shape: Union[list, tuple] = (64, 64, 64, 1),
+        base_filters: int = 16,
+        depth: int = 2,
+        batch_normalization: bool = True,
+        transposed_convolution: bool = False,
+        pre_activation: bool = True,
     ):
         """
     resUnet3D
@@ -152,10 +152,10 @@ class ResUNET3D(ResUNETBase):
     def _get_convolution_block(
         cls,
         input_layer,
-        n_filters,
-        activation="relu",
-        batch_normalization=True,
-        pre_activation=True,
+        n_filters: int,
+        activation: str = "relu",
+        batch_normalization: bool = True,
+        pre_activation: bool = True,
     ):
         """
         create_convolution_block
@@ -186,18 +186,7 @@ class ResUNET3D(ResUNETBase):
             data_format="channels_last",  # Make sure data is in "channel_last" format
         )
         batchnorm_layer = BatchNormalization(axis=-1)
-        if activation:
-            # tf.keras.activations.get (here aliased as get_activation() ), is an undocumented Keras method:
-            # it basically accepts an identifier and returns an activation method
-            # if the identifier is None it returns a linear activation function,
-            # if it's a string it returns the corresponding Keras activation function,
-            # if it's a callable it just returns the callable itself
-            # allowing for both standard activation method use and custom activation function definition)
-            #
-            # See original implementation
-            # https://github.com/tensorflow/tensorflow/blob/r1.15/tensorflow/python/keras/activations.py#L310-L325
 
-            activation_layer = Activation(get_activation(activation))
 
         # Assembling layers together
 
@@ -227,6 +216,17 @@ class ResUNET3D(ResUNETBase):
             layer_list.append(batchnorm_layer)
 
         if activation:
+            # tf.keras.activations.get (here aliased as get_activation() ), is an undocumented Keras method:
+            # it basically accepts an identifier and returns an activation method
+            # if the identifier is None it returns a linear activation function,
+            # if it's a string it returns the corresponding Keras activation function,
+            # if it's a callable it just returns the callable itself
+            # allowing for both standard activation method use and custom activation function definition)
+            #
+            # See original implementation
+            # https://github.com/tensorflow/tensorflow/blob/r1.15/tensorflow/python/keras/activations.py#L310-L325
+
+            activation_layer = Activation(get_activation(activation))
             layer_list.append(activation_layer)
 
         if pre_activation:
@@ -245,10 +245,10 @@ class ResUNET3D(ResUNETBase):
     def _get_encoder_block(
         cls,
         input_layer,
-        conv_filters_depths,
-        batch_normalization=True,
-        pre_activation=True,
-        is_first_block=False,
+        conv_filters_depths: Union[list, tuple],
+        batch_normalization: bool = True,
+        pre_activation: bool = True,
+        is_first_block: bool = False,
     ):
         """
     encoder_block
@@ -355,11 +355,11 @@ class ResUNET3D(ResUNETBase):
     def _get_decoder_block(
         cls,
         input_layer,
-        to_concatenate_layer,
-        conv_filters_depths,
-        batch_normalization,
-        transposed_convolution=False,
-        pre_activation=True,
+        to_concatenate_layer: bool,
+        conv_filters_depths: Union[list, tuple],
+        batch_normalization: bool,
+        transposed_convolution: bool = False,
+        pre_activation: bool = True,
     ):
         """
     
@@ -471,7 +471,7 @@ class ResUNET3D(ResUNETBase):
         return out
 
     @staticmethod
-    def _combine_layers(input_layer, layerlist):
+    def _combine_layers(input_layer, layerlist: list):
         """
         combine_layers
     
@@ -495,7 +495,7 @@ class ResUNET3D(ResUNETBase):
         return layer_in
 
     @staticmethod
-    def _get_filter_depths(base_filters, block_depth, decoder=False):
+    def _get_filter_depths(base_filters: int, block_depth: int, decoder: bool = False):
         """
     get_filter_depths
     

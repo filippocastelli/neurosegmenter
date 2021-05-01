@@ -2,6 +2,7 @@ from matplotlib import pylab as plt
 from matplotlib.widgets import Slider, Button
 from skimage import exposure
 import numpy as np
+import tensorflow as tf
 
 
 def BatchInspector(config, batch):
@@ -20,7 +21,13 @@ class BatchInspectorBase:
                  block=True
                  ):
         self.block = block
-        self.frames_batch, self.masks_batch = batch
+        frames_batch, masks_batch = batch
+        if tf.is_tensor(frames_batch):
+            self.frames_batch = frames_batch.numpy()
+            self.masks_batch = masks_batch.numpy()
+        else:
+            self.frames_batch = frames_batch
+            self.masks_batch = masks_batch
         self._fix_dims()
         self.fig, self.axs = plt.subplots(ncols=2)
         self.n_imgs = self.frames_batch.shape[0]

@@ -1,0 +1,35 @@
+output_cfg:
+  output_path: "/mnt/ssd1/em_predict/"
+  descriptor_path: "/mnt/ssd1/em_predict/descr"
+  enable_wandb_tracking: false
+  output_mode: "stack"
+
+tiled_predictor_cfg:
+  window_overlap: 10
+  extra_padding_windows: 1
+  tiling_mode: "drop_borders"
+
+performance_evaluation_cfg:
+  window_size: [16, 200, 200]
+  batch_size: 5
+  classification_threshold: 0.5
+  add_empty_channel: false
+  enable_curves: false
+  ground_truth_path: "/mnt/ssd1/datasets/em_neuroseg/test/masks/masks.tif"
+  data_mode: "stack"
+
+data_cfg:
+  image_path: "/mnt/ssd1/datasets/em_neuroseg/test/frames/frames.tif"
+  mode: "stack"
+  normalize_data: true
+  n_channels: 1
+
+prediction_cfg:
+  mode: "3d"
+  n_output_classes: 1
+  model_path: "/mnt/ssd1/em_training/shrill-turtle-429/final_model.hdf5"
+  window_size: [16, 200, 200]
+  batch_size: 5
+  padding_mode: "reflect"
+
+notes: "note_example"

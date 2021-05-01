@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 import logging
 
-from neuroseg import TrainConfig, train
+from neuroseg import PredictConfig, predict
 
 
 def setup_logger(logfile_path):
@@ -25,8 +25,8 @@ def main():
 
     cfg_path = Path(args.configuration_path_str)
 
-    config = TrainConfig(cfg_path)
-    _, _, _ = train(config)
+    config = PredictConfig(cfg_path)
+    _, _, _ = predict(config)
 
 
 if __name__ == "__main__":
