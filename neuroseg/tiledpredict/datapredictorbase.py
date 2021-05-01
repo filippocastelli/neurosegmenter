@@ -8,8 +8,6 @@ class DataPredictorBase:
     def __init__(self, config, model=None):
 
         self.config = config
-
-        self.data_path = self.config.data_path
         self.mode = self.config.config_type
         self._parse_settings()
         self._parse_paths()

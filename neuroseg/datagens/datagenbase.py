@@ -1,13 +1,17 @@
+from typing import Union
+from pathlib import Path
+
 from neuroseg.utils import SUPPORTED_IMG_FORMATS, SUPPORTED_STACK_FORMATS
+from neuroseg.config import TrainConfig, PredictConfig
 
 
 class DataGenBase:
     def __init__(self,
-                 config,
-                 partition="train",
-                 data_augmentation=True,
-                 normalize_inputs=True,
-                 verbose=False):
+                 config: Union[TrainConfig, PredictConfig],
+                 partition: str = "train",
+                 data_augmentation: bool = True,
+                 normalize_inputs: bool = True,
+                 verbose: bool = False):
 
         self.config = config
         self.partition = partition
@@ -33,17 +37,17 @@ class DataGenBase:
         # init sequence
         self._scan_dirs()
 
-    def _path_sanity_check(self):
+    def _path_sanity_check(self) -> None:
         if self.dataset_mode in ["single_images", "stack"]:
             if not (self.data_path_dict["frames"].is_dir()
                     and self.data_path_dict["masks"].is_dir()):
                 raise ValueError("dataset paths are not actual dirs")
 
-    def _scan_dirs(self):
+    def _scan_dirs(self) -> None:
         self.frames_paths = self._glob_subdirs("frames")
         self.masks_paths = self._glob_subdirs("masks")
 
-    def _glob_subdirs(self, subdir):
+    def _glob_subdirs(self, subdir: Path) -> list:
         subdir_paths = [str(imgpath) for imgpath in
                         sorted(self.data_path_dict[subdir].glob("*.*"))
                         if self._is_supported_format(imgpath)]
@@ -53,6 +57,6 @@ class DataGenBase:
         return subdir_paths
 
     @staticmethod
-    def _is_supported_format(fpath):
+    def _is_supported_format(fpath: Path) -> bool:
         extension = fpath.suffix.split(".")[1]
         return extension in SUPPORTED_IMG_FORMATS or extension in SUPPORTED_STACK_FORMATS

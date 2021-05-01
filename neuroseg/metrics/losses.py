@@ -1,7 +1,8 @@
+from typing import Callable
 import tensorflow as tf
 
 
-def weighted_cross_entropy_loss(pos_weight):
+def weighted_cross_entropy_loss(pos_weight: float) -> Callable:
     if pos_weight is None:
         raise ValueError("need to define a pos_weight parameter in training config to use weighted_cross_entropy_loss")
 

@@ -1,33 +1,40 @@
+from typing import Union
+
 from tensorflow.keras.callbacks import (
     CSVLogger,
     ModelCheckpoint,
     ReduceLROnPlateau,
     TensorBoard
-    )
+)
+
+
 # TODO: WANDB
+
+from neuroseg.config import TrainConfig, PredictConfig
+
 
 class CallbackConfigurator:
     def __init__(self,
-                 config):
+                 config: Union[TrainConfig, PredictConfig]):
         self.config = config
         self.callback_names = self.config.callbacks
         self.callback_cfg = self.config.callbacks_cfg
         self.callbacks = self._compile_callback_list()
-        
+
     @staticmethod
-    def _get_callback(callback_name):
+    def _get_callback(callback_name: str):
         SUPPORTED_CALLBACKS = {
             "checkpoint": ModelCheckpoint,
             "csvlogger": CSVLogger,
             "reducelronplateau": ReduceLROnPlateau,
             "tensorboard": TensorBoard
-            }
+        }
         if callback_name in SUPPORTED_CALLBACKS:
             return SUPPORTED_CALLBACKS[callback_name]
         else:
             raise NotImplementedError(callback_name)
-                
-    def _compile_callback_list(self):
+
+    def _compile_callback_list(self) -> list:
         callback_list = []
         for callback_name in self.callback_names:
             callback_cls = self._get_callback(callback_name)
@@ -35,8 +42,8 @@ class CallbackConfigurator:
             callback = callback_cls(**callback_args)
             callback_list.append(callback)
         return callback_list
-    
-    def _get_callback_args(self, callback_name):
+
+    def _get_callback_args(self, callback_name: str) -> dict:
         config_args = self.callback_cfg[callback_name]
         extra_args = {}
         if callback_name == "checkpoint":
@@ -45,10 +52,6 @@ class CallbackConfigurator:
             extra_args["filename"] = str(self.config.csv_summary_path)
         elif callback_name == "tensorboard":
             extra_args["log_dir"] = str(self.config.logs_path)
-        
+
         config_args.update(extra_args)
         return config_args
-        
-        
-        
-        

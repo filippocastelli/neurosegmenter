@@ -1,10 +1,12 @@
+from typing import Union
 from neuroseg.metrics import jaccard_index, dice_coefficient, weighted_cross_entropy_loss
+from neuroseg.config import TrainConfig, PredictConfig
 
 
 class MetricsConfigurator:
 
     def __init__(self,
-                 config):
+                 config: Union[TrainConfig, PredictConfig]) -> None:
 
         self.config = config
         self.track_metrics_names = self.config.track_metrics
@@ -15,7 +17,7 @@ class MetricsConfigurator:
         self.track_metrics = self._get_track_metrics(self.track_metrics_names)
         self.loss = self._get_metric(self.loss_name)
 
-    def _get_metric(self, metric_name):
+    def _get_metric(self, metric_name: str):
         SUPPORTED_METRICS = {
             "jaccard_index": jaccard_index,
             "dice_coefficient": dice_coefficient,
@@ -29,7 +31,7 @@ class MetricsConfigurator:
         else:
             raise NotImplementedError(metric_name)
 
-    def _get_track_metrics(self, track_metric_list):
+    def _get_track_metrics(self, track_metric_list: Union[list, tuple]) -> list:
         metric_list = []
         for track_metric_name in track_metric_list:
             metric = self._get_metric(track_metric_name)
