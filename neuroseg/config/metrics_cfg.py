@@ -12,7 +12,7 @@ class MetricsConfigurator:
         self.track_metrics_names = self.config.track_metrics
         self.loss_name = self.config.loss
 
-        self.pos_weight = self.config.pos_weight
+        self.pos_weight = self.config.pos_weight if self.config.pos_weight is not None else 1.0
 
         self.track_metrics = self._get_track_metrics(self.track_metrics_names)
         self.loss = self._get_metric(self.loss_name)
