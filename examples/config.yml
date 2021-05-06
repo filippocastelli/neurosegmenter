@@ -107,6 +107,8 @@ data_augmentation_cfg:
             p_per_channel: 1
 
 performance_evaluation_cfg:
+    soft_labels: False
+    normalize_ground_truth: False
     window_size: [64, 64, 64]
     batch_size:       15
     chunk_size:       20

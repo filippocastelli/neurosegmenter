@@ -36,6 +36,7 @@ class Config:
             self._parse_tiled_predictor_cfg(self.tiled_predictor_cfg)
 
             # performance evaluation parsing
+            self.pe_cfg = self.get_param(self.cfg_dict, "performance_evauation_cfg", None)
             self.pe_cfg = self.cfg_dict[
                 "performance_evaluation_cfg"] if "performance_evaluation_cfg" in self.cfg_dict else None
             self._parse_performance_evaluation_cfg(self.pe_cfg)
@@ -43,19 +44,26 @@ class Config:
             # notes parsing
             self.notes = self.cfg_dict["notes"]
 
+    @staticmethod
+    def get_param(cfg_dict: dict, key: str, default):
+        """load key from dataset_cfg with default"""
+        if key in cfg_dict:
+            return cfg_dict[key]
+        else:
+            return default
+
     def _parse_tiled_predictor_cfg(self, tiled_predictor_cfg: dict) -> None:
-        self.window_overlap = tiled_predictor_cfg["window_overlap"] if "window_overlap" in tiled_predictor_cfg else None
-        self.extra_padding_windows = tiled_predictor_cfg[
-            "extra_padding_windows"] if "extra_padding_windows" in tiled_predictor_cfg else 1
+        self.window_overlap = self.get_param(tiled_predictor_cfg, "window_overlap", None)
+        self.extra_padding_windows = self.get_param(tiled_predictor_cfg, "extra_padding_windows", 1)
         assert type(self.extra_padding_windows) == int, "must have an integer number of extra padding windows"
-        self.tiling_mode = tiled_predictor_cfg["tiling_mode"] if "tiling_mode" in tiled_predictor_cfg else "average"
+        self.tiling_mode = self.get_param(tiled_predictor_cfg, "tiling_mode", "average")
         return
 
     def _parse_output_cfg(self, out_cfg: dict) -> None:
         self.output_root_path = self._decode_path(out_cfg["output_path"])
         self.output_path = self.output_root_path.joinpath(self.run_name)
         self.descriptor_path = self._decode_path(out_cfg["descriptor_path"])
-        self.enable_wandb_tracking = out_cfg["enable_wandb_tracking"]
+        # self.enable_wandb_tracking = out_cfg["enable_wandb_tracking"]
         return
 
     # > PERFORMANCE EVALUATION PARSING <
@@ -65,9 +73,9 @@ class Config:
             self.pe_window_size = pe_cfg["window_size"]
             self.pe_batch_size = pe_cfg["batch_size"]
             # self.pe_chunk_size = pe_cfg["chunk_size"]
-            self.pe_classification_threshold = pe_cfg["classification_threshold"]
-            self.pe_add_empty_channel = pe_cfg["add_empty_channel"]
-            self.pe_enable_curves = pe_cfg["enable_curves"] if "enable_curves" in pe_cfg else False
+            self.pe_classification_threshold = self.get_param(pe_cfg, "classification_threshold", 0.5)
+            self.add_empty_channel = self.get_param(pe_cfg, "add_empty_channel", False)
+            self.pe_enable_curves = self.get_param(pe_cfg, "enable_curves", False)
         else:
             self.evaluate_performance = False
         return
@@ -130,6 +138,8 @@ class Config:
 
 
 class TrainConfig(Config):
+    """training configuration class"""
+
     def __init__(self,
                  yml_path: Path = None,
                  cfg_dict: dict = None):
@@ -162,7 +172,7 @@ class TrainConfig(Config):
         self._parse_callbacks_cfg(self.callbacks_cfg)
 
         # debug parsing
-        self.debug_cfg = self.cfg_dict["debug_cfg"]
+        self.debug_cfg = self.get_param(self.cfg_dict, "debug_cfg", {})
         self._parse_debug_cfg(self.debug_cfg)
 
         self._parse_performance_evaluation_cfg_additional()
@@ -172,10 +182,11 @@ class TrainConfig(Config):
         """parse the training configuration dict"""
         self.training_mode = training_cfg["mode"]
         self.epochs = training_cfg["epochs"]
-        self.loss = training_cfg["loss"]
-        self.batch_size = training_cfg["batch_size"]
-        self.track_metrics = training_cfg["track_metrics"]
-        self.pos_weight = training_cfg["pos_weight"] if "pos_weight" in training_cfg else None
+        self.loss = self.get_param(training_cfg, "loss", "binary_crossentropy")
+        self.batch_size = self.get_param(training_cfg, "batch_size", 1)
+        self.track_metrics = self.get_param(training_cfg, "track_metrics",
+                                            ["accuracy", "jaccard_index", "dice_coefficient"])
+        self.pos_weight = self.get_param(training_cfg, "pos_weight", None)
         return
 
     def _parse_dataset_cfg(self,
@@ -184,9 +195,12 @@ class TrainConfig(Config):
         self.dataset_path = self._decode_path(dataset_cfg["dataset_path"])
         self.dataset_mode = dataset_cfg["mode"]
         self.n_channels = dataset_cfg["n_channels"]
+        self.soft_labels = self.get_param(dataset_cfg, "binarize_masks", False)
         self.positive_class_value = dataset_cfg["positive_class_value"]
         self.negative_class_value = dataset_cfg["negative_class_value"]
-        self.ignore_last_channel = dataset_cfg["ignore_last_channel"] if "ignore_last_channel" in dataset_cfg else False
+        self.ignore_last_channel = self.get_param(dataset_cfg, "ignore_last_channel", False)
+        self.normalize_inputs = self.get_param(dataset_cfg, "normalize_inputs", True)
+        self.normalize_masks = self.get_param(dataset_cfg, "normalize_masks", False)
         return
 
     def _parse_model_cfg(self,
@@ -263,15 +277,9 @@ class TrainConfig(Config):
         return
 
     def _parse_debug_cfg(self, debug_cfg: dict) -> None:
-        default_debug_cfg = {
-            "test_datagen_inspector": False,
-            "train_datagen_inspector": False,
-            "val_datagen_inspector": False
-        }
-        default_debug_cfg.update(debug_cfg)
-        self.test_datagen_inspector = default_debug_cfg["test_datagen_inspector"]
-        self.train_datagen_inspector = default_debug_cfg["train_datagen_inspector"]
-        self.val_datagen_inspector = default_debug_cfg["val_datagen_inspector"]
+        self.test_datagen_inspector = self.get_param(debug_cfg, "test_datagen_inspector", False)
+        self.val_datagen_inspector = self.get_param(debug_cfg, "val_datagen_inspector", False)
+        self.train_datagen_inspector = self.get_param(debug_cfg, "train_datagen_inspector", False)
         return
 
     def _gen_paths(self, dataset_path: Path) -> None:
@@ -315,8 +323,9 @@ class TrainConfig(Config):
             self.temp_path = self._joinpath_mkdir(self.output_path, "tmp")
             self.logs_path = self._joinpath_mkdir(self.output_path, "logs")
 
-            if self.enable_wandb_tracking:
-                self.wandb_path = self._joinpath_mkdir(self.output_path, "wandb")
+            if hasattr(self, "enable_wand_tracking"):
+                if self.enable_wandb_tracking:
+                    self.wandb_path = self._joinpath_mkdir(self.output_path, "wandb")
 
             self.logfile_path = self.logs_path.joinpath("train_log.log")
             self.model_history_path = self.output_path.joinpath("model_history.pickle")
@@ -331,6 +340,8 @@ class TrainConfig(Config):
         """additional configs for performance evaluation in training mode"""
         self.ground_truth_mode = self.dataset_mode
         self.ground_truth_path = self.test_paths["masks"]
+        self.ground_truth_normalize = self.get_param(self.pe_cfg, "normalize_ground_truth", True)
+        self.ground_truth_soft_labels = self.get_param(self.pe_cfg, "soft_labels", self.soft_labels)
         return
 
 
@@ -372,8 +383,8 @@ class PredictConfig(Config):
         self.model_path = self._decode_path(prediction_cfg["model_path"])
         self.prediction_mode = prediction_cfg["mode"]
         self.window_size = prediction_cfg["window_size"]
-        self.batch_size = prediction_cfg["batch_size"]
-        self.padding_mode = prediction_cfg["padding_mode"] if "padding_mode" in prediction_cfg else "reflect"
+        self.batch_size = self.get_param(prediction_cfg, "batch_size", 1)
+        self.padding_mode = self.get_param(prediction_cfg, "padding_mode", "reflect")
         return
 
     def _gen_paths(self) -> None:
@@ -384,5 +395,9 @@ class PredictConfig(Config):
 
     def _parse_performance_evaluation_cfg_additional(self) -> None:
         self.ground_truth_mode = self.pe_cfg["data_mode"]
+        self.ground_truth_normalize = self.get_param(self.pe_cfg, "normalize_ground_truth", False)
         self.ground_truth_path = self._decode_path(self.pe_cfg["ground_truth_path"])
+        self.ground_truth_soft_labels = self.get_param(self.pe_cfg, "soft_labels", False)
+
+        # self.ground_truth_normalize = self.get_param(self.pe_cfg, normalize_data)
         return
