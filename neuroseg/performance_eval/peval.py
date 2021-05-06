@@ -17,6 +17,12 @@ class MultiVolumePerformanceEvaluator:
         self.prediction_dict = {key: np.squeeze(prediction) for key, prediction in prediction_dict.items()}
         self.ground_truth_mode = config.ground_truth_mode
         self.ground_truth_path = config.ground_truth_path
+
+        if config.config_type == "predict":
+            self.normalize_ground_truth = config.ground_truth_normalize
+        elif config.config_type == "training":
+            self.normalize_ground_truth = config.normalize_masks
+
         self.gt_dict = self._load_gt()
 
         self.measure_dict = self._calc_aggregated_metrics()
@@ -30,12 +36,13 @@ class MultiVolumePerformanceEvaluator:
         gt_dict = {}
         for idx, gt_fpath in enumerate(self.ground_truth_volume_fpaths):
             volume_name = gt_fpath.name
-            gt_volume = load_volume(gt_fpath,
-                                    ignore_last_channel=False,
-                                    data_mode="stack")
-            norm_constant = np.iinfo(gt_volume.dtype).max
-            gt_volume = gt_volume / norm_constant
-            gt_dict[volume_name] = gt_volume.astype(np.uint8)
+            gt_volume, norm = load_volume(gt_fpath,
+                                          ignore_last_channel=False,
+                                          data_mode="stack",
+                                          return_norm=True)
+            if self.normalize_ground_truth:
+                gt_volume = gt_volume / norm
+            gt_dict[volume_name] = gt_volume
 
         return gt_dict
 
@@ -86,6 +93,12 @@ class SingleVolumePerformanceEvaluator:
 
         self._preprocess_pred(predicted_data)
 
+        self.soft_labels = config.soft_labels
+        if config.config_type == "predict":
+            self.normalize_ground_truth = config.ground_truth_normalize
+        elif config.config_type == "training":
+            self.normalize_ground_truth = config.normalize_masks
+
         self.classification_threshold = config.pe_classification_threshold
         self.enable_curves = config.pe_enable_curves
         self._calc_metrics()
@@ -110,15 +123,26 @@ class SingleVolumePerformanceEvaluator:
     def _preprocess_pred(self, pred_array: np.ndarray) -> None:
         if len(pred_array.shape) > len(self.ground_truth.shape):
             pred_array = np.squeeze(pred_array)
+        elif len(pred_array.shape) < len(self.ground_truth.shape):
+            pred_array = np.expand_dims(pred_array, axis=-1)
+        else:
+            pass
 
         assert (pred_array.shape == self.ground_truth.shape), "GT and predictions have different number of channels"
 
         self.predictions = pred_array
 
     def _load_gt(self) -> None:
-        gt_vol = (load_volume(self.ground_truth_path,
-                              ignore_last_channel=False,
-                              data_mode=self.ground_truth_mode) / 255).astype(np.uint8)
+        gt_vol, norm = load_volume(self.ground_truth_path,
+                                   ignore_last_channel=False,
+                                   data_mode=self.ground_truth_mode,
+                                   return_norm=True)
+        if self.normalize_ground_truth:
+            gt_vol = gt_vol / norm
+
+        # if not self.soft_labels:
+        #     gt_vol = gt_vol.astype(np.uint8)
+
         self.ground_truth = gt_vol
 
     def _calc_metrics(self):
@@ -141,8 +165,8 @@ class PerformanceMetrics:
                  enable_curves: bool = False):
 
         self.enable_curves = enable_curves
-        self.y_true = np.copy(y_true)
-        self.y_pred = np.copy(y_pred)
+        self.y_true = np.copy(y_true).astype(np.uint8)
+        self.y_pred = np.copy(y_pred).astype(np.uint8)
         self.thr = thr
 
         self.y_pred_fuzzy = y_pred
@@ -291,8 +315,8 @@ class PerformanceMetrics:
         """Area under ROC curve
         Implemented by scikit-learn"""
         logging.info("Calculating PR curve")
-        flatten_y_true = self.y_true_fuzzy.flatten()
-        flatten_y_pred = self.y_pred_fuzzy.flatten()
+        flatten_y_true = self.y_true.flatten()
+        flatten_y_pred = self.y_pred.flatten()
 
         return skmetrics.roc_auc_score(y_true=flatten_y_true,
                                        y_score=flatten_y_pred)
