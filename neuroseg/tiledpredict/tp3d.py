@@ -2,6 +2,7 @@
 # from itertools import product
 # import pickle
 # import shutil
+from typing import Union
 
 import numpy as np
 from tqdm import tqdm
@@ -37,7 +38,7 @@ class TiledPredictor3D:
         self.window_overlap = window_overlap
 
         if self.window_overlap is not None:
-            assert all(self.window_overlap % 2 == 0), "window overlap must be divisible by 2"
+            assert self.window_overlap % 2 == 0, "window overlap must be divisible by 2"
 
         # self.tmp_folder = Path(tmp_folder)
         # self.keep_tmp = keep_tmp
@@ -48,7 +49,7 @@ class TiledPredictor3D:
         if not (self.crop_shape % 2 == 0).all():
             raise ValueError("crop shape must be divisible by 2 along all dims")
 
-        # calculating steps
+        # # calculating steps
         if self.window_overlap is not None:
             self.step = np.array(self.crop_shape) - np.array(self.window_overlap)
         else:
@@ -61,9 +62,11 @@ class TiledPredictor3D:
         #     import pudb
         #     pudb.set_trace()
 
-        self.paddings = self.get_paddings(self.input_volume.shape,
-                                          self.crop_shape,
-                                          extra_windows=self.extra_tiling_windows)
+
+        self.paddings = self.get_paddings(image_shape=self.input_volume.shape,
+                                          crop_shape=self.crop_shape,
+                                          extra_windows=self.extra_tiling_windows,
+                                          step=self.step)
         self.padded_volume = self.pad_image(
             self.input_volume, self.paddings, mode=self.padding_mode
         )
@@ -85,35 +88,58 @@ class TiledPredictor3D:
         prediction_volume = self.unpad_image(prediction_volume_padded, self.paddings)
         return prediction_volume
 
-    @staticmethod
-    def get_paddings(image_shape, crop_shape, extra_windows=0):
+    @classmethod
+    def get_paddings(cls,
+                     image_shape,
+                     crop_shape,
+                     extra_windows=0,
+                     step=None):
         """given image_shape and crop_shape get [(pad_left, pad_right)] paddings"""
 
-        image_shape = np.array(image_shape)
+        image_shape = np.array(image_shape)[:3]
         crop_shape = np.array(crop_shape)
+
+        if step is None:
+            step = crop_shape // 2
+        step = np.array(step)
 
         if not (crop_shape % 2 == 0).all():
             raise ValueError("crop_shape should be divisible by 2")
 
-        image_shape_spatial = image_shape[:3]
-        pad_list = [(0, 0) for _ in range(len(image_shape_spatial))]
+        pad_list = [(0, 0) for _ in range(len(image_shape))]
 
-        # mod = np.array(image_shape_spatial) % np.array(crop_shape)
-        step = crop_shape // 2
-        mod = (image_shape_spatial - crop_shape) % step
+        # non-distortion condition is (padded_shape - crop_shape) % step == 0
 
-        nonzero_idxs = np.nonzero(mod)[0]
+        # padded_shape = img_shape + paddings
+        # paddings = res_paddings + extra_tiling_windows * crop_shape
+        # padded_shape = img_shape + extra_tiling_windows * crop_shape + res_paddings
+        # condition becomes
+        # img_shape + (extra_tiling_windows - 1) * crop_shape + res_paddings % step = 0
 
-        if len(nonzero_idxs) > 0:
-            for nonzero_idx in nonzero_idxs:
-                idx = int(nonzero_idx)
-                total_pad = (step - mod)[idx] + extra_windows * crop_shape[idx]
-                left_pad = total_pad // 2
-                right_pad = total_pad - left_pad
+        # which is in the form
+        # a + x % b == 0
+        # with a = img_shape + (extra_tiling_windows - 1) * crop_shape
+        # b = step
 
-                pad_list[idx] = (left_pad, right_pad)
+        # im dumb so I bruteforce it.
 
-        return pad_list
+        tot_paddings = [0,0,0]
+        tot_res_paddings = [0,0,0]
+
+        paddings = [(0,0) for _ in tot_paddings]
+
+        a = image_shape + (extra_windows - 1) * crop_shape
+        b = step
+
+        tot_res_paddings = a % b
+        tot_paddings = (extra_windows * crop_shape) + tot_res_paddings
+
+        for idx in range(len(image_shape)):
+            left_pad = tot_paddings[idx] // 2
+            right_pad = tot_paddings[idx] - left_pad
+            paddings[idx] = (left_pad, right_pad)
+
+        return paddings
 
     @staticmethod
     def pad_image(img, pad_widths, mode="constant"):
@@ -328,8 +354,8 @@ class DataPredictor3D(DataPredictorBase):
             model=self.prediction_model,
             padding_mode=self.padding_mode,
             extra_padding_windows=self.extra_padding_windows,
-            tiling_mode=self.tiling_mode
-
+            tiling_mode=self.tiling_mode,
+            window_overlap=self.window_overlap
         )
 
         self.predicted_data = tiledpredictor.predict()
@@ -352,7 +378,8 @@ class MultiVolumeDataPredictor3D(DataPredictorBase):
                 model=self.prediction_model,
                 padding_mode=self.padding_mode,
                 extra_padding_windows=self.extra_padding_windows,
-                tiling_mode=self.tiling_mode
+                tiling_mode=self.tiling_mode,
+                window_overlap=self.window_overlap
             )
 
             tiled_predictors[volume_name] = tiledpredictor

@@ -140,7 +140,7 @@ class TestDataPredictor2D:
         context = pytest.raises(ValueError) if fail_condition else nullcontext()
 
         with context:
-            paddings = TiledPredictor2D.get_paddings_image(frame_shape, crop_shape)
+            paddings = TiledPredictor2D.get_paddings(frame_shape, crop_shape)
 
             assert len(paddings) == len(frame_shape_spatial), "Paddings ahve different length than expected"
             pad_lengths = np.array([len(padding) for padding in paddings])
@@ -242,7 +242,7 @@ class TestDataPredictor2D:
         context = pytest.raises(ValueError) if fail_condition else nullcontext()
         with context:
             frame_shape = input_volume_fixture.shape
-            paddings = TiledPredictor2D.get_paddings_image(frame_shape, crop_shape)
+            paddings = TiledPredictor2D.get_paddings(frame_shape, crop_shape)
             padded_img = TiledPredictor2D.pad_image(input_volume_fixture, paddings)
             unpadded_img = TiledPredictor2D.unpad_image(padded_img, paddings)
 
