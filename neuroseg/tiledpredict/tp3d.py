@@ -131,7 +131,16 @@ class TiledPredictor3D:
         a = image_shape + (extra_windows - 1) * crop_shape
         b = step
 
-        tot_res_paddings = a % b
+        tot_res_paddings = -(a % b)
+
+        if any(tot_res_paddings < 0):
+            # making paddings positive
+            for idx in range(len(tot_res_paddings)):
+                if tot_res_paddings[idx] < 0:
+                    tot_res_paddings[idx] = tot_res_paddings[idx] + step[idx]
+
+        assert not any(tot_res_paddings < 0), "paddings must be positive"
+
         tot_paddings = (extra_windows * crop_shape) + tot_res_paddings
 
         for idx in range(len(image_shape)):
@@ -273,7 +282,7 @@ class TiledPredictor3D:
                     raise ValueError(f"unsuppported tiling mode {tiling_mode}")
 
         final_img = output_img / weight_img
-        SAVE_DEBUG_TIFFS_FLAG = True
+        SAVE_DEBUG_TIFFS_FLAG = False
         if SAVE_DEBUG_TIFFS_FLAG:
             import tifffile
             tifffile.imsave("debug_output.tiff", output_img)

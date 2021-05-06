@@ -238,7 +238,16 @@ class TiledPredictor2D:
         a = image_shape + (extra_windows - 1) * crop_shape
         b = step
 
-        tot_res_paddings = a % b
+        tot_res_paddings = - (a % b)
+
+        if any(tot_res_paddings < 0):
+            # making paddings positive
+            for idx in range(len(tot_res_paddings)):
+                if tot_res_paddings[idx] < 0:
+                    tot_res_paddings[idx] = tot_res_paddings[idx] + step[idx]
+
+        assert not any(tot_res_paddings < 0), "paddings must be positive"
+
         tot_paddings = (extra_windows * crop_shape) + tot_res_paddings
 
         for idx in range(len(image_shape)):
