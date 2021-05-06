@@ -1,11 +1,14 @@
 import numpy as np
+from typing import Union
+
 from tensorflow.python.keras.models import load_model
 
 from neuroseg.utils import load_volume, save_volume, glob_imgs
 # from neuroseg.config.config import SUPPORTED_STACK_FORMATS
+from neuroseg.config import TrainConfig, PredictConfig
 
 class DataPredictorBase:
-    def __init__(self, config, model=None):
+    def __init__(self, config: Union[PredictConfig, TrainConfig], model=None):
 
         self.config = config
         self.mode = self.config.config_type
@@ -67,7 +70,7 @@ class DataPredictorBase:
         elif self.mode == "training":
             # self.data_mode = self.config.ground_truth_mode
             self.data_mode = self.config.dataset_mode
-            self.normalize_data = True
+            self.normalize_data = self.config.normalize_inputs
             self.output_mode = "stack"
             self.window_size = self.config.crop_shape
             self.batch_size = self.config.batch_size
