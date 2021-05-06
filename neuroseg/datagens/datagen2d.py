@@ -35,7 +35,6 @@ class DataGen2D(DataGenBase):
             config: Union[TrainConfig, PredictConfig],
             partition: str = "train",
             data_augmentation: bool = True,
-            normalize_inputs: bool = True,
             verbose: bool = False
     ):
         """
@@ -63,7 +62,6 @@ class DataGen2D(DataGenBase):
             config=config,
             partition=partition,
             data_augmentation=data_augmentation,
-            normalize_inputs=normalize_inputs,
             verbose=verbose,
         )
 
@@ -119,8 +117,6 @@ class DataGen2D(DataGenBase):
 
             if len(frame_shape) > len(mask_shape):
                 mask_shape = np.append(mask_shape, [1])
-            elif len(mask_shape) < len(frame_shape):
-                mask_shape = mask_shape[:-1]
             assert len(frame_shape) == len(mask_shape), "frame and mask have different dim lengths"
 
         elif self.dataset_mode in ["stack", "multi_stack"]:
@@ -149,17 +145,23 @@ class DataGen2D(DataGenBase):
         mask = load_volume(mask_path,
                            ignore_last_channel=False,
                            data_mode="stack")
+        if not self.soft_labels:
+            mask = np.where(mask == self.positive_class_value, 1, 0).astype(frame.dtype)
 
         if self.normalize_inputs:
             norm_constant_frame = np.iinfo(frame.dtype).max
             frame = frame / norm_constant_frame
+        if self.normalize_masks:
+            norm_constant_mask = np.iinfo(mask.dtype).max
+            mask = mask / norm_constant_mask
 
-        mask = np.where(mask == self.positive_class_value, 1, 0).astype(frame.dtype)
+        # ensuring mask and frame have same dtype
+        mask = mask.astype(frame.dtype)
         return frame, mask
 
     def _load_multi_stack(self,
                           frame_paths: List[Path],
-                          mask_paths: List[Path]
+                          mask_paths: List[Path],
                           ):
         frames = []
         masks = []
@@ -176,7 +178,7 @@ class DataGen2D(DataGenBase):
     @staticmethod
     def _load_img(
             img_to_load_path: str,
-            normalize_inputs: bool = True,
+            normalize: bool = True,
             ignore_last_channel: bool = False,
             is_binary_mask: bool = False,
             positive_class_value: int = 1,
@@ -188,7 +190,7 @@ class DataGen2D(DataGenBase):
         ----------
         img_to_load_path : str
             filepath to input image.
-        normalize_inputs : bool, optional
+        normalize : bool, optional
             if True divides image values by np.iinfo(img.dtype).max. The default is True.
         ignore_last_channel : bool, optional
             If True doesn't consider the last channel of an image
@@ -206,7 +208,7 @@ class DataGen2D(DataGenBase):
         """
         try:
             img = skio.imread(img_to_load_path)
-            if normalize_inputs and (not is_binary_mask):
+            if normalize and (not is_binary_mask):
                 norm_constant = np.iinfo(img.dtype).max
                 img = img / norm_constant
             if is_binary_mask:
@@ -237,9 +239,11 @@ class DataGen2D(DataGenBase):
             cls,
             frame_path: Union[str, EagerTensor],
             mask_path: Union[str, EagerTensor],
-            normalize_inputs=True,
-            ignore_last_channel=False,
-            positive_class_value=1,
+            normalize_inputs: bool = True,
+            normalize_masks: bool = False,
+            ignore_last_channel: bool = False,
+            positive_class_value: Union[int, float] = 1,
+            soft_labels: bool = False
     ) -> (EagerTensor, EagerTensor):
         """
         generate a (frame, mask) data point given frame_path and mask_path
@@ -271,14 +275,14 @@ class DataGen2D(DataGenBase):
 
         frame = cls._load_img(
             frame_path_str,
-            normalize_inputs=normalize_inputs,
+            normalize=normalize_inputs,
             ignore_last_channel=ignore_last_channel,
         )
         mask = cls._load_img(
             mask_path_str,
-            normalize_inputs=normalize_inputs,
+            normalize=normalize_masks,
             ignore_last_channel=False,
-            is_binary_mask=True,
+            is_binary_mask=not soft_labels,
             positive_class_value=positive_class_value,
         )
 
@@ -299,8 +303,10 @@ class DataGen2D(DataGenBase):
         load_example_partial = partial(
             self._load_example,
             normalize_inputs=self.normalize_inputs,
+            normalize_masks=self.normalize_masks,
             ignore_last_channel=self.ignore_last_channel,
             positive_class_value=self.positive_class_value,
+            soft_labels=self.soft_labels
         )
         frame, mask = tf.py_function(
             load_example_partial, [frame_path, mask_path], (tf.float64, tf.float64)
@@ -309,15 +315,15 @@ class DataGen2D(DataGenBase):
 
     def gen_dataset(self) -> tf.data.Dataset:
         """generate a 2D pipeline tf.Dataset"""
-        # GEN_DATASET_DEBUGMODE = False
+        GEN_DATASET_DEBUGMODE = False
 
         if self.dataset_mode in ["stack", "multi_stack"]:
             ds = Dataset.from_tensor_slices((self.frames_volume, self.masks_volume))
         elif self.dataset_mode == "single_images":
-            # if GEN_DATASET_DEBUGMODE:
-            #     frame_path = self.frames_paths[0]
-            #     mask_path = self.masks_paths[0]
-            #     debug_ex = self._load_example_wrapper(frame_path, mask_path)
+            if GEN_DATASET_DEBUGMODE:
+                frame_path = self.frames_paths[0]
+                mask_path = self.masks_paths[0]
+                debug_ex = self._load_example_wrapper(frame_path, mask_path)
 
             ds = Dataset.from_tensor_slices((self.frames_paths, self.masks_paths))
             ds = ds.map(
@@ -338,13 +344,13 @@ class DataGen2D(DataGenBase):
             )
         )
 
-        # if GEN_DATASET_DEBUGMODE and self.dataset_mode == "single_images":
-        #     debug_crop = self._random_crop(debug_ex[0], debug_ex[1], self.crop_shape, batch_crops=True)
-        # ds = ds.map(
-        #     map_func=lambda frame, mask: self._random_crop(
-        #         frame, mask, crop_shape=self.crop_shape, batch_crops=True
-        #     )
-        # )
+        if GEN_DATASET_DEBUGMODE and self.dataset_mode == "single_images":
+            debug_crop = self._random_crop(debug_ex[0], debug_ex[1], self.crop_shape, batch_crops=True)
+        ds = ds.map(
+            map_func=lambda frame, mask: self._random_crop(
+                frame, mask, crop_shape=self.crop_shape, batch_crops=True
+            )
+        )
         ds = ds.unbatch()
         if self.data_augmentation:
             if self.transform_cfg is None:
@@ -723,7 +729,8 @@ class DataGen2D(DataGenBase):
         for idx, frame_img in enumerate(frame_npy):
             transformed_batch_frames.append(transform_partial(frame_img))
             transformed_mask = transform_partial(mask_npy[idx])
-            transformed_mask = np.where(transformed_mask > .5, 1., 0.)
+            # this wouldn't work with soft labels
+            # transformed_mask = np.where(transformed_mask > .5, 1., 0.)
             transformed_batch_masks.append(transformed_mask)
 
         transformed_frame_stack = np.stack(transformed_batch_frames, axis=0)

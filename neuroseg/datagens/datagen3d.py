@@ -48,7 +48,6 @@ class DataGen3D(DataGenBase):
                  config: Union[TrainConfig, PredictConfig],
                  partition: str = "train",
                  data_augmentation: bool = True,
-                 normalize_inputs: bool = True,
                  verbose: bool = False):
         """
         3D data generator
@@ -77,7 +76,6 @@ class DataGen3D(DataGenBase):
         super().__init__(config=config,
                          partition=partition,
                          data_augmentation=data_augmentation,
-                         normalize_inputs=normalize_inputs,
                          verbose=verbose)
 
         # self._parse_single_stack_paths()
@@ -113,42 +111,6 @@ class DataGen3D(DataGenBase):
         else:
             raise ValueError(f"{self.dataset_mode} is not supported")
         return data
-
-    # def _load_volumes(self):
-    #     """load images from file,
-    #     apply normalizations,
-    #     fix stack dimensions,,
-    #     create {"img: img_volume, "label": label_volume} data dict"""
-    #
-    #     if self.dataset_mode in ["single_images", "stack"]:
-    #
-    #         # TODO: MOVE ALL THIS PREPROCESSING INSIDE CROPPED DATA LOADER
-    #         # ONLY data = {img: img_path, label: label_path} must be here
-    #
-    #         # for processing purposes we use "stack" instead of "multi_stack"
-    #         # data_mode = self.dataset_mode if self.dataset_mode != "multi_stack" else "stack"
-    #
-    #         logging.debug("reading from disk, dataset mode: {}...".format(self.dataset_mode))
-    #
-    #         self.data_dict = {
-    #             "img": self.frames_volume,
-    #             "label": self.masks_volume}
-    #         # self.frames_volume and self.masks_volume are redundant at this point
-    #         # they might need to be deleted to free space
-    #
-    #         del self.frames_volume
-    #         del self.masks_volume
-    #         gc.collect()
-    #
-    #
-    #     elif self.dataset_mode == "multi_stack":
-    #
-    #         self.data_dict = {
-    #             "img": self.frames_paths,
-    #             "label": self.masks_paths}
-    #
-    #     else:
-    #         raise NotImplementedError(self.dataset_mode)
 
     def _spatial_transform_cfg(self) -> dict:
         """spatial transform"""
@@ -324,16 +286,20 @@ class DataGen3D(DataGenBase):
         self.data_dict = self._get_data_dict()
 
         if self.dataset_mode in ["single_images", "stack"]:
+
             self.dataLoader = CroppedDataLoaderBG(
                 data=self.data_dict,
-                data_mode=self.dataset_mode,
                 batch_size=self.batch_size,
                 crop_shape=self.crop_shape,
+                data_mode=self.dataset_mode,
                 num_threads_in_multithreaded=self.threads,
                 shuffle=self.shuffle,
                 seed_for_shuffle=self.seed,
                 infinite=False,
-                # pre_crop_scales=self.pre_crop_scales
+                normalize_inputs=self.normalize_inputs,
+                normalize_masks=self.normalize_masks,
+                soft_labels=self.soft_labels,
+                positive_class_value=self.positive_class_value
             )
         elif self.dataset_mode == "multi_stack":
             self.dataLoader = MultiCroppedDataLoaderBG(
@@ -414,7 +380,7 @@ class MultiCroppedDataLoaderBG(DataLoader):
 
     def __init__(
             self,
-            data : dict,
+            data: dict,
             batch_size: int,
             crop_shape: Union[tuple, list],
             num_threads_in_multithreaded: int = 1,
@@ -422,6 +388,8 @@ class MultiCroppedDataLoaderBG(DataLoader):
             seed_for_shuffle: int = 12,
             infinite: bool = False,
             normalize_inputs: bool = True,
+            normmalize_masks: bool = False,
+            soft_labels: bool = False,
             positive_class_value: int = 255):
 
         # data = {"img": [img_paths], "label": [label_paths]}}
@@ -438,6 +406,8 @@ class MultiCroppedDataLoaderBG(DataLoader):
         self.label_paths = self._data["label"]
         self.rng_seed = seed_for_shuffle
         self.normalize_inputs = normalize_inputs
+        self.normalize_masks = normmalize_masks
+        self.soft_labels = soft_labels
         self.positive_class_value = positive_class_value
 
         if self.rng_seed is not None:
@@ -475,10 +445,17 @@ class MultiCroppedDataLoaderBG(DataLoader):
             label_path = vol_path_dict["label"]
 
             # NOTE LOAD_VOLUME_COUPLE IS NOW IN SINGLE CROPPED DATA LOADER
-            img_volume, label_volume = CroppedDataLoaderBG._load_volume_couple(img_path,
-                                                                               label_path,
-                                                                               self.normalize_inputs,
-                                                                               label_positive_class_value=self.positive_class_value)
+
+            img_volume, label_volume = CroppedDataLoaderBG._load_volume_couple(
+                img_path=img_path,
+                label_path=label_path,
+                normalize_inputs=self.normalize_inputs,
+                normalize_masks=self.normalize_masks,
+                soft_labels=self.soft_labels,
+                data_mode="stack",
+                label_positive_class_value=self.positive_class_value
+            )
+
             key_volume_dict = {
                 "img": img_volume.astype(np.float32),
                 "label": label_volume.astype(np.float32)}
@@ -529,6 +506,8 @@ class CroppedDataLoaderBG(DataLoader):
             seed_for_shuffle: int = 123,
             infinite: bool = False,
             normalize_inputs: bool = True,
+            normalize_masks: bool = False,
+            soft_labels: bool = False,
             positive_class_value: Union[int, float] = 255):
         """
         CroppedDataLoaderBG
@@ -568,6 +547,8 @@ class CroppedDataLoaderBG(DataLoader):
 
         self.data_mode = data_mode
         self.normalize_inputs = normalize_inputs
+        self.normalize_masks = normalize_masks
+        self.soft_labels = soft_labels
         self.positive_class_value = positive_class_value
 
         if self.data_mode not in ["single_images", "stack"]:
@@ -578,6 +559,8 @@ class CroppedDataLoaderBG(DataLoader):
             img_path=self.img_path,
             label_path=self.labels_path,
             normalize_inputs=self.normalize_inputs,
+            normalize_masks=self.normalize_masks,
+            soft_labels=self.soft_labels,
             data_mode=self.data_mode,
             label_positive_class_value=self.positive_class_value)
 
@@ -594,21 +577,28 @@ class CroppedDataLoaderBG(DataLoader):
                             img_path: Path,
                             label_path: Path,
                             normalize_inputs: bool,
+                            normalize_masks: bool = False,
+                            soft_labels: bool = False,
                             data_mode: str = "stack",
                             label_positive_class_value: Union[int, float] = 255) -> Tuple[np.ndarray, np.ndarray]:
 
-        img_volume, norm = load_volume(img_path,
-                                       data_mode=data_mode,
-                                       ignore_last_channel=False,
-                                       return_norm=True)
+        img_volume, img_norm = load_volume(img_path,
+                                           data_mode=data_mode,
+                                           ignore_last_channel=False,
+                                           return_norm=True)
 
-        label_volume = load_volume(label_path,
-                                   data_mode=data_mode,
-                                   ignore_last_channel=False)
+        label_volume, label_norm = load_volume(label_path,
+                                               data_mode=data_mode,
+                                               ignore_last_channel=False,
+                                               return_norm=True)
         if normalize_inputs:
             img_volume = cls._normalize_stack(img_volume,
-                                              norm=norm)
-        label_volume = np.where(label_volume >= label_positive_class_value, 1, 0).astype(img_volume.dtype)
+                                              norm=img_norm)
+        if normalize_masks:
+            label_volume = cls._normalize_stack(label_volume, label_norm)
+
+        if not soft_labels:
+            label_volume = np.where(label_volume >= label_positive_class_value, 1, 0).astype(img_volume.dtype)
 
         img_volume, label_volume = cls._adjust_stack_dims(img_volume, label_volume, to_channel_first=True)
         return img_volume, label_volume
