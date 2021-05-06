@@ -66,10 +66,10 @@ AUGMENTATION_TRANSFORMS_IDS = [
 ]
 
 DATASETS = [
-    # "single_images_1ch",
+    "single_images_1ch",
     "single_images_2ch",
-    # "stack_1ch",
-    # "multi_stack_1ch"
+    "stack_1ch",
+    "multi_stack_1ch"
 ]
 
 
@@ -145,15 +145,11 @@ class TestDatagen2D:
                            normalize_inputs,
                            crop_shape):
         yml_cfg_path, cfg_dict = config_yml_path_fixture
-        # if cfg_dict["dataset_cfg"]["n_channels"] == 2:
-        #     import pudb
-        #     pudb.set_trace()
         cfg_dict["model_cfg"]["crop_shape"] = crop_shape
         config = TrainConfig(cfg_dict=cfg_dict)
         datagen = DataGen2D(config=config,
                             partition=partition,
-                            data_augmentation=data_augmentation,
-                            normalize_inputs=normalize_inputs)
+                            data_augmentation=data_augmentation)
 
         batch_frames, batch_masks = next(datagen.data.__iter__())
         batch_frames_shape = batch_frames.shape.as_list()
@@ -237,3 +233,106 @@ class TestDatagen2D:
 
         tfdebug.assert_shapes([(transformed_frames, frame_expected_shape),
                                (transformed_masks, mask_expected_shape)])
+
+    @pytest.mark.neuroseg_load_img
+    @pytest.mark.parametrize("dataset", ["single_images_1ch", "single_images_2ch"])
+    def test_load_img(self, dataset):
+        dataset_path = DATASETS_PATH.joinpath(dataset)
+
+        if dataset == "single_images_1ch":
+            ignore_last_channel = False
+            exp_shape = (200, 200)
+            extra_shape = None
+        elif dataset == "single_images_2ch":
+            ignore_last_channel = True
+            exp_shape = (512, 512)
+            extra_shape = 2
+        else:
+            exp_shape = (200,200)
+            ignore_last_channel = False
+            extra_shape = None
+
+        frames_path = dataset_path.joinpath("test/frames")
+        masks_path = dataset_path.joinpath("test/masks")
+
+        frames_fpaths = list(frames_path.glob("*.png"))
+        masks_fpaths = list(masks_path.glob("*.png"))
+
+        frame_fpath = frames_fpaths[0]
+        mask_fpath = masks_fpaths[0]
+
+        img = DataGen2D._load_img(
+            img_to_load_path=str(frame_fpath),
+            normalize=True,
+            ignore_last_channel=ignore_last_channel,
+            is_binary_mask=False)
+        mask = DataGen2D._load_img(
+            img_to_load_path=str(mask_fpath),
+            normalize=False,
+            ignore_last_channel=False,
+            is_binary_mask=True)
+
+        if extra_shape is not None:
+            img_shape = list(exp_shape)
+            img_shape.append(extra_shape)
+            img_shape = tuple(img_shape)
+        else:
+            img_shape = exp_shape
+
+        assert img.shape == img_shape
+        assert mask.shape == exp_shape
+
+    @pytest.mark.neuroseg_load_img
+    @pytest.mark.parametrize("dataset", ["single_images_1ch", "single_images_2ch"])
+    def test_load_example(self, dataset):
+        dataset_path = DATASETS_PATH.joinpath(dataset)
+
+        if dataset == "single_images_1ch":
+            ignore_last_channel = False
+            exp_shape = (200, 200)
+            extra_shape = None
+        elif dataset == "single_images_2ch":
+            ignore_last_channel = True
+            exp_shape = (512, 512)
+            extra_shape = 2
+        else:
+            exp_shape = (200,200)
+            ignore_last_channel = False
+            extra_shape = None
+
+        frames_path = dataset_path.joinpath("test/frames")
+        masks_path = dataset_path.joinpath("test/masks")
+
+        frames_fpaths = list(frames_path.glob("*.png"))
+        masks_fpaths = list(masks_path.glob("*.png"))
+
+        frames_fpaths_str = [str(fpath) for fpath in frames_fpaths]
+        masks_fpaths_str = [str(fpath) for fpath in masks_fpaths]
+
+        frames_fpaths_tensor = tf.convert_to_tensor(frames_fpaths_str)
+        masks_fpaths_tensor = tf.convert_to_tensor(masks_fpaths_str)
+
+        ex_elems = frames_fpaths_tensor[0], masks_fpaths_tensor[0]
+
+        ex = DataGen2D._load_example(frame_path=ex_elems[0],
+                                     mask_path=ex_elems[1],
+                                     normalize_inputs=True,
+                                     normalize_masks=False,
+                                     ignore_last_channel=ignore_last_channel,
+                                     positive_class_value=255,
+                                     soft_labels=False)
+
+        if extra_shape is not None:
+            img_shape = list(exp_shape)
+            img_shape.append(extra_shape)
+            img_shape = tuple(img_shape)
+        else:
+            img_shape = exp_shape
+
+        mask_shape = list(exp_shape)
+        if len(img_shape) == 3:
+            mask_shape.append(1)
+        mask_shape = tuple(mask_shape)
+
+        assert ex[0].shape == img_shape, "wrong shape frame"
+        assert ex[1].shape == mask_shape, "wrong shape mask"
