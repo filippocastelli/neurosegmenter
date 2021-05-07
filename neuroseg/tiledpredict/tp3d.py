@@ -264,8 +264,9 @@ class TiledPredictor3D:
                     weight_img[slice_z, slice_y, slice_x] += weight
 
                 elif tiling_mode == "drop_borders":
+                    assert all(np.array(window_overlap) % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
                     half_overlap = np.array(window_overlap) // 2
-                    assert all(half_overlap % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
+
                     slice_z = slice(pivot[0] + half_overlap[0], pivot[0] + window_shape[0] - half_overlap[0])
                     slice_y = slice(pivot[1] + half_overlap[1], pivot[1] + window_shape[1] - half_overlap[1])
                     slice_x = slice(pivot[2] + half_overlap[2], pivot[2] + window_shape[2] - half_overlap[2])
