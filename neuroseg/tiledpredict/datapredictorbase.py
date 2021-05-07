@@ -147,7 +147,3 @@ class DataPredictorBase:
                             save_tiff=True,
                             save_pickle=True                            
                     )
-            
-            
-            
-            
