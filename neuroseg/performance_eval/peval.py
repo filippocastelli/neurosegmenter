@@ -84,6 +84,12 @@ class SingleVolumePerformanceEvaluator:
                  gt_array: np.ndarray = None):
         self.config = config
 
+        self.soft_labels = config.soft_labels
+        if config.config_type == "predict":
+            self.normalize_ground_truth = config.ground_truth_normalize
+        elif config.config_type == "training":
+            self.normalize_ground_truth = config.normalize_masks
+
         if gt_array is None:
             self.ground_truth_mode = config.ground_truth_mode
             self.ground_truth_path = self._get_gt_path()
@@ -92,12 +98,6 @@ class SingleVolumePerformanceEvaluator:
             self.ground_truth = gt_array
 
         self._preprocess_pred(predicted_data)
-
-        self.soft_labels = config.soft_labels
-        if config.config_type == "predict":
-            self.normalize_ground_truth = config.ground_truth_normalize
-        elif config.config_type == "training":
-            self.normalize_ground_truth = config.normalize_masks
 
         self.classification_threshold = config.pe_classification_threshold
         self.enable_curves = config.pe_enable_curves
