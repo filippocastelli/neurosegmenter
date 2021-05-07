@@ -33,10 +33,10 @@ def debug_train_val_datagens(config: TrainConfig,
     """datagens debug batch inspector"""
     if config.train_datagen_inspector:
         train_batch = next(train_datagen.data.__iter__())
-        _ = BatchInspector(config, train_batch)
+        _ = BatchInspector(config, train_batch, title="TRAIN DATAGEN BATCH DEBUG")
     if config.val_datagen_inspector:
         val_batch = next(val_datagen.data.__iter__())
-        _ = BatchInspector(config, val_batch)
+        _ = BatchInspector(config, val_batch, title="VAL DATAGEN BATCH DEBUG")
 
 
 def train(train_config: TrainConfig):
