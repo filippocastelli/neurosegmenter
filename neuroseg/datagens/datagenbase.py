@@ -10,7 +10,6 @@ class DataGenBase:
                  config: Union[TrainConfig, PredictConfig],
                  partition: str = "train",
                  data_augmentation: bool = True,
-                 soft_labels: bool = False,
                  verbose: bool = False):
 
         self.config = config
@@ -27,7 +26,7 @@ class DataGenBase:
 
         self.normalize_inputs = self.config.normalize_inputs
         self.normalize_masks = self.config.normalize_masks
-        self.soft_labels = soft_labels
+        self.soft_labels = self.config.soft_labels
 
         self.single_thread = config.da_single_thread
         self.threads = 1 if config.da_single_thread == True else config.da_threads

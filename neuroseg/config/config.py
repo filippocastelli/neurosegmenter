@@ -195,7 +195,7 @@ class TrainConfig(Config):
         self.dataset_path = self._decode_path(dataset_cfg["dataset_path"])
         self.dataset_mode = dataset_cfg["mode"]
         self.n_channels = dataset_cfg["n_channels"]
-        self.soft_labels = self.get_param(dataset_cfg, "binarize_masks", False)
+        self.soft_labels = self.get_param(dataset_cfg, "soft_labels", False)
         self.positive_class_value = dataset_cfg["positive_class_value"]
         self.negative_class_value = dataset_cfg["negative_class_value"]
         self.ignore_last_channel = self.get_param(dataset_cfg, "ignore_last_channel", False)

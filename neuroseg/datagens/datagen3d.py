@@ -306,11 +306,14 @@ class DataGen3D(DataGenBase):
                 data=self.data_dict,
                 batch_size=self.batch_size,
                 crop_shape=self.crop_shape,
-                normalize_inputs=self.normalize_inputs,
                 num_threads_in_multithreaded=self.threads,
                 shuffle=self.shuffle,
                 seed_for_shuffle=self.seed,
-                infinite=False)
+                infinite=False,
+                normalize_inputs=self.normalize_inputs,
+                normalize_masks=self.normalize_masks,
+                soft_labels=self.soft_labels,
+                positive_class_value=self.positive_class_value)
         else:
             raise NotImplementedError(self.dataset_mode)
 
@@ -388,7 +391,7 @@ class MultiCroppedDataLoaderBG(DataLoader):
             seed_for_shuffle: int = 12,
             infinite: bool = False,
             normalize_inputs: bool = True,
-            normmalize_masks: bool = False,
+            normalize_masks: bool = False,
             soft_labels: bool = False,
             positive_class_value: int = 255):
 
@@ -406,7 +409,7 @@ class MultiCroppedDataLoaderBG(DataLoader):
         self.label_paths = self._data["label"]
         self.rng_seed = seed_for_shuffle
         self.normalize_inputs = normalize_inputs
-        self.normalize_masks = normmalize_masks
+        self.normalize_masks = normalize_masks
         self.soft_labels = soft_labels
         self.positive_class_value = positive_class_value
 
