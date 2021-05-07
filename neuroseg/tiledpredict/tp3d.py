@@ -8,7 +8,7 @@ import numpy as np
 from tqdm import tqdm
 import scipy.signal as signal
 from skimage.util import view_as_windows
-
+from typing import Union
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
 
 
@@ -24,7 +24,7 @@ class TiledPredictor3D:
             padding_mode="reflect",
             extra_padding_windows=0,
             tiling_mode="average",
-            window_overlap=None
+            window_overlap: tuple = None
     ):
 
         self.input_volume = input_volume
@@ -37,8 +37,8 @@ class TiledPredictor3D:
         self.tiling_mode = tiling_mode
         self.window_overlap = window_overlap
 
-        if self.window_overlap is not None:
-            assert self.window_overlap % 2 == 0, "window overlap must be divisible by 2"
+
+
 
         # self.tmp_folder = Path(tmp_folder)
         # self.keep_tmp = keep_tmp
@@ -51,6 +51,10 @@ class TiledPredictor3D:
 
         # # calculating steps
         if self.window_overlap is not None:
+            assert (np.array(self.window_overlap) % 2 == 0).all(), "window overlap must be divisible by 2"
+            assert (np.array(self.window_overlap) - np.array(
+                self.crop_shape) < 0).all(), "Window overlap must not be greater than crop_shape"
+
             self.step = np.array(self.crop_shape) - np.array(self.window_overlap)
         else:
             self.step = np.array(self.crop_shape) // 2
@@ -61,7 +65,6 @@ class TiledPredictor3D:
         # if len(self.input_volume_shape) == 4:
         #     import pudb
         #     pudb.set_trace()
-
 
         self.paddings = self.get_paddings(image_shape=self.input_volume.shape,
                                           crop_shape=self.crop_shape,
@@ -123,10 +126,10 @@ class TiledPredictor3D:
 
         # im dumb so I bruteforce it.
 
-        tot_paddings = [0,0,0]
-        tot_res_paddings = [0,0,0]
+        tot_paddings = [0, 0, 0]
+        tot_res_paddings = [0, 0, 0]
 
-        paddings = [(0,0) for _ in tot_paddings]
+        paddings = [(0, 0) for _ in tot_paddings]
 
         a = image_shape + (extra_windows - 1) * crop_shape
         b = step
@@ -204,7 +207,7 @@ class TiledPredictor3D:
             model,
             batch_size,
             tiling_mode="average",
-            window_overlap=None
+            window_overlap=None,
     ):
         view_shape = img_windows.shape
         if len(view_shape) == 8:
@@ -223,9 +226,9 @@ class TiledPredictor3D:
             raise ValueError("the first two dimensions of window_shape should be divisible by 2")
 
         if window_overlap is not None:
-            step = np.array(window_shape) - np.array(window_overlap)
+            step = np.array(window_shape_spatial) - np.array(window_overlap)
         else:
-            step = np.array(window_shape) // 2
+            step = np.array(window_shape_spatial) // 2
             window_overlap = step
 
         cls.check_distortion_condition(frame_shape, window_shape_spatial, step)

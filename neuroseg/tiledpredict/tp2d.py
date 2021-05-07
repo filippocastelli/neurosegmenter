@@ -76,7 +76,7 @@ class TiledPredictor2D:
             padding_mode="reflect",
             extra_padding_windows=0,
             tiling_mode="average",
-            window_overlap=None
+            window_overlap: tuple = None
     ):
         self.input_volume = input_volume
         self.is_volume = is_volume
@@ -88,9 +88,6 @@ class TiledPredictor2D:
         self.tiling_mode = tiling_mode
         self.extra_padding_windows = extra_padding_windows
         self.window_overlap = window_overlap
-
-        if self.window_overlap is not None:
-            assert all(self.window_overlap % 2 == 0), "window overlap must be divisible by 2"
 
         # self.tmp_folder = Path(tmp_folder)
         # self.keep_tmp = keep_tmp
@@ -106,6 +103,10 @@ class TiledPredictor2D:
         # calculating steps
 
         if self.window_overlap is not None:
+            assert (np.array(self.window_overlap) % 2 == 0).all(), "window overlap must be divisible by 2"
+            assert (np.array(self.window_overlap) - np.array(
+                self.crop_shape) < 0).all(), "Window overlap must not be greater than crop_shape"
+
             self.step = np.array(self.crop_shape) - np.array(self.window_overlap)
         else:
             self.step = np.array(self.crop_shape) // 2
