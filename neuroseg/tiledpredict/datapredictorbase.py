@@ -82,6 +82,7 @@ class DataPredictorBase:
         self.extra_padding_windows = self.config.extra_padding_windows
         self.tiling_mode = self.config.tiling_mode
         self.window_overlap = self.config.window_overlap
+        self.debug = self.config.predict_inspector
 
     def _load_model(self):
         return load_model(filepath=str(self.model_path), compile=False)

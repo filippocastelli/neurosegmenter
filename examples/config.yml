@@ -140,4 +140,5 @@ debug_cfg:
     test_datagen_inspector: false
     train_datagen_inspector: false
     val_datagen_inspector: false
+    predict_inspector: false
 

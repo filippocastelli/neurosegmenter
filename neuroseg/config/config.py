@@ -280,6 +280,7 @@ class TrainConfig(Config):
         self.test_datagen_inspector = self.get_param(debug_cfg, "test_datagen_inspector", False)
         self.val_datagen_inspector = self.get_param(debug_cfg, "val_datagen_inspector", False)
         self.train_datagen_inspector = self.get_param(debug_cfg, "train_datagen_inspector", False)
+        self.predict_inspector = self.get_param(debug_cfg, "predict_inspector", False)
         return
 
     def _gen_paths(self, dataset_path: Path) -> None:

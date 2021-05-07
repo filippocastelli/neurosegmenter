@@ -10,6 +10,7 @@ import scipy.signal as signal
 from skimage.util import view_as_windows
 from typing import Union
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
+from neuroseg.utils import BatchInspector3D
 
 
 class TiledPredictor3D:
@@ -24,7 +25,8 @@ class TiledPredictor3D:
             padding_mode="reflect",
             extra_padding_windows=0,
             tiling_mode="average",
-            window_overlap: tuple = None
+            window_overlap: tuple = None,
+            debug: bool = False
     ):
 
         self.input_volume = input_volume
@@ -37,8 +39,7 @@ class TiledPredictor3D:
         self.tiling_mode = tiling_mode
         self.window_overlap = window_overlap
 
-
-
+        self.debug = debug
 
         # self.tmp_folder = Path(tmp_folder)
         # self.keep_tmp = keep_tmp
@@ -86,7 +87,8 @@ class TiledPredictor3D:
                                                       model=self.model,
                                                       batch_size=self.batch_size,
                                                       tiling_mode=self.tiling_mode,
-                                                      window_overlap=self.window_overlap)
+                                                      window_overlap=self.window_overlap,
+                                                      debug=self.debug)
 
         prediction_volume = self.unpad_image(prediction_volume_padded, self.paddings)
         return prediction_volume
@@ -208,6 +210,7 @@ class TiledPredictor3D:
             batch_size,
             tiling_mode="average",
             window_overlap=None,
+            debug=False
     ):
         view_shape = img_windows.shape
         if len(view_shape) == 8:
@@ -246,6 +249,10 @@ class TiledPredictor3D:
             batch_global_index = int(batch_idx) * batch_size
             predicted_batch = model.predict(batch)
 
+            if debug:
+                debug_batch = (batch, predicted_batch)
+                BatchInspector3D(debug_batch, title="PREDICTION BATCH DEBUG")
+
             for img_idx, pred_img in enumerate(predicted_batch):
                 tile_idx = img_idx + batch_global_index
                 canvas_index = np.array(np.unravel_index(tile_idx, img_windows.shape[:3]))
@@ -264,7 +271,8 @@ class TiledPredictor3D:
                     weight_img[slice_z, slice_y, slice_x] += weight
 
                 elif tiling_mode == "drop_borders":
-                    assert all(np.array(window_overlap) % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
+                    assert all(
+                        np.array(window_overlap) % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
                     half_overlap = np.array(window_overlap) // 2
 
                     slice_z = slice(pivot[0] + half_overlap[0], pivot[0] + window_shape[0] - half_overlap[0])
@@ -286,7 +294,7 @@ class TiledPredictor3D:
                     raise ValueError(f"unsuppported tiling mode {tiling_mode}")
 
         final_img = output_img / weight_img
-        SAVE_DEBUG_TIFFS_FLAG = False
+        SAVE_DEBUG_TIFFS_FLAG = True
         if SAVE_DEBUG_TIFFS_FLAG:
             import tifffile
             tifffile.imsave("debug_output.tiff", output_img)
@@ -368,7 +376,8 @@ class DataPredictor3D(DataPredictorBase):
             padding_mode=self.padding_mode,
             extra_padding_windows=self.extra_padding_windows,
             tiling_mode=self.tiling_mode,
-            window_overlap=self.window_overlap
+            window_overlap=self.window_overlap,
+            debug=self.debug
         )
 
         self.predicted_data = tiledpredictor.predict()
@@ -392,7 +401,8 @@ class MultiVolumeDataPredictor3D(DataPredictorBase):
                 padding_mode=self.padding_mode,
                 extra_padding_windows=self.extra_padding_windows,
                 tiling_mode=self.tiling_mode,
-                window_overlap=self.window_overlap
+                window_overlap=self.window_overlap,
+                debug=self.debug
             )
 
             tiled_predictors[volume_name] = tiledpredictor

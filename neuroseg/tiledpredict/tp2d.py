@@ -9,7 +9,7 @@ from skimage.util import view_as_windows
 from tqdm import tqdm
 
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
-
+from neuroseg.utils import BatchInspector2D
 
 class DataPredictor2D(DataPredictorBase):
     def __init__(self, config, model=None):
@@ -26,6 +26,7 @@ class DataPredictor2D(DataPredictorBase):
             extra_padding_windows=self.extra_padding_windows,
             tiling_mode=self.tiling_mode,
             window_overlap=self.window_overlap,
+            debug=self.debug
         )
 
         self.predicted_data = self.tiledpredictor.predict()
@@ -50,7 +51,8 @@ class MultiVolumeDataPredictor2D(DataPredictorBase):
                 n_output_classes=self.n_output_classes,
                 extra_padding_windows=self.extra_padding_windows,
                 tiling_mode=self.tiling_mode,
-                window_overlap=self.window_overlap
+                window_overlap=self.window_overlap,
+                debug=self.debug
             )
 
             tiled_predictors[volume_name] = tiled_predictor
@@ -76,7 +78,8 @@ class TiledPredictor2D:
             padding_mode="reflect",
             extra_padding_windows=0,
             tiling_mode="average",
-            window_overlap: tuple = None
+            window_overlap: tuple = None,
+            debug: bool = False
     ):
         self.input_volume = input_volume
         self.is_volume = is_volume
@@ -88,6 +91,7 @@ class TiledPredictor2D:
         self.tiling_mode = tiling_mode
         self.extra_padding_windows = extra_padding_windows
         self.window_overlap = window_overlap
+        self.debug = debug
 
         # self.tmp_folder = Path(tmp_folder)
         # self.keep_tmp = keep_tmp
@@ -166,35 +170,6 @@ class TiledPredictor2D:
 
         self.prediction_volume = self.unpad_image(self.prediction_volume_padded, self.paddings)
         return self.prediction_volume
-
-    # @staticmethod
-    # def get_paddings(image_shape, crop_shape, extra_windows=0):
-    #     """given image_shape and crop_shape get [(pad_left, pad_right)] paddings"""
-    #
-    #     image_shape = np.array(image_shape)
-    #     crop_shape = np.array(crop_shape)
-    #
-    #     if not (crop_shape % 2 == 0).all():
-    #         raise ValueError("crop_shape should be divisible by 2")
-    #
-    #     image_shape_spatial = image_shape[:2]
-    #     pad_list = [(0, 0) for _ in range(len(image_shape_spatial))]
-    #
-    #     # mod = np.array(image_shape_spatial) % np.array(crop_shape)
-    #     step = crop_shape // 2
-    #     mod = (image_shape_spatial - crop_shape) % step
-    #     nonzero_idxs = np.nonzero(mod)[0]
-    #
-    #     if len(nonzero_idxs) > 0:
-    #         for nonzero_idx in nonzero_idxs:
-    #             idx = int(nonzero_idx)
-    #             total_pad = (step - mod)[idx] + extra_windows * crop_shape[idx]
-    #             left_pad = total_pad // 2
-    #             right_pad = total_pad - left_pad
-    #
-    #             pad_list[idx] = (left_pad, right_pad)
-    #
-    #     return pad_list
 
     @classmethod
     def get_paddings(cls,
@@ -313,7 +288,8 @@ class TiledPredictor2D:
             model,
             batch_size,
             window_overlap=None,
-            tiling_mode="average"
+            tiling_mode="average",
+            debug: bool = False
     ):
         view_shape = img_windows.shape
         if len(view_shape) == 6:
@@ -351,6 +327,10 @@ class TiledPredictor2D:
         for batch_idx, batch in enumerate(batched_inputs):
             batch_global_index = int(batch_idx) * batch_size
             predicted_batch = model.predict(batch)
+
+            if debug:
+                debug_batch = (batch, predicted_batch)
+                BatchInspector2D(debug_batch, title="PREDICTION BATCH DEBUG")
 
             for img_idx, pred_img in enumerate(predicted_batch):
                 tile_idx = img_idx + batch_global_index
