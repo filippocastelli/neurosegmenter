@@ -65,8 +65,6 @@ class DataGen3D(DataGenBase):
             Enables data agumentation pipeline.
             You have to disable it for validation or test.
             The default is True.
-        normalize_inputs : bool, optional
-            if True divides image values by np.iinfo(img.dtype).max. The default is True.
         verbose : bool, optional
             Enable additional verbosity. The default is False.
             
