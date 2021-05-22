@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from typing import Union
+from contextlib import nullcontext
 
 from neuroseg.config import (
     TrainConfig,
@@ -8,6 +9,8 @@ from neuroseg.config import (
     ModelConfigurator,
     OptimizerConfigurator,
     MetricsConfigurator)
+
+import tensorflow as tf
 
 from neuroseg.datagens import Datagen
 from neuroseg.utils import BatchInspector
@@ -39,6 +42,14 @@ def debug_train_val_datagens(config: TrainConfig,
         _ = BatchInspector(config, val_batch, title="VAL DATAGEN BATCH DEBUG")
 
 
+def get_strategy_scope(config: TrainConfig):
+    strategy_name = config.distribute_strategy
+    if strategy_name == "mirrored":
+        return tf.distribute.MirroredStrategy().scope()
+    else:
+        return nullcontext()
+
+
 def train(train_config: TrainConfig):
     setup_logger(train_config.logfile_path)
     train_datagen = Datagen(train_config,
@@ -54,16 +65,14 @@ def train(train_config: TrainConfig):
                           data_augmentation=False)
 
     debug_train_val_datagens(train_config, train_datagen, val_datagen)
-
     callback_cfg = CallbackConfigurator(train_config)
     callbacks = callback_cfg.callbacks
 
-    model_cfg = ModelConfigurator(train_config)
-    model = model_cfg.model
-
-    optimizer_cfg = OptimizerConfigurator(train_config)
-
-    metrics_cfg = MetricsConfigurator(train_config)
+    with get_strategy_scope(train_config):
+        model_cfg = ModelConfigurator(train_config)
+        model = model_cfg.model
+        optimizer_cfg = OptimizerConfigurator(train_config)
+        metrics_cfg = MetricsConfigurator(train_config)
 
     model.compile(optimizer=optimizer_cfg.optimizer,
                   loss=metrics_cfg.loss,
