@@ -45,14 +45,16 @@ class DataGenBase:
                 raise ValueError("dataset paths are not actual dirs")
 
     def _scan_dirs(self) -> None:
-        self.frames_paths = self._glob_subdirs("frames")
-        self.masks_paths = self._glob_subdirs("masks")
+        if self.dataset_mode in ["single_images", "stack", "multi_stack"]:
+            self.frames_paths = self._glob_subdirs("frames")
+            self.masks_paths = self._glob_subdirs("masks")
+        else:
+            pass
 
-    def _glob_subdirs(self, subdir: Path) -> list:
+    def _glob_subdirs(self, subdir: str) -> list:
         subdir_paths = [str(imgpath) for imgpath in
                         sorted(self.data_path_dict[subdir].glob("*.*"))
                         if self._is_supported_format(imgpath)]
-
         if self.verbose:
             print("there are {} {} imgs".format(len(subdir_paths), subdir))
         return subdir_paths

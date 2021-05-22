@@ -196,8 +196,8 @@ class TrainConfig(Config):
         self.dataset_mode = dataset_cfg["mode"]
         self.n_channels = dataset_cfg["n_channels"]
         self.soft_labels = self.get_param(dataset_cfg, "soft_labels", False)
-        self.positive_class_value = dataset_cfg["positive_class_value"]
-        self.negative_class_value = dataset_cfg["negative_class_value"]
+        self.positive_class_value = self.get_param(dataset_cfg, "positive_class_value", 255)
+        self.negative_class_value = self.get_param(dataset_cfg, "negative_class_value", 0)
         self.ignore_last_channel = self.get_param(dataset_cfg, "ignore_last_channel", False)
         self.normalize_inputs = self.get_param(dataset_cfg, "normalize_inputs", True)
         self.normalize_masks = self.get_param(dataset_cfg, "normalize_masks", False)
@@ -313,9 +313,14 @@ class TrainConfig(Config):
                 self.val_paths = path_dict["val"]
                 self.test_paths = path_dict["test"]
 
+            elif self.dataset_mode == "h5_dataset":
+                for partition in ["train", "val", "test"]:
+                    partition_path = dataset_path.joinpath(f"{partition}.h5")
+                    path_dict[partition] = partition_path
+
+                self.path_dict = path_dict
             elif self.dataset_mode == "multi_stack":
                 raise NotImplementedError(self.dataset_mode)
-
             else:
                 raise NotImplementedError(self.dataset_mode)
 
@@ -340,7 +345,7 @@ class TrainConfig(Config):
     def _parse_performance_evaluation_cfg_additional(self) -> None:
         """additional configs for performance evaluation in training mode"""
         self.ground_truth_mode = self.dataset_mode
-        self.ground_truth_path = self.test_paths["masks"]
+        self.ground_truth_path = self.test_paths["masks"] if self.dataset_mode != "h5_dataset" else None
         self.ground_truth_normalize = self.get_param(self.pe_cfg, "normalize_ground_truth", True)
         self.ground_truth_soft_labels = self.get_param(self.pe_cfg, "soft_labels", self.soft_labels)
         return
