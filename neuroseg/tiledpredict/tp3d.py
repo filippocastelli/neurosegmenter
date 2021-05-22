@@ -10,7 +10,7 @@ import scipy.signal as signal
 from skimage.util import view_as_windows
 from typing import Union
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
-from neuroseg.utils import BatchInspector3D
+from neuroseg.utils import BatchInspector3D, save_volume
 
 
 class TiledPredictor3D:
@@ -384,6 +384,50 @@ class DataPredictor3D(DataPredictorBase):
         return self.predicted_data
 
 
+class H5DataPredictor(DataPredictorBase):
+    # self.predicted_data here is a list of pickle paths
+    def __init__(self, config, model=None):
+        super().__init__(config, model)
+
+    # overriding _save_volume with null function
+    def _save_volume(self):
+        pass
+
+    def predict(self):
+        self.predicted_data = []
+        n_vols = len(self.input_data)
+        for idx in range(n_vols):
+            volume = self.input_data[idx, 0, ...]
+            if self.normalize_data:
+                norm = np.iinfo(volume.dtype).max
+                volume = volume / norm
+            tiledpredictor = TiledPredictor3D(
+                input_volume=volume,
+                batch_size=self.batch_size,
+                n_output_classes=self.n_output_classes,
+                window_size=self.window_size,
+                model=self.prediction_model,
+                padding_mode=self.padding_mode,
+                extra_padding_windows=self.extra_padding_windows,
+                tiling_mode=self.tiling_mode,
+                window_overlap=self.window_overlap,
+                debug=self.debug
+            )
+            output_path = self.output_path
+
+            pred_data = tiledpredictor.predict()
+            saved_paths = save_volume(volume=pred_data,
+                                      output_path=self.output_path,
+                                      save_pickle=True,
+                                      fname=str(idx) + "_predict")
+
+            # if save_pickle == True first element is pickle fpath
+            pickle_fpath = saved_paths[0]
+            self.predicted_data.append(pickle_fpath)
+            del pred_data
+        return self.predicted_data
+
+
 class MultiVolumeDataPredictor3D(DataPredictorBase):
     def __init__(self, config, model=None):
         super().__init__(config, model)
@@ -410,4 +454,5 @@ class MultiVolumeDataPredictor3D(DataPredictorBase):
         self.predicted_data = {
             name: pred.predict() for name, pred in tiled_predictors.items()
         }
+        del tiled_predictors
         return self.predicted_data

@@ -1,5 +1,6 @@
 import numpy as np
 from typing import Union
+import h5py
 
 from tensorflow.python.keras.models import load_model
 
@@ -47,6 +48,8 @@ class DataPredictorBase:
                 self.data_path = glob_imgs(
                     self.config.test_paths["frames"], mode="stack", to_string=True
                 )[0]
+            elif self.data_mode == "h5_dataset":
+                self.data_path = self.config.path_dict["test"]
             elif self.data_mode == "multi_stack":
                 self.data_path = self.config.test_paths["frames"]
                 # raise NotImplementedError(self.data_mode)
@@ -111,6 +114,17 @@ class DataPredictorBase:
             self.input_data = self._load_single_volume(
                 self.data_path, self.n_channels, self.data_mode
             )
+        elif self.data_mode == "h5_dataset":
+            h5file = h5py.File(str(self.data_path), "r")
+            # n_vols = len(h5file["data"])
+            # loaded_vols = []
+            # for vol_idx in range(n_vols):
+            #     vol = h5file["data"][vol_idx, 0, ...]
+            #     if self.normalize_data:
+            #         norm = np.iinfo(vol.dtype).max
+            #         vol = vol / norm
+            #     loaded_vols.append(vol)
+            self.input_data = h5file["data"]
 
         elif self.data_mode == "multi_stack":
             self.data_paths = glob_imgs(self.data_path, mode="stack")
@@ -148,3 +162,15 @@ class DataPredictorBase:
                             save_tiff=True,
                             save_pickle=True                            
                     )
+
+        # this occupies way too much resources
+        # best solution would be to override save_volume() in H5DataPredictor
+        # and save each volume in the main predict loop
+        elif self.data_mode == "h5_dataset":
+            for idx, vol in enumerate(self.predicted_data):
+                fname = str(f"{idx}_predict")
+                save_volume(volume=vol,
+                            output_path=self.output_path,
+                            fname=fname,
+                            save_tiff=True,
+                            save_pickle=True)

@@ -1,5 +1,5 @@
 from neuroseg.tiledpredict.tp2d import DataPredictor2D, MultiVolumeDataPredictor2D
-from neuroseg.tiledpredict.tp3d import DataPredictor3D, MultiVolumeDataPredictor3D
+from neuroseg.tiledpredict.tp3d import DataPredictor3D, MultiVolumeDataPredictor3D, H5DataPredictor
 
 
 def DataPredictor(config, model=None):
@@ -16,10 +16,12 @@ def DataPredictor(config, model=None):
             raise NotImplementedError(data_mode)
         
     elif mode == "3d":
-        if data_mode in ["single_images", "stack" ]:
+        if data_mode in ["single_images", "stack"]:
             return DataPredictor3D(config, model)
-        elif data_mode == "multi_stack":
+        elif data_mode in ["multi_stack"]:
             return MultiVolumeDataPredictor3D(config, model)
+        elif data_mode == "h5_dataset":
+            return H5DataPredictor(config, model)
         else:
             raise NotImplementedError(data_mode)
             
