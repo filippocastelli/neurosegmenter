@@ -129,12 +129,15 @@ def save_volume(volume,
                 clip=True,
                 save_tiff=True,
                 save_8bit=True,
-                save_pickle=True):
+                save_pickle=True,
+                return_outpaths=False):
+    returns = []
     if save_pickle:
         pickle_out_path = output_path.joinpath(fname + ".pickle")
 
         with pickle_out_path.open(mode="wb") as out_file:
             pickle.dump(volume, out_file)
+        returns.append(pickle_out_path)
 
     if clip:
         volume = np.clip(volume, a_min=0., a_max=1.)
@@ -153,13 +156,18 @@ def save_volume(volume,
             for img_plane in out_volume:
                 stack.save(img_plane)
 
+        return tiff_path
+
     if save_tiff:
-        exp_tiff(volume, name=fname)
+        tiff_path = exp_tiff(volume, name=fname)
+        returns.append(tiff_path)
     if save_8bit:
         # vol_clipped = np.clip(volume, a_min=0., a_max=.99999)
         vol_8bit = (volume * 255).astype(np.uint8)
-        exp_tiff(vol_8bit, name=fname + "_8bit")
+        tiff_8bit_path = exp_tiff(vol_8bit, name=fname + "_8bit")
+        returns.append(tiff_8bit_path)
 
+    return returns
 
 def is_supported_ext(path, mode="img"):
     suffix = path.suffix
