@@ -81,7 +81,7 @@ class DataGen3D(DataGenBase):
 
         self.data = self._setup_gen()
         self.iter = self.data.__iter__
-        self.steps_per_epoch = self._get_steps_per_epoch(self.volume_shape, self.crop_shape, self.batch_size)
+        self.steps_per_epoch = self._get_steps_per_epoch(self.volume_shape, self.crop_shape, self.batch_size, self.n_volumes)
 
     @staticmethod
     def _normalize_stack(stack_arr: np.ndarray,
@@ -298,6 +298,7 @@ class DataGen3D(DataGenBase):
                 soft_labels=self.soft_labels,
                 positive_class_value=self.positive_class_value
             )
+            self.n_volumes = 1
         elif self.dataset_mode == "multi_stack":
             self.dataLoader = MultiCroppedDataLoaderBG(
                 data=self.data_dict,
@@ -311,6 +312,7 @@ class DataGen3D(DataGenBase):
                 normalize_masks=self.normalize_masks,
                 soft_labels=self.soft_labels,
                 positive_class_value=self.positive_class_value)
+            self.n_volumes = self.dataLoader.n_volumes
 
         elif self.dataset_mode == "h5_dataset":
             self.dataLoader = H5DataLoader(
@@ -320,8 +322,11 @@ class DataGen3D(DataGenBase):
                 num_threads_in_multithreaded=self.threads,
                 shuffle=self.shuffle,
                 seed_for_shuffle=self.seed,
+                normalize_inputs=self.normalize_inputs,
+                normalize_masks=self.normalize_masks,
                 infinite=True
             )
+            self.n_volumes = self.dataLoader.n_volumes
         else:
             raise NotImplementedError(self.dataset_mode)
 
@@ -340,11 +345,12 @@ class DataGen3D(DataGenBase):
     @staticmethod
     def _get_steps_per_epoch(frame_shape: Union[list, tuple],
                              crop_shape: Union[list, tuple],
-                             batch_size: int) -> int:
+                             batch_size: int,
+                             n_volumes: int = 1) -> int:
         """calculate the number of steps per epoch"""
         frame_px = np.prod(frame_shape)
         crop_px = np.prod(crop_shape)
-        return int(np.ceil((frame_px / crop_px) / float(batch_size)))
+        return n_volumes * int(np.ceil((frame_px / crop_px) / float(batch_size)))
 
     @classmethod
     def _get_keras_gen(cls,
@@ -420,6 +426,8 @@ class MultiCroppedDataLoaderBG(DataLoader):
         self.normalize_masks = normalize_masks
         self.soft_labels = soft_labels
         self.positive_class_value = positive_class_value
+
+        self.n_volumes = len(self.label_paths)
 
         if self.rng_seed is not None:
             np.random.seed(self.rng_seed)
@@ -742,7 +750,9 @@ class H5DataLoader(DataLoader):
             num_threads_in_multithreaded: int = 1,
             shuffle: bool = False,
             seed_for_shuffle: int = 123,
-            infinite: bool = False):
+            infinite: bool = False,
+            normalize_inputs: bool = True,
+            normalize_masks: bool = True):
         # assuming datasets are .h5 np.uint8 un-normalized frames with soft masks
         # TODO: change this to something more flexible when we have multichannel datasets
         super().__init__(
@@ -755,6 +765,8 @@ class H5DataLoader(DataLoader):
         )
         self.batch_size = batch_size
         self.crop_shape = crop_shape
+        self.normalize_inputs = normalize_inputs
+        self.normalize_masks = normalize_masks
 
         if seed_for_shuffle is not None:
             np.random.seed(seed_for_shuffle)
@@ -796,8 +808,10 @@ class H5DataLoader(DataLoader):
         stack_label = np.expand_dims(stack_label, axis=1)
 
         norm_constant = np.iinfo(stack_img.dtype).max
-        stack_img = self._normalize_stack(stack_img, norm_constant)
-        stack_label = self._normalize_stack(stack_label, norm_constant)
+        if self.normalize_inputs:
+            stack_img = self._normalize_stack(stack_img, norm_constant)
+        if self.normalize_masks:
+            stack_label = self._normalize_stack(stack_label, norm_constant)
 
         return {"data": stack_img, "seg": stack_label}
 
