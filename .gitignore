@@ -1,5 +1,8 @@
 *.pyc
 *.egg-info
+*.xml
+*.iml
+.idea
 build
 dist
 __pycache__
