@@ -224,6 +224,17 @@ class DataGen2D(DataGenBase):
                 img = np.where(img == positive_class_value, 1, 0)
                 img = img.astype(np.float64)
                 # img = np.expand_dims(img, axis=-1)
+
+            # target shape = [y, x, ch]
+            # adjust dimensions to target
+            img_shape = img.shape
+            if len(img_shape) == 2:
+                logging.debug("expanding img shape")
+                img = np.expand_dims(img, axis=-1)
+            elif len(img_shape) in [3, 4]:
+                pass
+
+            # ignoring last channel if it's an RGB image with one empty ch
             if ignore_last_channel:
                 img = img[..., :-1]
             return img
@@ -243,7 +254,7 @@ class DataGen2D(DataGenBase):
             normalize_masks: bool = False,
             ignore_last_channel: bool = False,
             positive_class_value: Union[int, float] = 1,
-            soft_labels: bool = False
+            soft_labels: bool = False,
     ) -> (EagerTensor, EagerTensor):
         """
         generate a (frame, mask) data point given frame_path and mask_path
@@ -287,7 +298,7 @@ class DataGen2D(DataGenBase):
         )
 
         if len(mask.shape) < len(frame.shape):
-            mask = np.expand_dims(mask, axis=-1)
+            mask = tf.expand_dims(mask, axis=-1)
         elif len(mask.shape) > len(frame.shape):
             mask = mask[:, :, 0]
 
@@ -306,7 +317,7 @@ class DataGen2D(DataGenBase):
             normalize_masks=self.normalize_masks,
             ignore_last_channel=self.ignore_last_channel,
             positive_class_value=self.positive_class_value,
-            soft_labels=self.soft_labels
+            soft_labels=self.soft_labels,
         )
         frame, mask = tf.py_function(
             load_example_partial, [frame_path, mask_path], (tf.float64, tf.float64)
@@ -345,12 +356,16 @@ class DataGen2D(DataGenBase):
         )
 
         if GEN_DATASET_DEBUGMODE and self.dataset_mode == "single_images":
-            debug_crop = self._random_crop(debug_ex[0], debug_ex[1], self.crop_shape, batch_crops=True)
+            debug_crop = self._random_crop(debug_ex[0], debug_ex[1],
+                                           crop_shape=self.crop_shape, batch_crops=True)
         ds = ds.map(
             map_func=lambda frame, mask: self._random_crop(
-                frame, mask, crop_shape=self.crop_shape, batch_crops=True
+                frame=frame, mask=mask,
+                crop_shape=self.crop_shape,
+                batch_crops=True
             )
         )
+
         ds = ds.unbatch()
         if self.data_augmentation:
             if self.transform_cfg is None:
@@ -425,8 +440,8 @@ class DataGen2D(DataGenBase):
             (n_crops, *crop_shape) tensor batch
 
         """
+        # frame, mask = cls._adapt_dims(frame, mask, frame_shape, mask_shape)
 
-        frame, mask = cls._adapt_dims(frame, mask)
         frame_shape = frame.shape.as_list()[:-1]
 
         # print("frame.shape: {} \n mask.shape: {}".format(frame.shape, mask.shape))
@@ -473,6 +488,7 @@ class DataGen2D(DataGenBase):
     @staticmethod
     def _adapt_dims(frame: EagerTensor,
                     mask: EagerTensor) -> Tuple[EagerTensor, EagerTensor]:
+
         frame_shape = frame.shape
         mask_shape = mask.shape
 
