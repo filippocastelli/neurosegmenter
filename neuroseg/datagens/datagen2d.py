@@ -2,6 +2,7 @@ from functools import partial
 import logging
 from typing import Union, List, Tuple
 from pathlib import Path
+import csv
 
 import tensorflow as tf
 # from tensorflow.data import Dataset
@@ -83,7 +84,7 @@ class DataGen2D(DataGenBase):
             self.frames_volume, self.masks_volume = self._load_multi_stack(self.frames_paths,
                                                                            self.masks_paths)
 
-        self.data = self.gen_dataset()
+        self.data = self.gen_dataset_2()
         self.iter = self.data.__iter__
 
     @classmethod
@@ -324,6 +325,54 @@ class DataGen2D(DataGenBase):
         )
         return frame, mask
 
+    def gen_dataset_2(self) -> tf.data.Dataset:
+
+        self.mask_csv_paths = [Path(fpath).parent.joinpath(Path(fpath).name + ".csv") for fpath in self.masks_paths]
+
+        frame_volume, mask_volume, b_boxes = self._single_images_load(frame_paths=self.frames_paths,
+                                                                      mask_paths=self.masks_paths,
+                                                                      csv_paths=self.mask_csv_paths)
+
+        ds = Dataset.from_tensors((frame_volume, mask_volume, b_boxes))
+
+        ds = ds.map(
+            map_func=lambda frame, mask: self._get_random_crop(
+                frame_volume=frame_volume, mask_volume=mask_volume,
+                crop_shape=self.crop_shape,
+                b_boxes=b_boxes
+            )
+        )
+
+    def _single_images_load(self,
+                            frame_paths: list,
+                            mask_paths: list,
+                            csv_paths: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        csv_lists = []
+        for fpath in csv_paths:
+            if fpath.is_file():
+                csv_lists.append(self._parse_csv(fpath))
+            else:
+                csv_lists.append([0, -1, 0, -1])
+        frame_list = [self._load_img(fpath, ignore_last_channel=self.ignore_last_channel) for fpath in frame_paths]
+        frame_volume = np.stack(frame_list)
+        del frame_list
+        mask_list = [self._load_img(fpath, is_binary_mask=True) for fpath in mask_paths]
+        mask_volume = np.stack(mask_list)
+        del mask_list
+        b_boxes = np.array(csv_lists)
+        return frame_volume, mask_volume, b_boxes
+
+    @staticmethod
+    def _parse_csv(csv_path: Path) -> list:
+        """return the first row of a csv file"""
+        out_list = []
+        with csv_path.open(mode="r") as infile:
+            reader = csv.reader(infile)
+            for row in reader:
+                row_ints = [int(elem) for elem in row]
+                out_list.append(row_ints)
+        return out_list[0]
+
     def gen_dataset(self) -> tf.data.Dataset:
         """generate a 2D pipeline tf.Dataset"""
         GEN_DATASET_DEBUGMODE = False
@@ -406,6 +455,31 @@ class DataGen2D(DataGenBase):
         frame.set_shape(frame_shape)
         mask.set_shape(mask_shape)
         return frame, mask
+
+    @classmethod
+    def _get_random_crop(cls, crop_shape, frame_volume, mask_volume, b_boxes):
+
+        plane = np.randint(low=0, high=frame_volume.shape[0])
+        crop_box = cls._get_bound_boxes(frame_shape=frame_volume.shape[1:],
+                                        crop_shape=crop_shape,
+                                        n_crops=1,
+                                        b_box=b_boxes[plane])
+
+        concat = tf.concat(frame_volume[plane], mask_volume[plane])
+
+        crop = tf.image.crop_and_resize(
+            image=concat,
+            boxes=crop_box,
+            crop_size=crop_shape,
+            method="nearest",
+            name="crop_stacked",
+        )
+
+        frame_crop = crop[..., :-1]
+        mask_crop = crop[..., -1]
+        # this shouldnt be necessary
+        mask_crop = tf.expand_dims(mask_crop, axis=-1)
+        return frame_crop, mask_crop
 
     @classmethod
     def _random_crop(
@@ -515,20 +589,25 @@ class DataGen2D(DataGenBase):
     @staticmethod
     def _get_bound_boxes(frame_shape: Union[list, tuple],
                          crop_shape: Union[list, tuple],
-                         n_crops: int) -> np.ndarray:
+                         n_crops: int,
+                         b_box: np.ndarray = None) -> np.ndarray:
         """get n_crops random bounding boxes in frame_shape"""
+        if b_box is None:
+            b_box = [0, frame_shape[0], 0, frame_shape[1]]
+
         if not (np.array(crop_shape) > np.array(frame_shape)).any():
-            x_low = 0
-            x_high = 1 - (crop_shape[0] / frame_shape[0])
+            x_low = b_box[0] / frame_shape[0]
+            x_high = 1 - ((crop_shape[0] + b_box[1]) / frame_shape[0])
 
-            y_low = 0
-            y_high = 1 - (crop_shape[1] / frame_shape[1])
+            y_low = b_box[2] / frame_shape[1]
+            y_high = 1 - ((crop_shape[1] + b_box[3]) / frame_shape[1])
         else:
-            x_low = -(crop_shape[0] / (2 * frame_shape[0]))
-            x_high = 1 - (crop_shape[0] / (2 * frame_shape[0]))
-
-            y_low = -(crop_shape[1] / (2 * frame_shape[1]))
-            y_high = 1 - (crop_shape[1] / (2 * frame_shape[1]))
+            raise ValueError("crop_shape is larger than frame_shape")
+            # x_low = -(crop_shape[0] / (2 * frame_shape[0]))
+            # x_high = 1 - (crop_shape[0] / (2 * frame_shape[0]))
+            #
+            # y_low = -(crop_shape[1] / (2 * frame_shape[1]))
+            # y_high = 1 - (crop_shape[1] / (2 * frame_shape[1]))
 
         lower_x = np.random.uniform(low=x_low, high=x_high, size=n_crops)  # I HAVE REMOVED PARENTHESES FROM (n_crops)
         lower_y = np.random.uniform(low=y_low, high=y_high, size=n_crops)
