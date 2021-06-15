@@ -333,6 +333,12 @@ class DataGen2D(DataGenBase):
                                                                       mask_paths=self.masks_paths,
                                                                       csv_paths=self.mask_csv_paths)
 
+        frame_tensor = tf.convert_to_tensor(frame_volume)
+        mask_tensor = tf.convert_to_tensor(mask_volume)
+        b_boxes_tensor = tf.convert_to_tensor(b_boxes)
+        self._get_random_crop(crop_shape=(100, 100), frame_volume=frame_tensor, mask_volume=mask_tensor,
+                              b_boxes=b_boxes_tensor)
+
         ds = Dataset.from_tensors((frame_volume, mask_volume, b_boxes))
 
         ds = ds.map(
@@ -342,6 +348,8 @@ class DataGen2D(DataGenBase):
                 b_boxes=b_boxes
             )
         )
+
+        return ds
 
     def _single_images_load(self,
                             frame_paths: list,
@@ -459,17 +467,18 @@ class DataGen2D(DataGenBase):
     @classmethod
     def _get_random_crop(cls, crop_shape, frame_volume, mask_volume, b_boxes):
 
-        plane = np.randint(low=0, high=frame_volume.shape[0])
+        plane = np.random.randint(low=0, high=frame_volume.shape[0])
         crop_box = cls._get_bound_boxes(frame_shape=frame_volume.shape[1:],
                                         crop_shape=crop_shape,
                                         n_crops=1,
                                         b_box=b_boxes[plane])
 
-        concat = tf.concat(frame_volume[plane], mask_volume[plane])
+        concat = tf.concat([frame_volume[plane], mask_volume[plane]], axis=-1)
 
         crop = tf.image.crop_and_resize(
             image=concat,
             boxes=crop_box,
+            box_indices=[0],
             crop_size=crop_shape,
             method="nearest",
             name="crop_stacked",
@@ -595,7 +604,7 @@ class DataGen2D(DataGenBase):
         if b_box is None:
             b_box = [0, frame_shape[0], 0, frame_shape[1]]
 
-        if not (np.array(crop_shape) > np.array(frame_shape)).any():
+        if not (np.array(crop_shape) > np.array(frame_shape)[1:2]).any():
             x_low = b_box[0] / frame_shape[0]
             x_high = 1 - ((crop_shape[0] + b_box[1]) / frame_shape[0])
 
