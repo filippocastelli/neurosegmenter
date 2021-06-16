@@ -336,6 +336,12 @@ class DataGen2D(DataGenBase):
         frame_tensor = tf.convert_to_tensor(frame_volume)
         mask_tensor = tf.convert_to_tensor(mask_volume)
         b_boxes_tensor = tf.convert_to_tensor(b_boxes)
+
+        frames_px = np.sum(frame_tensor.shape[:2])
+        mask_px = np.sum(self.crop_shape)
+        steps_per_epoch = frames_px // mask_px
+
+
         self._get_random_crop(crop_shape=(100, 100), frame_volume=frame_tensor, mask_volume=mask_tensor,
                               b_boxes=b_boxes_tensor)
 
@@ -474,7 +480,7 @@ class DataGen2D(DataGenBase):
                                         b_box=b_boxes[plane])
 
         concat = tf.concat([frame_volume[plane], mask_volume[plane]], axis=-1)
-
+        concat = tf.expand_dims(concat, axis=0)
         crop = tf.image.crop_and_resize(
             image=concat,
             boxes=crop_box,
