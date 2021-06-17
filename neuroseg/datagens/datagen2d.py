@@ -348,7 +348,7 @@ class DataGen2D(DataGenBase):
         ds = Dataset.from_tensors((frame_volume, mask_volume, b_boxes))
 
         ds = ds.map(
-            map_func=lambda frame, mask: self._get_random_crop(
+            map_func=lambda frame, mask, b_boxes: self._get_random_crop(
                 frame_volume=frame_volume, mask_volume=mask_volume,
                 crop_shape=self.crop_shape,
                 b_boxes=b_boxes
@@ -474,9 +474,8 @@ class DataGen2D(DataGenBase):
     def _get_random_crop(cls, crop_shape, frame_volume, mask_volume, b_boxes):
 
         plane = np.random.randint(low=0, high=frame_volume.shape[0])
-        crop_box = cls._get_bound_boxes(frame_shape=frame_volume.shape[1:],
+        crop_box = cls._get_bounding_box(frame_shape=frame_volume.shape[1:],
                                         crop_shape=crop_shape,
-                                        n_crops=1,
                                         b_box=b_boxes[plane])
 
         concat = tf.concat([frame_volume[plane], mask_volume[plane]], axis=-1)
@@ -602,6 +601,44 @@ class DataGen2D(DataGenBase):
         return frame, mask
 
     @staticmethod
+    def _get_bounding_box(frame_shape: Union[list, tuple],
+                         crop_shape: Union[list, tuple],
+                         b_box: np.ndarray = None) -> np.ndarray:
+        """get n_crops random bounding boxes in frame_shape"""
+        if b_box is None:
+            b_box = [0, frame_shape[0], 0, frame_shape[1]]
+
+        if not (np.array(crop_shape) > np.array(frame_shape)[1:2]).any():
+            x_low = b_box[0] / frame_shape[0]
+            x_high = 1 - ((crop_shape[0] + b_box[1]) / frame_shape[0])
+
+            y_low = b_box[2] / frame_shape[1]
+            y_high = 1 - ((crop_shape[1] + b_box[3]) / frame_shape[1])
+        else:
+            raise ValueError("crop_shape is larger than frame_shape")
+            # x_low = -(crop_shape[0] / (2 * frame_shape[0]))
+            # x_high = 1 - (crop_shape[0] / (2 * frame_shape[0]))
+            #
+            # y_low = -(crop_shape[1] / (2 * frame_shape[1]))
+            # y_high = 1 - (crop_shape[1] / (2 * frame_shape[1]))
+
+        lower_x = tf.random.uniform(
+            shape=(1,), minval=x_low, maxval=x_high, dtype=tf.float64
+        )
+        lower_y = tf.random.uniform(
+            shape=(1,), minval=y_low, maxval=y_high, dtype=tf.float64
+        )
+
+        upper_x = lower_x + crop_shape[0] / frame_shape[0]
+        upper_y = lower_y + crop_shape[1] / frame_shape[1]
+        # crop_boxes = (lower_x, lower_y, upper_x, upper_y)
+        crop_boxes = tf.stack((lower_x, lower_y, upper_x, upper_y), axis=-1)
+        crop_boxes = tf.cast(crop_boxes, dtype=tf.float32)
+        # crop_boxes = np.column_stack((lower_x, lower_y, upper_x, upper_y))
+
+        return crop_boxes
+
+    @staticmethod
     def _get_bound_boxes(frame_shape: Union[list, tuple],
                          crop_shape: Union[list, tuple],
                          n_crops: int,
@@ -623,7 +660,8 @@ class DataGen2D(DataGenBase):
             #
             # y_low = -(crop_shape[1] / (2 * frame_shape[1]))
             # y_high = 1 - (crop_shape[1] / (2 * frame_shape[1]))
-
+        import pdb
+        pdb.set_trace()
         lower_x = np.random.uniform(low=x_low, high=x_high, size=n_crops)  # I HAVE REMOVED PARENTHESES FROM (n_crops)
         lower_y = np.random.uniform(low=y_low, high=y_high, size=n_crops)
 
