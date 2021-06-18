@@ -333,17 +333,17 @@ class DataGen2D(DataGenBase):
                                                                       mask_paths=self.masks_paths,
                                                                       csv_paths=self.mask_csv_paths)
 
-        frame_tensor = tf.convert_to_tensor(frame_volume)
-        mask_tensor = tf.convert_to_tensor(mask_volume)
-        b_boxes_tensor = tf.convert_to_tensor(b_boxes)
+        # frame_tensor = tf.convert_to_tensor(frame_volume)
+        # mask_tensor = tf.convert_to_tensor(mask_volume)
+        # b_boxes_tensor = tf.convert_to_tensor(b_boxes)
 
-        frames_px = np.sum(frame_tensor.shape[:2])
+        frames_px = np.sum(frame_volume.shape[:2])
         mask_px = np.sum(self.crop_shape)
         steps_per_epoch = frames_px // mask_px
 
 
-        self._get_random_crop(crop_shape=(100, 100), frame_volume=frame_tensor, mask_volume=mask_tensor,
-                              b_boxes=b_boxes_tensor)
+        # self._get_random_crop(crop_shape=(100, 100), frame_volume=frame_tensor, mask_volume=mask_tensor,
+        #                       b_boxes=b_boxes_tensor)
 
         ds = Dataset.from_tensors((frame_volume, mask_volume, b_boxes))
 
@@ -354,7 +354,36 @@ class DataGen2D(DataGenBase):
                 b_boxes=b_boxes
             )
         )
+        ds = ds.unbatch()
 
+        if self.data_augmentation:
+            if self.transform_cfg is None:
+                raise ValueError(
+                    "There are no configured data augmentation transforms in configuration YAML"
+                )
+
+            augment_partial = partial(self._augment, transform_cfg=self.transform_cfg)
+            ds = ds.map(
+                map_func=lambda frame, mask: tf.py_function(
+                    func=augment_partial,
+                    inp=[frame, mask],
+                    Tout=[tf.float32, tf.float32],
+                ),
+                num_parallel_calls=self.threads,
+            )
+
+        # set dataset shape
+        frame_channels = self._get_n_channels(frame_volume.shape)
+        frame_shape = np.append(self.crop_shape, frame_channels)
+        mask_shape = np.append(self.crop_shape, 1)
+
+        ds = ds.map(
+            map_func=lambda frame, mask: self._set_shapes(
+                frame, mask, frame_shape, mask_shape
+            )
+        )
+
+        ds = ds.batch(self.batch_size)
         return ds
 
     def _single_images_load(self,
