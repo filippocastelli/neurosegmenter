@@ -84,7 +84,12 @@ class DataGen2D(DataGenBase):
             self.frames_volume, self.masks_volume = self._load_multi_stack(self.frames_paths,
                                                                            self.masks_paths)
 
-        self.data = self.gen_dataset_2()
+        # branching generation of 2d single-images dataset depending on the use of CSV bboxes
+        if self.use_bboxes:
+            self.data = self.gen_dataset_bboxes()
+        else:
+            self.data = self.gen_dataset()
+
         self.iter = self.data.__iter__
 
     @classmethod
@@ -325,7 +330,7 @@ class DataGen2D(DataGenBase):
         )
         return frame, mask
 
-    def gen_dataset_2(self) -> tf.data.Dataset:
+    def gen_dataset_bboxes(self) -> tf.data.Dataset:
 
         self.mask_csv_paths = [Path(fpath).parent.joinpath(Path(fpath).name + ".csv") for fpath in self.masks_paths]
 
@@ -333,19 +338,30 @@ class DataGen2D(DataGenBase):
                                                                       mask_paths=self.masks_paths,
                                                                       csv_paths=self.mask_csv_paths)
 
+        dataset_inspect_flag = False
+        if dataset_inspect_flag:
+            from neuroseg.utils import BatchInspector2D
+            BatchInspector2D((frame_volume, mask_volume), bboxes=b_boxes, title="Datagen2D Inspect")
+
         # frame_tensor = tf.convert_to_tensor(frame_volume)
         # mask_tensor = tf.convert_to_tensor(mask_volume)
         # b_boxes_tensor = tf.convert_to_tensor(b_boxes)
+        annotated_pixels = 0
+        for b_box in b_boxes:
+            width = b_box[2] - b_box[0]
+            height = b_box[3] - b_box[1]
+            annotated_pixels_bbox = width*height
+            annotated_pixels += annotated_pixels_bbox
 
-        frames_px = np.sum(frame_volume.shape[:2])
-        mask_px = np.sum(self.crop_shape)
-        steps_per_epoch = frames_px // mask_px
+        mask_px = np.prod(self.crop_shape)
+        self.steps_per_epoch = annotated_pixels // ( mask_px * self.batch_size)
 
 
         # self._get_random_crop(crop_shape=(100, 100), frame_volume=frame_tensor, mask_volume=mask_tensor,
         #                       b_boxes=b_boxes_tensor)
 
         ds = Dataset.from_tensors((frame_volume, mask_volume, b_boxes))
+        ds = ds.repeat()
 
         ds = ds.map(
             map_func=lambda frame, mask, b_boxes: self._get_random_crop(
@@ -373,7 +389,7 @@ class DataGen2D(DataGenBase):
             )
 
         # set dataset shape
-        frame_channels = self._get_n_channels(frame_volume.shape)
+        frame_channels = self._get_n_channels(frame_volume.shape[1:])
         frame_shape = np.append(self.crop_shape, frame_channels)
         mask_shape = np.append(self.crop_shape, 1)
 
@@ -382,7 +398,6 @@ class DataGen2D(DataGenBase):
                 frame, mask, frame_shape, mask_shape
             )
         )
-
         ds = ds.batch(self.batch_size)
         return ds
 
@@ -399,7 +414,9 @@ class DataGen2D(DataGenBase):
         frame_list = [self._load_img(fpath, ignore_last_channel=self.ignore_last_channel) for fpath in frame_paths]
         frame_volume = np.stack(frame_list)
         del frame_list
-        mask_list = [self._load_img(fpath, is_binary_mask=True) for fpath in mask_paths]
+        mask_list = [self._load_img(fpath,
+                                    is_binary_mask=True,
+                                    positive_class_value=self.positive_class_value) for fpath in mask_paths]
         mask_volume = np.stack(mask_list)
         del mask_list
         b_boxes = np.array(csv_lists)
@@ -639,17 +656,12 @@ class DataGen2D(DataGenBase):
 
         if not (np.array(crop_shape) > np.array(frame_shape)[1:2]).any():
             x_low = b_box[0] / frame_shape[0]
-            x_high = 1 - ((crop_shape[0] + b_box[1]) / frame_shape[0])
+            x_high = (b_box[2] - crop_shape[0]) / frame_shape[0]
 
-            y_low = b_box[2] / frame_shape[1]
-            y_high = 1 - ((crop_shape[1] + b_box[3]) / frame_shape[1])
+            y_low = b_box[1] / frame_shape[1]
+            y_high = (b_box[3] - crop_shape[1]) / frame_shape[1]
         else:
             raise ValueError("crop_shape is larger than frame_shape")
-            # x_low = -(crop_shape[0] / (2 * frame_shape[0]))
-            # x_high = 1 - (crop_shape[0] / (2 * frame_shape[0]))
-            #
-            # y_low = -(crop_shape[1] / (2 * frame_shape[1]))
-            # y_high = 1 - (crop_shape[1] / (2 * frame_shape[1]))
 
         lower_x = tf.random.uniform(
             shape=(1,), minval=x_low, maxval=x_high, dtype=tf.float64
@@ -689,8 +701,7 @@ class DataGen2D(DataGenBase):
             #
             # y_low = -(crop_shape[1] / (2 * frame_shape[1]))
             # y_high = 1 - (crop_shape[1] / (2 * frame_shape[1]))
-        import pdb
-        pdb.set_trace()
+
         lower_x = np.random.uniform(low=x_low, high=x_high, size=n_crops)  # I HAVE REMOVED PARENTHESES FROM (n_crops)
         lower_y = np.random.uniform(low=y_low, high=y_high, size=n_crops)
 
