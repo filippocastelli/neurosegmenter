@@ -1,5 +1,8 @@
+from typing import Union
+
 from matplotlib import pylab as plt
 from matplotlib.widgets import Slider, Button
+import matplotlib.patches as patches
 from skimage import exposure
 import numpy as np
 import tensorflow as tf
@@ -18,6 +21,7 @@ class BatchInspectorBase:
     def __init__(self,
                  batch,
                  title=None,
+                 bboxes: list = None,
                  keymap_conflicts={"k", "j"},
                  block=True
                  ):
@@ -35,6 +39,8 @@ class BatchInspectorBase:
         self.frames_ax, self.masks_ax = self.axs
         self.title = title if title is not None else "BATCH INSPECTOR"
         self.keymap_conflicts = keymap_conflicts
+
+        self.bboxes = bboxes
         self._remove_keymap_conflicts(self.keymap_conflicts)
         self._create_btns()
         self.start_inspector()
@@ -109,6 +115,21 @@ class BatchInspectorBase:
         # self.frames_ax.images[0].set_array(self.frames_batch[idx])
         self._update_widgets(self.gamma_slider.val)
         self.masks_ax.images[0].set_array(self.masks_batch[idx])
+        if self.bboxes is not None:
+            bbox = self.bboxes[idx]
+            width = bbox[2] - bbox[0]
+            height = bbox[3] - bbox[1]
+            try:
+                self.bbox_rect.remove()
+            except:
+                pass
+
+            self.bbox_rect = patches.Rectangle((bbox[0], bbox[1]), width=width, height=height,
+                                     linewidth=1,
+                                     edgecolor="r",
+                                     facecolor="none")
+
+            self.masks_ax.add_patch(self.bbox_rect)
         self._update_titles()
 
     def _update_titles(self):
@@ -139,8 +160,11 @@ class BatchInspectorBase:
 class BatchInspector2D(BatchInspectorBase):
     def __init__(self,
                  batch,
-                 title: str = None):
-        super().__init__(batch, title)
+                 title: str = None,
+                 bboxes: Union[np.ndarray, list] = None):
+        super().__init__(batch=batch,
+                         title=title,
+                         bboxes=bboxes)
 
 
 class BatchInspector3D(BatchInspectorBase):
