@@ -1,6 +1,6 @@
 training_cfg:
     mode: "2d"
-    epochs: 5
+    epochs: 1
     batch_size: 10
     loss: "binary_crossentropy"
 #    class_weights:
@@ -32,13 +32,14 @@ model_cfg:
 
 dataset_cfg:
 #     dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
-     dataset_path : "/home/phil/Scrivania/label/label_v2/ALL/mini_ds/"
+     dataset_path : "/home/phil/Scrivania/cam_l_dataset"
 #     dataset_path : "/home/phil/repos/neuroseg/neuroseg/tests/test_datasets/stack_1ch"
      mode: "single_images"
-     n_channels: 1
+     n_channels: 2
      positive_class_value: 255
      negative_class_value: 0
      ignore_last_channel: true
+     use_bboxes: true
 
 output_cfg:
 #    output_path: "/mnt/ssd1/em_training"
@@ -106,7 +107,7 @@ data_augmentation_cfg:
 #            p_per_channel: 1
 
 performance_evaluation_cfg:
-    window_size: [64, 64, 64]
+    window_size: [256, 256]
     batch_size:       15
     chunk_size:       20
     classification_threshold:   0.5
@@ -139,5 +140,5 @@ debug_cfg:
 
 tiled_predictor_cfg:
     extra_padding_windows: 2
-    window_overlap : [8, 20, 20]
+#    window_overlap : [12, 12]
     tiling_mode: "drop_borders"
