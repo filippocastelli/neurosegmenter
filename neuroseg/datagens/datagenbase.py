@@ -16,6 +16,7 @@ class DataGenBase:
         self.partition = partition
         self.data_path_dict = self.config.path_dict[partition]
         self.dataset_mode = self.config.dataset_mode
+        self.use_bboxes = self.config.use_bboxes
 
         self.positive_class_value = self.config.positive_class_value
         self.verbose = verbose

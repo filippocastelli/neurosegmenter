@@ -202,6 +202,7 @@ class TrainConfig(Config):
         self.ignore_last_channel = self.get_param(dataset_cfg, "ignore_last_channel", False)
         self.normalize_inputs = self.get_param(dataset_cfg, "normalize_inputs", True)
         self.normalize_masks = self.get_param(dataset_cfg, "normalize_masks", False)
+        self.use_bboxes = self.get_param(dataset_cfg, "use_bboxes", False)
         return
 
     def _parse_model_cfg(self,
