@@ -1,6 +1,6 @@
 training_cfg:
     mode: "2d"
-    epochs: 1
+    epochs: 50
     batch_size: 10
     loss: "binary_crossentropy"
 #    class_weights:
@@ -32,7 +32,7 @@ model_cfg:
 
 dataset_cfg:
 #     dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
-     dataset_path : "/home/phil/Scrivania/cam_l_dataset"
+     dataset_path : "/home/phil/Scrivania/spim_dataset"
 #     dataset_path : "/home/phil/repos/neuroseg/neuroseg/tests/test_datasets/stack_1ch"
      mode: "single_images"
      n_channels: 2

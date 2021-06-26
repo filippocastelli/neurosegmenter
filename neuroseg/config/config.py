@@ -255,15 +255,14 @@ class TrainConfig(Config):
         self._parse_data_augmentation_common(da_cfg)
         self.da_debug_mode = da_cfg["debug_mode"]
         self.da_buffer_size = da_cfg["buffer_size"]
+        self.da_shuffle = self.get_param(da_cfg, "shuffle", False)
+        self.da_seed = self.get_param(da_cfg, "seed", None)
         return
 
     def _parse_data_augmentation_cfg_3d(self, da_cfg: dict) -> None:
         self._parse_data_augmentation_common(da_cfg)
-        self.da_shuffle = da_cfg["shuffle"]
-        if "seed" in da_cfg:
-            self.da_seed = da_cfg["seed"]
-        else:
-            self.da_seed = None
+        self.da_shuffle = self.get_param(da_cfg, "shuffle", False)
+        self.da_seed = self.get_param(da_cfg, "seed", None)
         return
 
     def _parse_data_augmentation_common(self, da_cfg: dict) -> None:
