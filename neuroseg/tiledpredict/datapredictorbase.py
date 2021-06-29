@@ -80,7 +80,7 @@ class DataPredictorBase:
             # self.chunk_size = self.config.pe_chunk_size
             self.padding_mode = "reflect"
             # self.keep_tmp = False
-            self.n_output_classes = 1
+            self.n_output_classes = self.config.n_output_classes
         self.n_channels = self.config.n_channels
         self.extra_padding_windows = self.config.extra_padding_windows
         self.tiling_mode = self.config.tiling_mode
