@@ -1,10 +1,13 @@
-from typing import Union
+from typing import Union, List
 import numpy as np
 import sklearn.metrics as skmetrics
 import logging
 from pathlib import Path
 import h5py
+import csv
 import pickle
+
+from skimage import io as skio
 
 from neuroseg.utils import load_volume, glob_imgs, save_volume
 from neuroseg.config import TrainConfig, PredictConfig
@@ -241,6 +244,9 @@ class SingleVolumePerformanceEvaluator:
                  gt_array: np.ndarray = None):
         self.config = config
 
+        self.n_output_classes = config.n_output_classes
+        self.class_values = config.class_values
+
         self.soft_labels = config.soft_labels
         if config.config_type == "predict":
             self.normalize_ground_truth = config.ground_truth_normalize
@@ -294,6 +300,14 @@ class SingleVolumePerformanceEvaluator:
                                    ignore_last_channel=False,
                                    data_mode=self.ground_truth_mode,
                                    return_norm=True)
+
+        if self.n_output_classes > 1:
+            class_val_img_list = []
+            for output_class_value in self.class_values:
+                class_val_img_list.append(np.where(gt_vol == output_class_value, 1, 0))
+
+            gt_vol = np.stack(class_val_img_list, axis=-1)
+
         if self.normalize_ground_truth:
             gt_vol = gt_vol / norm
 
@@ -303,13 +317,84 @@ class SingleVolumePerformanceEvaluator:
         self.ground_truth = gt_vol
 
     def _calc_metrics(self):
-
         self.performanceMetrics = PerformanceMetrics(y_true=self.ground_truth,
                                                      y_pred=self.predictions,
                                                      thr=self.classification_threshold,
                                                      enable_curves=self.enable_curves)
 
         self.measure_dict = self.performanceMetrics.measure_dict
+
+class bboxPerformanceEvaluator:
+
+    def __init__(self,
+                 config: Union[PredictConfig, TrainConfig],
+                 predicted_data: np.ndarray):
+        self.config = config
+
+        # this should be a [z, y, x, ch] volume
+        self.predicted_data = predicted_data
+        self.class_values = self.config.class_values
+        self.n_output_values = self.config.n_output_classes
+
+        if config.config_type == "predict":
+            raise NotImplementedError
+
+        self.gt_vol, self.bboxes = self._load_gt()
+        self.measure_dict = self._calc_metrics()
+
+    def _calc_metrics(self):
+        metrics_dict = {}
+        for idx, output_class_value in enumerate(self.class_values):
+            class_gt_arr = np.array(())
+            class_pred_arr = np.array(())
+            for bbox_idx, bbox in enumerate(self.bboxes):
+                predictions = self.predicted_data[bbox_idx, bbox[1]:bbox[3], bbox[0]:bbox[2], idx]
+                predictions_flat = predictions.flatten()
+                class_pred_arr = np.append(class_pred_arr, predictions_flat)
+
+                gt = self.gt_vol[bbox_idx, bbox[0]:bbox[2], bbox[1]:bbox[3], idx]
+                gt_flat = gt.flatten()
+                class_gt_arr = np.append(class_gt_arr, gt_flat)
+
+            pe = SingleVolumePerformanceEvaluator(self.config, predicted_data=class_pred_arr, gt_array=class_gt_arr)
+            metrics_dict[output_class_value] = pe.measure_dict
+
+        return metrics_dict
+
+
+    def _load_gt(self):
+        gt_img_paths = sorted(glob_imgs(self.config.ground_truth_path, mode="stack"))
+
+        csv_paths = [fpath.parent.joinpath(fpath.name+".csv") for fpath in gt_img_paths]
+        bboxes = [self._parse_csv(fpath) for fpath in csv_paths]
+
+        img_list = []
+        for fpath in gt_img_paths:
+            img = skio.imread(str(fpath), plugin="pil")
+
+            class_value_img_list = []
+            for class_value in self.class_values:
+                val_img = np.where(img == class_value, 1, 0)
+                class_value_img_list.append(val_img)
+
+            img = np.stack(class_value_img_list, axis=-1)
+            img_list.append(img)
+
+        gt_vol = np.stack(img_list, axis=0)
+
+        return gt_vol, bboxes
+
+
+    @staticmethod
+    def _parse_csv(csv_path: Path) -> list:
+        """return the first row of a csv file"""
+        out_list = []
+        with csv_path.open(mode="r") as infile:
+            reader = csv.reader(infile)
+            for row in reader:
+                row_ints = [int(elem) for elem in row]
+                out_list.append(row_ints)
+        return out_list[0]
 
 
 class H5PerformanceEvaluator:
@@ -432,13 +517,17 @@ class MultiVolumePerformanceEvaluator:
 
 def PerformanceEvaluator(config: Union[TrainConfig, PredictConfig],
                          predicted_data: Union[np.ndarray, dict, list] = None) -> Union[
-    MultiVolumePerformanceEvaluator, SingleVolumePerformanceEvaluator, H5PerformanceEvaluator]:
+    MultiVolumePerformanceEvaluator, SingleVolumePerformanceEvaluator, H5PerformanceEvaluator, bboxPerformanceEvaluator]:
     data_mode = config.dataset_mode if config.config_type == "training" else config.data_mode
     if data_mode in ["single_images", "stack"]:
         # predicted_data should be an ndarray
-        return SingleVolumePerformanceEvaluator(config, predicted_data=predicted_data)
+        if config.use_bboxes:
+            return bboxPerformanceEvaluator(config, predicted_data=predicted_data)
+        else:
+            return SingleVolumePerformanceEvaluator(config, predicted_data=predicted_data)
     elif data_mode == "multi_stack":
         # predicted_data should be a dict
         return MultiVolumePerformanceEvaluator(config, prediction_dict=predicted_data)
     elif data_mode == "h5_dataset":
         return H5PerformanceEvaluator(config, predict_pathlist=predicted_data)
+
