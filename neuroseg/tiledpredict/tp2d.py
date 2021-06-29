@@ -134,7 +134,7 @@ class TiledPredictor2D:
         self.padded_img_shape = self.padded_volume[0].shape
 
         #self.prediction_volume = np.zeros_like(self.padded_volume)
-        self.prediction_volume = np.zeros(shape=[*self.padded_volume.shape[:3], 1])
+        self.prediction_volume = np.zeros(shape=[*self.padded_volume.shape[:3], self.n_output_classes])
 
         for idx, img in enumerate(tqdm(self.padded_volume)):
             img_windows = self.get_patch_windows(img=img,
@@ -146,7 +146,8 @@ class TiledPredictor2D:
                                                  model=self.model,
                                                  batch_size=self.batch_size,
                                                  window_overlap=self.window_overlap,
-                                                 tiling_mode=self.tiling_mode)
+                                                 tiling_mode=self.tiling_mode,
+                                                 n_output_classes=self.n_output_classes)
             self.prediction_volume[idx] = predicted_tiles
 
         self.prediction_volume = self.unpad_volume(self.prediction_volume, self.paddings)
@@ -288,6 +289,7 @@ class TiledPredictor2D:
             frame_shape,
             model,
             batch_size,
+            n_output_classes=1,
             window_overlap=None,
             tiling_mode="average",
             debug: bool = False
@@ -319,7 +321,7 @@ class TiledPredictor2D:
 
         batched_inputs = cls.divide_into_batches(reshaped_windows, batch_size)
 
-        out_img_shape = [*frame_shape[:2], 1]
+        out_img_shape = [*frame_shape[:2], n_output_classes]
         output_img = np.zeros(out_img_shape, dtype=np.float32)
         weight_img = np.ones_like(output_img)
 
