@@ -62,7 +62,11 @@ class Config:
     def _parse_output_cfg(self, out_cfg: dict) -> None:
         self.output_root_path = self._decode_path(out_cfg["output_path"])
         self.output_path = self.output_root_path.joinpath(self.run_name)
-        self.descriptor_path = self._decode_path(out_cfg["descriptor_path"])
+
+        if "descriptor_path" not in out_cfg:
+            self.descriptor_path = self.output_path.joinpath("descr")
+        else:
+            self.descriptor_path = self._decode_path(out_cfg["descriptor_path"])
         # self.enable_wandb_tracking = out_cfg["enable_wandb_tracking"]
         return
 
@@ -197,12 +201,19 @@ class TrainConfig(Config):
         self.dataset_mode = dataset_cfg["mode"]
         self.n_channels = dataset_cfg["n_channels"]
         self.soft_labels = self.get_param(dataset_cfg, "soft_labels", False)
+        # TODO: deprecate positive_class_vaue and negative_class_value
         self.positive_class_value = self.get_param(dataset_cfg, "positive_class_value", 255)
         self.negative_class_value = self.get_param(dataset_cfg, "negative_class_value", 0)
         self.ignore_last_channel = self.get_param(dataset_cfg, "ignore_last_channel", False)
         self.normalize_inputs = self.get_param(dataset_cfg, "normalize_inputs", True)
         self.normalize_masks = self.get_param(dataset_cfg, "normalize_masks", False)
         self.use_bboxes = self.get_param(dataset_cfg, "use_bboxes", False)
+
+        # TODO: deprecate n_output_classes (inferred from class_values)
+        self.class_values = self.get_param(dataset_cfg, "class_values", [1, ])
+        self.background_value = self.get_param(dataset_cfg, "background_value", 255)
+        self.n_output_classes = len(self.class_values)
+
         return
 
     def _parse_model_cfg(self,
