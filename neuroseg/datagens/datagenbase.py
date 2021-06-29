@@ -18,6 +18,7 @@ class DataGenBase:
         self.dataset_mode = self.config.dataset_mode
         self.use_bboxes = self.config.use_bboxes
 
+        # TODO: deprecate positive_class_value and negative_class_value
         self.positive_class_value = self.config.positive_class_value
         self.verbose = verbose
         self._path_sanity_check()
@@ -36,6 +37,8 @@ class DataGenBase:
         self.transforms = config.da_transforms
         self.transform_cfg = config.da_transform_cfg
 
+        self.class_values = config.class_values
+        self.background_value = config.background_value
         # init sequence
         self._scan_dirs()
 

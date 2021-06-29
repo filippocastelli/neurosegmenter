@@ -56,8 +56,9 @@ class DataGen2D(DataGenBase):
             infinite=True,
             normalize_inputs=self.normalize_inputs,
             normalize_masks=self.normalize_masks,
-            positive_class_value=self.positive_class_value,
-            ignore_last_channel=self.ignore_last_channel
+            ignore_last_channel=self.ignore_last_channel,
+            class_values=self.class_values,
+            background_value=self.background_value
         )
 
         self.steps_per_epoch = self.dataLoader.steps_per_epoch
@@ -263,7 +264,8 @@ class BboxCroppedDataLoader(DataLoader):
                  normalize_inputs: bool = True,
                  normalize_masks: bool = False,
                  # soft_labels: bool = False,
-                 positive_class_value: Union[int, float] = 255,
+                 class_values: list = (0),
+                 background_value: Union[int, float] = 255,
                  ignore_last_channel: bool = False):
 
         super().__init__(
@@ -282,11 +284,13 @@ class BboxCroppedDataLoader(DataLoader):
         self.normalize_inputs = normalize_inputs
         self.normalize_masks = normalize_masks
         # self.soft_labels = soft_labels
-        self.positive_class_value = positive_class_value
         self.data_mode = data_mode
         self.crop_shape = crop_shape
         self.use_bboxes = use_bboxes
         self.ignore_last_channel = ignore_last_channel
+
+        self.class_values = class_values
+        self.background_value = background_value
 
         if self.rng_seed is not None:
             np.random.seed(self.rng_seed)
@@ -347,12 +351,12 @@ class BboxCroppedDataLoader(DataLoader):
 
         n_planes = frame_volume.shape[0]
         assert len(b_boxes) == (frame_volume.shape[0])
-        plane_weights = np.array([(box[2] - box[0])*(box[3]-box[1]) for box in b_boxes])
+        plane_weights = np.array([(box[2] - box[0]) * (box[3] - box[1]) for box in b_boxes])
         plane_weights = plane_weights / np.sum(plane_weights)
         planes = list(range(n_planes))
 
         plane = np.random.choice(a=planes, p=plane_weights)
-        #plane = np.random.randint(low=0, high=frame_volume.shape[0])
+        # plane = np.random.randint(low=0, high=frame_volume.shape[0])
 
         # outputs x_min, y_min, x_max, y_max
         crop_box = cls._get_bounding_box(frame_shape=frame_volume.shape[1:],
@@ -403,14 +407,14 @@ class BboxCroppedDataLoader(DataLoader):
                 csv_lists.append([0, -1, 0, -1])
         frame_list = [self._load_img(img_to_load_path=fpath,
                                      normalize=self.normalize_inputs,
-                                     is_binary_mask=False,
                                      ignore_last_channel=self.ignore_last_channel) for fpath in frame_paths]
         frame_volume = np.stack(frame_list)
         del frame_list
         mask_list = [self._load_img(img_to_load_path=fpath,
-                                    is_binary_mask=True,
                                     normalize=self.normalize_masks,
-                                    positive_class_value=self.positive_class_value) for fpath in mask_paths]
+                                    ignore_last_channel=False,
+                                    class_values=self.class_values) for fpath in mask_paths]
+
         mask_volume = np.stack(mask_list)
         del mask_list
         b_boxes = np.array(csv_lists)
@@ -421,8 +425,7 @@ class BboxCroppedDataLoader(DataLoader):
             img_to_load_path: str,
             normalize: bool = True,
             ignore_last_channel: bool = False,
-            is_binary_mask: bool = False,
-            positive_class_value: int = 1,
+            class_values: Union[list, tuple] = None,
     ):
         """
         load an image from path, apply basic transforms
@@ -449,21 +452,33 @@ class BboxCroppedDataLoader(DataLoader):
         """
         try:
             img = skio.imread(img_to_load_path)
-            if normalize and (not is_binary_mask):
+
+            if normalize and (class_values is None):
                 norm_constant = np.iinfo(img.dtype).max
                 img = img / norm_constant
-            if is_binary_mask:
-                values = np.unique(img)
-                # assert len(values) in [1, 2], "mask is not binary {}\n there are {} values".format(str(
-                # img_to_load_path), len(values))
-                if len(values) not in [1, 2]:
-                    logging.warning(
-                        "Mask is not binary {}\nthere are {} values\nautomatically converting to binary mask".format(
-                            str(img_to_load_path), len(values)
-                        )
-                    )
-                img = np.where(img == positive_class_value, 1, 0)
-                img = img.astype(np.float64)
+
+            if class_values is not None:
+                # image should be an indexmask
+                # assert len(uniques) == n_classes + 1, "incorrect number of output classes in dataset"
+                img_list = []
+                for value in class_values:
+                    val_img = np.where(img == value, 1, 0)
+                    img_list.append(val_img)
+
+                # we should have [y, x, ch]
+                img = np.stack(img_list, axis=-1)
+
+            # if is_binary_mask and not (n_classes > 1):
+            #     # assert len(values) in [1, 2], "mask is not binary {}\n there are {} values".format(str(
+            #     # img_to_load_path), len(values))
+            #     if len(uniques) not in [1, 2]:
+            #         logging.warning(
+            #             "Mask is not binary {}\nthere are {} values\nautomatically converting to binary mask".format(
+            #                 str(img_to_load_path), len(uniques)
+            #             )
+            #         )
+            #     img = np.where(img == class_values[0], 1, 0)
+            #     img = img.astype(np.float64)
                 # img = np.expand_dims(img, axis=-1)
 
             # target shape = [y, x, ch]
