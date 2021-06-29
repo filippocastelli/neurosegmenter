@@ -437,6 +437,7 @@ class ResUNET2D(ResUNETBase):
     def _get_model(
         cls,
         input_shape: Union[tuple, list] = (128, 128, 1),
+        output_classes: int = 1,
         base_filters: int = 16,
         depth: int = 2,
         batch_normalization: bool = True,
@@ -541,11 +542,11 @@ class ResUNET2D(ResUNETBase):
             decoders[d] = dec
 
         # Final Conv layer
-        final_conv = Conv2D(filters=1, kernel_size=(1, 1), data_format="channels_last")(
+        final_conv = Conv2D(filters=output_classes, kernel_size=(1, 1), data_format="channels_last")(
             decoders[0]
         )
-
-        final_activation = Activation("sigmoid")(final_conv)
+        act_fn = "sigmoid" if output_classes == 1 else "softmax"
+        final_activation = Activation(act_fn)(final_conv)
 
         model = Model(inputs=inputs, outputs=final_activation)
 

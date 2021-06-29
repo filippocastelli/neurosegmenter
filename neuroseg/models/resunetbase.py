@@ -14,6 +14,7 @@ class ResUNETBase:
         self.pre_activation = self.config.residual_preactivation
         self.transposed_convolution = self.config.transposed_convolution
         self.n_channels = self.config.n_channels
+        self.n_output_classes = self.config.n_output_classes
 
         self.input_shape = self._get_input_shape()
 
@@ -25,6 +26,7 @@ class ResUNETBase:
             batch_normalization=self.batch_normalization,
             pre_activation=self.pre_activation,
             transposed_convolution=self.transposed_convolution,
+            output_classes=self.n_output_classes
         )
 
     @abstractmethod
@@ -34,7 +36,8 @@ class ResUNETBase:
                    depth: int,
                    batch_normalization: bool,
                    pre_activation: bool,
-                   transposed_convolution: bool):
+                   transposed_convolution: bool,
+                   output_classes: int):
         pass
 
     def _get_input_shape(self):
