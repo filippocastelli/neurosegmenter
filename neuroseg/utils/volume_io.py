@@ -28,7 +28,7 @@ def load_volume(imgpath,
                 img_paths = [imgpath]
         else:
             raise TypeError("invalid type for imgpath")
-        return img_paths
+        return sorted(img_paths)
 
     def adjust_dimensions(vol):
         vol_shape = vol.shape
