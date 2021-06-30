@@ -1,17 +1,18 @@
 training_cfg:
     mode: "2d"
-    epochs: 50
+    epochs: 150
     batch_size: 20
     loss: "weighted_categorical_crossentropy"
 #    class_weights:
 #        0: 05966296
 #        1: 1.0
     pos_weight: 5
-    class_weights: [20, 43, 33]
+    class_weights: [2.0, 4.3, 3.3, 0.19]
     track_metrics:
         - "accuracy"
         - "jaccard_index"
         - "dice_coefficient"
+    enable_wandb_tracking: true
 
 optimizer_cfg:
     # args in tf.KERAS.OPTIMIZERS api docs
@@ -41,9 +42,9 @@ dataset_cfg:
      negative_class_value: 0
      ignore_last_channel: true
      use_bboxes: true
-     n_output_classes: 3
-     class_values: [0, 1, 2]
-     background_value: 255
+#     n_output_classes: 3
+     class_values: [0, 1, 2, 255]
+ #    background_value: 255
 
 output_cfg:
 #    output_path: "/mnt/ssd1/em_training"
@@ -133,6 +134,12 @@ callbacks_cfg:
         patience:   5
         min_lr:     0.00000000067
         verbose:    1
+
+    wandb:
+        monitor: "val_loss"
+        mode: "min"
+        save_weights_only: false
+        save_model: true
 
 notes: ""
 

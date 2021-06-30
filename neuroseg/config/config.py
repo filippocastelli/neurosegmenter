@@ -67,7 +67,6 @@ class Config:
             self.descriptor_path = self.output_path.joinpath("descr")
         else:
             self.descriptor_path = self._decode_path(out_cfg["descriptor_path"])
-        # self.enable_wandb_tracking = out_cfg["enable_wandb_tracking"]
         return
 
     # > PERFORMANCE EVALUATION PARSING <
@@ -193,6 +192,7 @@ class TrainConfig(Config):
         self.pos_weight = self.get_param(training_cfg, "pos_weight", None)
         self.class_weights = self.get_param(training_cfg, "class_weights", None)
         self.distribute_strategy = self.get_param(training_cfg, "distribute_strategy", None)
+        self.enable_wandb_tracking = self.get_param(training_cfg, "enable_wandb_tracking", False)
         return
 
     def _parse_dataset_cfg(self,
@@ -342,9 +342,8 @@ class TrainConfig(Config):
             self.temp_path = self._joinpath_mkdir(self.output_path, "tmp")
             self.logs_path = self._joinpath_mkdir(self.output_path, "logs")
 
-            if hasattr(self, "enable_wand_tracking"):
-                if self.enable_wandb_tracking:
-                    self.wandb_path = self._joinpath_mkdir(self.output_path, "wandb")
+            if self.enable_wandb_tracking:
+                self.wandb_path = self._joinpath_mkdir(self.output_path, "wandb")
 
             self.logfile_path = self.logs_path.joinpath("train_log.log")
             self.model_history_path = self.output_path.joinpath("model_history.pickle")

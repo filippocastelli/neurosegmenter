@@ -7,8 +7,7 @@ from tensorflow.keras.callbacks import (
     TensorBoard
 )
 
-
-# TODO: WANDB
+from wandb.keras import WandbCallback
 
 from neuroseg.config import TrainConfig, PredictConfig
 
@@ -27,7 +26,8 @@ class CallbackConfigurator:
             "checkpoint": ModelCheckpoint,
             "csvlogger": CSVLogger,
             "reducelronplateau": ReduceLROnPlateau,
-            "tensorboard": TensorBoard
+            "tensorboard": TensorBoard,
+            "wandb": WandbCallback
         }
         if callback_name in SUPPORTED_CALLBACKS:
             return SUPPORTED_CALLBACKS[callback_name]

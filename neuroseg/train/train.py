@@ -8,7 +8,8 @@ from neuroseg.config import (
     CallbackConfigurator,
     ModelConfigurator,
     OptimizerConfigurator,
-    MetricsConfigurator)
+    MetricsConfigurator,
+    WandbConfigurator)
 
 import tensorflow as tf
 
@@ -51,6 +52,9 @@ def get_strategy_scope(config: TrainConfig):
 
 
 def train(train_config: TrainConfig):
+
+    wc = WandbConfigurator(train_config)
+
     setup_logger(train_config.logfile_path)
     train_datagen = Datagen(train_config,
                             partition="train",
