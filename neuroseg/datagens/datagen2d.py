@@ -87,7 +87,7 @@ class DataGen2D(DataGenBase):
                 frames = cls._to_channel_last(frames)
                 masks = cls._to_channel_last(masks)
 
-            yield frames, masks
+            yield frames.astype(np.float32), masks.astype(np.float32)
 
     @staticmethod
     def _to_channel_last(input_tensor: np.ndarray) -> np.ndarray:
