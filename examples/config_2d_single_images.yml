@@ -2,11 +2,12 @@ training_cfg:
     mode: "2d"
     epochs: 50
     batch_size: 20
-    loss: "binary_crossentropy"
+    loss: "weighted_categorical_crossentropy"
 #    class_weights:
 #        0: 05966296
 #        1: 1.0
     pos_weight: 5
+    class_weights: [20, 43, 33]
     track_metrics:
         - "accuracy"
         - "jaccard_index"

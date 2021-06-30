@@ -191,6 +191,7 @@ class TrainConfig(Config):
         self.track_metrics = self.get_param(training_cfg, "track_metrics",
                                             ["accuracy", "jaccard_index", "dice_coefficient"])
         self.pos_weight = self.get_param(training_cfg, "pos_weight", None)
+        self.class_weights = self.get_param(training_cfg, "class_weights", None)
         self.distribute_strategy = self.get_param(training_cfg, "distribute_strategy", None)
         return
 
