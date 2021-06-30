@@ -45,15 +45,17 @@ class IndexMask2RGB:
 
         for fpath in tiff_paths:
             img = skio.imread(str(fpath), plugin="pil")
-
-            img_stack = []
-            for class_value in self.class_values:
-                img_stack.append(np.where(img == class_value, 255, 0))
-            out_img = np.stack(img_stack, axis=-1)
-
+            out_img = self.to_rgb(fpath, self.class_values)
             out_class_img_path = section_rgb_path.joinpath(fpath.name)
             skio.imsave(str(out_class_img_path), out_img, plugin="pil")
 
+    @staticmethod
+    def to_rgb(img: np.ndarray, class_values: tuple):
+        img_stack = []
+        for class_value in class_values:
+            img_stack.append(np.where(img == class_value, 255, 0))
+        out_img = np.stack(img_stack, axis=-1)
+        return out_img
 
 if __name__ == "__main__":
     main()
