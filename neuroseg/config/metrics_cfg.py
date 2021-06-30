@@ -3,6 +3,8 @@ from neuroseg.metrics import jaccard_index, dice_coefficient, weighted_cross_ent
 from neuroseg.config import TrainConfig, PredictConfig
 import numpy as np
 
+from tensorflow.keras.losses import CategoricalCrossentropy
+
 class MetricsConfigurator:
 
     def __init__(self,
@@ -13,9 +15,9 @@ class MetricsConfigurator:
         self.loss_name = self.config.loss
 
         self.pos_weight = self.config.pos_weight if self.config.pos_weight is not None else 1.0
-        self.class_weights = self.config.class_weights if self.config.class_weights is not None else np.array([1., 1., 1.])
+        self.class_weights = self.config.class_weights
 
-        self.class_weights = np.array(self.class_weights).astype(np.float64)
+        self.class_weight_fit = dict(zip(range(len(self.class_weights)), self.class_weights))
 
         self.track_metrics = self._get_track_metrics(self.track_metrics_names)
         self.loss = self._get_metric(self.loss_name)
@@ -27,7 +29,8 @@ class MetricsConfigurator:
             "binary_crossentropy": "binary_crossentropy",
             "accuracy": "accuracy",
             "weighted_binary_crossentropy": weighted_cross_entropy_loss(self.pos_weight),
-            "weighted_categorical_crossentropy": weighted_categorical_crossentropy_loss(self.class_weights)
+            "weighted_categorical_crossentropy": weighted_categorical_crossentropy_loss(self.class_weights),
+            "categorical_crossentropy": CategoricalCrossentropy(from_logits=False),
         }
 
         if metric_name in SUPPORTED_METRICS:
