@@ -37,8 +37,6 @@ def weighted_categorical_crossentropy_loss(weights) -> Callable:
         # clip to prevent NaN's and Inf's
         y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
         # calc
-        import pdb
-        pdb.set_trace()
         loss = y_true * K.log(y_pred) * weights
         loss = -K.sum(loss, -1)
         return loss
