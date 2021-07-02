@@ -57,6 +57,7 @@ class Config:
         self.extra_padding_windows = self.get_param(tiled_predictor_cfg, "extra_padding_windows", 1)
         assert type(self.extra_padding_windows) == int, "must have an integer number of extra padding windows"
         self.tiling_mode = self.get_param(tiled_predictor_cfg, "tiling_mode", "average")
+        self.to_segmentation = self.get_param(tiled_predictor_cfg, "to_segmentation", False)
         return
 
     def _parse_output_cfg(self, out_cfg: dict) -> None:

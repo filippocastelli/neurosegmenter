@@ -1,13 +1,13 @@
 training_cfg:
     mode: "2d"
-    epochs: 150
+    epochs: 1
     batch_size: 20
     loss: "weighted_categorical_crossentropy"
 #    class_weights:
 #        0: 05966296
 #        1: 1.0
     pos_weight: 5
-    class_weights: [2.0, 4.3, 3.3, 0.19]
+    class_weights: [1.8, 4.3, 3.3, 0.25]
     track_metrics:
         - "accuracy"
         - "jaccard_index"
@@ -51,8 +51,6 @@ output_cfg:
     output_path: "/home/phil/Scrivania/single_images_test_out"
     #descriptor_path: "/home/phil/Scrivania/single_images_test_descr"
 #    descriptor_path: "/mnt/ssd1/em_training/descr"
-    enable_wandb_tracking: false
-    extra_padding_windows: 2
 
 data_augmentation_cfg:
     debug_mode: false
@@ -152,3 +150,4 @@ tiled_predictor_cfg:
     extra_padding_windows: 2
 #    window_overlap : [12, 12]
     tiling_mode: "drop_borders"
+    to_segmentation: true

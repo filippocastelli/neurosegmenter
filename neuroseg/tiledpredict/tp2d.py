@@ -9,7 +9,7 @@ from skimage.util import view_as_windows
 from tqdm import tqdm
 
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
-from neuroseg.utils import BatchInspector2D
+from neuroseg.utils import BatchInspector2D, toargmax
 
 class DataPredictor2D(DataPredictorBase):
     def __init__(self, config, model=None):
@@ -30,6 +30,10 @@ class DataPredictor2D(DataPredictorBase):
         )
 
         self.predicted_data = self.tiledpredictor.predict()
+
+        if self.to_segmentation:
+            self.predicted_data = toargmax(self.predicted_data, self.config.class_values, pos_value=1)
+
         return self.predicted_data
 
 

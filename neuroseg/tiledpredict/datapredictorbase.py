@@ -13,6 +13,8 @@ class DataPredictorBase:
 
         self.config = config
         self.mode = self.config.config_type
+        self.to_segmentation = self.config.to_segmentation
+
         self._parse_settings()
         self._parse_paths()
         self._load_volume()
@@ -139,7 +141,6 @@ class DataPredictorBase:
             raise NotImplementedError(self.data_mode)
 
     def _save_volume(self):
-        
         if self.data_mode in ["single_images", "stack"]:
             if self.output_mode == "stack":
                 save_volume(
