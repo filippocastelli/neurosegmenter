@@ -50,10 +50,10 @@ class IndexMask2RGB:
             skio.imsave(str(out_class_img_path), out_img, plugin="pil")
 
     @staticmethod
-    def to_rgb(img: np.ndarray, class_values: tuple):
+    def to_rgb(img: np.ndarray, class_values: tuple, pos_value: int = 255):
         img_stack = []
         for class_value in class_values:
-            img_stack.append(np.where(img == class_value, 255, 0))
+            img_stack.append(np.where(img == class_value, pos_value, 0))
         out_img = np.stack(img_stack, axis=-1)
         return out_img
 
