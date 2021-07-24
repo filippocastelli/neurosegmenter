@@ -6,6 +6,7 @@ import numpy as np
 from skimage import io as skio
 # import skimage.external.tifffile as tifffile
 import tifffile
+import zetastitcher
 
 SUPPORTED_IMG_FORMATS = ["tif", "tiff", "png", "jpg", "jpeg"]
 SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
@@ -14,6 +15,7 @@ SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
 def load_volume(imgpath,
                 ignore_last_channel=False,
                 data_mode="stack",
+                channel_names=None,
                 return_norm=False):
     # if not is_supported_ext(imgpath):
     #     raise ValueError(imgpath, "unsupported image format")
@@ -106,6 +108,23 @@ def load_volume(imgpath,
             return postprocess_vol(vol), norm
         else:
             return postprocess_vol(vol)
+
+    elif data_mode == "zetastitcher":
+        channel_imgs = []
+
+        for chan_name in channel_names:
+            channel_fpath = imgpath.joinpath(chan_name + ".zip")
+            channel_imgs.append(zetastitcher.InputFile(channel_fpath)[...])
+
+        vol = np.stack(channel_imgs, axis=-1)
+        del channel_imgs
+
+        if return_norm:
+            norm = get_norm(vol)
+            return postprocess_vol(vol), norm
+        else:
+            return postprocess_vol(vol)
+
     elif data_mode == "multi_stack":
         img_paths = glob_if_needed(imgpath)
         vols_list = []
@@ -168,6 +187,7 @@ def save_volume(volume,
         returns.append(tiff_8bit_path)
 
     return returns
+
 
 def is_supported_ext(path, mode="img"):
     suffix = path.suffix
