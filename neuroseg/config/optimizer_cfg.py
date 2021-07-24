@@ -16,10 +16,15 @@ from neuroseg.config import TrainConfig, PredictConfig
 
 class OptimizerConfigurator:
     def __init__(self,
-                 config: Union[TrainConfig, PredictConfig]):
-        self.config = config
-        self.optimizer_cfg = self.config.optimizer_cfg
-        self.optimizer_name = self.optimizer_cfg["optimizer"]
+                 config: Union[TrainConfig, PredictConfig] = None,
+                 optimizer_name: str = None):
+        if optimizer_name is not None:
+            self.optimizer_name = optimizer_name
+        else:
+            self.config = config
+            self.optimizer_cfg = self.config.optimizer_cfg
+            self.optimizer_name = self.optimizer_cfg["optimizer"]
+
         self.optimizer = self._configure_optimizer()
 
     @staticmethod
@@ -49,6 +54,9 @@ class OptimizerConfigurator:
 
     def _configure_optimizer(self):
         optimizer_cls = self._get_optimizer(self.optimizer_name)
-        optimizer_args = self._get_optimizer_arg_dict(self.optimizer_cfg)
 
-        return optimizer_cls(**optimizer_args)
+        if self.config is not None:
+            optimizer_args = self._get_optimizer_arg_dict(self.optimizer_cfg)
+            return optimizer_cls(**optimizer_args)
+        else:
+            return optimizer_cls()

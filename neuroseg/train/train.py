@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Union
 from contextlib import nullcontext
 
+import yaml
+
 from neuroseg.config import (
     TrainConfig,
     CallbackConfigurator,
@@ -51,8 +53,20 @@ def get_strategy_scope(config: TrainConfig):
         return nullcontext()
 
 
-def train(train_config: TrainConfig):
+def dump_custom_objects(config: TrainConfig,
+                        optimizer_cfg: OptimizerConfigurator,
+                        metrics_cfg: MetricsConfigurator):
+    custom_object_names = {
+        "optimizer": optimizer_cfg.optimizer_name,
+        "loss": metrics_cfg.loss_name,
+        "metrics": metrics_cfg.track_metrics_names
+    }
 
+    with config.custom_objects_path.open(mode="w") as custom_objects_dump:
+        yaml.dump(custom_object_names, custom_objects_dump)
+
+
+def train(train_config: TrainConfig):
     wc = WandbConfigurator(train_config)
 
     setup_logger(train_config.logfile_path)
@@ -78,6 +92,7 @@ def train(train_config: TrainConfig):
         optimizer_cfg = OptimizerConfigurator(train_config)
         metrics_cfg = MetricsConfigurator(train_config)
 
+    dump_custom_objects(train_config, optimizer_cfg, metrics_cfg)
     model.compile(optimizer=optimizer_cfg.optimizer,
                   loss=metrics_cfg.loss,
                   metrics=metrics_cfg.track_metrics)

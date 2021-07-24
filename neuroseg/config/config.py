@@ -47,6 +47,8 @@ class Config:
     @staticmethod
     def get_param(cfg_dict: dict, key: str, default):
         """load key from dataset_cfg with default"""
+        if cfg_dict is None:
+            return default
         if key in cfg_dict:
             return cfg_dict[key]
         else:
@@ -105,7 +107,7 @@ class Config:
     @staticmethod
     def _decode_path(path_string: str) -> Union[Path, None]:
         """from string to pathlib Path"""
-        if path_string == "":
+        if path_string in ["", None]:
             parsed_path = None
         else:
             parsed_path = Path(path_string)
@@ -240,7 +242,7 @@ class TrainConfig(Config):
         """parse unet configuration dict"""
 
         self.model = model_cfg["model"]
-        self.crop_shape = model_cfg["crop_shape"]
+        self.window_size = model_cfg["window_size"]
         self.unet_depth = model_cfg["unet_depth"]
         self.base_filters = model_cfg["base_filters"]
         self.batch_normalization = model_cfg["batch_normalization"]
@@ -350,6 +352,7 @@ class TrainConfig(Config):
             self.model_history_path = self.output_path.joinpath("model_history.pickle")
             self.final_model_path = self.output_path.joinpath("final_model.hdf5")
             self.csv_summary_path = self.output_path.joinpath("run_summary.csv")
+            self.custom_objects_path = self.output_path.joinpath("custom_objects.yml")
         else:
             raise NotImplementedError(self.training_mode)
 
@@ -361,6 +364,8 @@ class TrainConfig(Config):
         self.ground_truth_path = self.test_paths["masks"] if self.dataset_mode != "h5_dataset" else None
         self.ground_truth_normalize = self.get_param(self.pe_cfg, "normalize_ground_truth", True)
         self.ground_truth_soft_labels = self.get_param(self.pe_cfg, "soft_labels", self.soft_labels)
+        self.padding_mode = self.get_param(self.pe_cfg, "padding_mode", "reflect")
+
         return
 
 
@@ -377,6 +382,8 @@ class PredictConfig(Config):
         self.prediction_cfg = self.cfg_dict["prediction_cfg"]
         self._parse_prediction_cfg(self.prediction_cfg)
 
+        debug_cfg = self.get_param(self.cfg_dict, "debug_cfg", None)
+        self.predict_inspector = self.get_param(debug_cfg, "predict_inspector", False)
         self.output_mode = self.output_cfg["output_mode"]
 
         self._gen_paths()
@@ -387,23 +394,28 @@ class PredictConfig(Config):
         self.data_path = self._decode_path(data_cfg["image_path"])
 
         self.data_mode = data_cfg["mode"]
-        SUPPORTED_DATA_MODES = ["single_images", "stack", "multi_stack"]
+        SUPPORTED_DATA_MODES = ["single_images", "stack", "multi_stack", "zetastitcher"]
         if self.data_mode not in SUPPORTED_DATA_MODES:
             raise NotImplementedError(self.data_mode)
 
         self.normalize_data = data_cfg["normalize_data"]
         self.n_channels = data_cfg["n_channels"]
+        self.channel_names = self.get_param(data_cfg, "channel_names", None)
+        self.ignore_last_channel = self.get_param(data_cfg, "ignore_last_channel", False)
         # self.positive_class_value = data_cfg["positive_class_value"]
         # self.negative_class_value = data_cfg["negative_class_value"]
         return
 
     def _parse_prediction_cfg(self, prediction_cfg: dict) -> None:
-        self.n_output_classes = prediction_cfg["n_output_classes"]
+        # self.n_output_classes = prediction_cfg["n_output_classes"]
         self.model_path = self._decode_path(prediction_cfg["model_path"])
+        self.custom_objects_path = self._decode_path(prediction_cfg["custom_objects_path"])
         self.prediction_mode = prediction_cfg["mode"]
         self.window_size = prediction_cfg["window_size"]
         self.batch_size = self.get_param(prediction_cfg, "batch_size", 1)
         self.padding_mode = self.get_param(prediction_cfg, "padding_mode", "reflect")
+        self.n_output_classes = self.get_param(prediction_cfg, "n_output_classes", 1)
+        self.class_values = self.get_param(prediction_cfg, "class_values", None)
         return
 
     def _gen_paths(self) -> None:
@@ -413,9 +425,9 @@ class PredictConfig(Config):
         return
 
     def _parse_performance_evaluation_cfg_additional(self) -> None:
-        self.ground_truth_mode = self.pe_cfg["data_mode"]
+        self.ground_truth_mode = self.get_param(self.pe_cfg, "data_mode", None)
         self.ground_truth_normalize = self.get_param(self.pe_cfg, "normalize_ground_truth", False)
-        self.ground_truth_path = self._decode_path(self.pe_cfg["ground_truth_path"])
+        self.ground_truth_path = self._decode_path(self.get_param(self.pe_cfg, "ground_truth_path", None))
         self.ground_truth_soft_labels = self.get_param(self.pe_cfg, "soft_labels", False)
 
         # self.ground_truth_normalize = self.get_param(self.pe_cfg, normalize_data)
