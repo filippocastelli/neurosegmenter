@@ -12,7 +12,7 @@ training_cfg:
         - "accuracy"
         - "jaccard_index"
         - "dice_coefficient"
-    enable_wandb_tracking: true
+    enable_wandb_tracking: false
 
 optimizer_cfg:
     # args in tf.KERAS.OPTIMIZERS api docs
@@ -25,7 +25,7 @@ optimizer_cfg:
 
 model_cfg:
     model: "resunet2d"
-    crop_shape: [256, 256]
+    window_size: [256, 256]
     unet_depth: 3
     base_filters: 16
     batch_normalization: true
@@ -115,6 +115,7 @@ performance_evaluation_cfg:
     classification_threshold:   0.5
     add_empty_channel:          true
     enable_curves: false
+    padding_mode: "reflect"
 
 callbacks_cfg:
     checkpoint:
@@ -133,11 +134,11 @@ callbacks_cfg:
         min_lr:     0.00000000067
         verbose:    1
 
-    wandb:
-        monitor: "val_loss"
-        mode: "min"
-        save_weights_only: false
-        save_model: true
+#    wandb:
+#        monitor: "val_loss"
+#        mode: "min"
+#        save_weights_only: false
+#        save_model: true
 
 notes: ""
 

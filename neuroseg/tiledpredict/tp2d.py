@@ -12,8 +12,8 @@ from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
 from neuroseg.utils import BatchInspector2D, toargmax
 
 class DataPredictor2D(DataPredictorBase):
-    def __init__(self, config, model=None):
-        super().__init__(config, model)
+    def __init__(self, config, model=None, in_fpath=None):
+        super().__init__(config, model, in_fpath=in_fpath)
 
     def predict(self):
         self.tiledpredictor = TiledPredictor2D(
@@ -286,6 +286,7 @@ class TiledPredictor2D:
                 "(img_shape - crop_shape) % step must be zeros to avoid reconstruction distorsions"
             )
 
+
     @classmethod
     def predict_tiles(
             cls,
@@ -326,14 +327,14 @@ class TiledPredictor2D:
         batched_inputs = cls.divide_into_batches(reshaped_windows, batch_size)
 
         out_img_shape = [*frame_shape[:2], n_output_classes]
-        output_img = np.zeros(out_img_shape, dtype=np.float32)
+        output_img = np.zeros(out_img_shape, dtype=np.float)
         weight_img = np.ones_like(output_img)
 
         weight = cls.get_weighting_window(window_shape_spatial) if tiling_mode == "weighted_average" else 1
         # print(weight.shape)
         for batch_idx, batch in enumerate(batched_inputs):
             batch_global_index = int(batch_idx) * batch_size
-            predicted_batch = model.predict(batch)
+            predicted_batch = model.predict(batch).astype(np.float)
 
             if debug:
                 debug_batch = (batch, predicted_batch)

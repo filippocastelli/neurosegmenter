@@ -1,0 +1,33 @@
+tiled_predictor_cfg:
+  extra_padding_windows: 2
+  tiling_mode: "drop_borders"
+  to_segmentation: false
+
+data_cfg:
+  image_path: "/home/phil/Scrivania/idxmask_dataset/test/frames"
+  mode: "single_images"
+  channel_names: ["488", "638"]
+  n_channels: 2
+  ignore_last_channel: true
+  normalize_data: true
+
+prediction_cfg:
+  model_path: "/home/phil/Scrivania/single_images_test_out/questionable-donkey-724/final_model.hdf5"
+  custom_objects_path: "/home/phil/Scrivania/single_images_test_out/questionable-donkey-724/custom_objects.yml"
+  batch_size: 100
+  window_size: [256, 256]
+  padding_mode: "reflect"
+  mode: "2d"
+  n_output_classes: 4
+  class_values: [0, 1, 2, 255]
+
+output_cfg:
+  output_path: "/home/phil/Scrivania/pred_out/"
+  output_mode: "stack"
+
+
+debug_cfg:
+  predict_inspector: false
+
+
+notes: "ciao"
