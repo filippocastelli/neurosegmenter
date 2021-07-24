@@ -70,8 +70,7 @@ class DataGen2D(DataGenBase):
         self.ignore_last_channel = config.ignore_last_channel
         self.buffer_size = config.da_buffer_size
         self.debug_mode = config.da_debug_mode
-
-        self.crop_shape = config.crop_shape
+        self.crop_shape = config.window_size
 
         # if self.prefetch_volume == True:
         if self.dataset_mode == "stack":

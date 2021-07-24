@@ -7,7 +7,7 @@ from neuroseg.config import TrainConfig, PredictConfig
 class ResUNETBase:
     def __init__(self, config: Union[TrainConfig, PredictConfig]):
         self.config = config
-        self.crop_shape = config.crop_shape
+        self.crop_shape = config.window_size
         self.depth = self.config.unet_depth
         self.base_filters = self.config.base_filters
         self.batch_normalization = self.config.batch_normalization

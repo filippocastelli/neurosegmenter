@@ -9,11 +9,12 @@ from neuroseg.utils import load_volume, save_volume, glob_imgs
 from neuroseg.config import TrainConfig, PredictConfig
 
 class DataPredictorBase:
-    def __init__(self, config: Union[PredictConfig, TrainConfig], model=None):
+    def __init__(self, config: Union[PredictConfig, TrainConfig], model=None, in_fpath=None):
 
         self.config = config
         self.mode = self.config.config_type
         self.to_segmentation = self.config.to_segmentation
+        self.in_fpath = in_fpath
 
         self._parse_settings()
         self._parse_paths()
@@ -35,6 +36,15 @@ class DataPredictorBase:
                     )[0]
                 else:
                     raise ValueError(f"invalid data path {str(self.data_path)}")
+
+            elif self.data_mode == "zetastitcher":
+                self.data_path = self.config.data_path
+                self.channel_names = self.config.channel_names
+                # self.in_fpath overrides config file setting
+
+                if self.in_fpath is not None:
+                    self.data_path = self.in_fpath
+
             elif self.data_mode == "multi_stack":
                 self.data_path = self.config.data_path
                 # raise NotImplementedError(self.data_mode)
@@ -97,13 +107,14 @@ class DataPredictorBase:
     #     paths = [str(imgpath) for imgpath in sorted(dir_path.glob("*.*")) if ]
 
     @staticmethod
-    def _load_single_volume(data_path, n_channels, data_mode, normalize_data=True):
+    def _load_single_volume(data_path, n_channels, data_mode, normalize_data=True, channel_names=None):
         drop_last_channel = True if (n_channels == 2) else False
 
         vol = load_volume(
             data_path,
             ignore_last_channel=drop_last_channel,
             data_mode=data_mode,
+            channel_names=channel_names
         )
         if normalize_data:
             max_norm = np.iinfo(vol.dtype).max
@@ -112,9 +123,9 @@ class DataPredictorBase:
         return vol
 
     def _load_volume(self):
-        if self.data_mode in ["single_images", "stack"]:
+        if self.data_mode in ["single_images", "stack", "zetastitcher"]:
             self.input_data = self._load_single_volume(
-                self.data_path, self.n_channels, self.data_mode
+                data_path=self.data_path, n_channels=self.n_channels, data_mode=self.data_mode, channel_names=self.channel_names
             )
         elif self.data_mode == "h5_dataset":
             h5file = h5py.File(str(self.data_path), "r")
