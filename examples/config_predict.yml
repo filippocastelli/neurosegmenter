@@ -5,6 +5,7 @@ tiled_predictor_cfg:
 
 data_cfg:
   image_path: "/home/phil/Scrivania/idxmask_dataset/test/frames"
+  # image_path: "/mnt/ssd1/datasets/spim/spim"
   mode: "single_images"
   channel_names: ["488", "638"]
   n_channels: 2
@@ -20,6 +21,7 @@ prediction_cfg:
   mode: "2d"
   n_output_classes: 4
   class_values: [0, 1, 2, 255]
+  to_8bit: true
 
 output_cfg:
   output_path: "/home/phil/Scrivania/pred_out/"

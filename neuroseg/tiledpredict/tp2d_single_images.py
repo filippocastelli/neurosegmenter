@@ -10,6 +10,7 @@ from skimage import io as skio
 from neuroseg.config import TrainConfig, PredictConfig
 from skimage.util import view_as_windows
 from tqdm import tqdm
+import tifffile
 
 
 class SingleImagesDataPredictor:
@@ -17,6 +18,7 @@ class SingleImagesDataPredictor:
     def __init__(self, config: Union[PredictConfig, TrainConfig], model=None, in_fpath=None):
         self.config = config
         self.mode = self.config.config_type
+        self.to_8bit = config.to_8bit
 
         if in_fpath is None:
             if self.config.config_type == "training":
@@ -53,7 +55,15 @@ class SingleImagesDataPredictor:
             if self.keep_stack:
                 img_list.append(prediction)
             out_fpath = self.output_path.joinpath(fpath.name)
-            skio.imsave(str(out_fpath), arr=pred.predicted_data)
+
+            if self.to_8bit:
+                save_arr = (pred.predicted_data * 255).astype(np.uint8)
+            else:
+                save_arr = pred.predicted_data
+
+            save_arr = np.moveaxis(save_arr, source=-1, destination=0)
+            save_arr = np.expand_dims(save_arr, axis=-1)
+            tifffile.imsave(str(out_fpath), data=save_arr)
 
         if self.keep_stack:
             return np.stack(img_list, axis=0)
@@ -72,7 +82,12 @@ class SingleImagesDataPredictor:
         return norm
 
     def load_img(self, fpath: Path):
-        img = skio.imread(str(fpath), plugin="pil")
+        if fpath.suffix in [".tif", ".tiff"]:
+            img = tifffile.imread(str(fpath))
+            if img.shape[0] == 3:
+                img = np.moveaxis(img, 0, -1)
+        else:
+            img = skio.imread(str(fpath), plugin="pil")
         if self.config.ignore_last_channel:
             img = img[..., :2]
         norm = self._get_norm_const(img)

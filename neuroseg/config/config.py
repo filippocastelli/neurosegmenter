@@ -365,6 +365,7 @@ class TrainConfig(Config):
         self.ground_truth_normalize = self.get_param(self.pe_cfg, "normalize_ground_truth", True)
         self.ground_truth_soft_labels = self.get_param(self.pe_cfg, "soft_labels", self.soft_labels)
         self.padding_mode = self.get_param(self.pe_cfg, "padding_mode", "reflect")
+        self.to_8bit = self.get_param(self.pe_cfg, "to_8bit", False)
 
         return
 
@@ -416,6 +417,7 @@ class PredictConfig(Config):
         self.padding_mode = self.get_param(prediction_cfg, "padding_mode", "reflect")
         self.n_output_classes = self.get_param(prediction_cfg, "n_output_classes", 1)
         self.class_values = self.get_param(prediction_cfg, "class_values", None)
+        self.to_8bit = self.get_param(prediction_cfg, "to_8bit", False)
         return
 
     def _gen_paths(self) -> None:

@@ -12,7 +12,7 @@ training_cfg:
         - "accuracy"
         - "jaccard_index"
         - "dice_coefficient"
-    enable_wandb_tracking: false
+    enable_wandb_tracking: true
 
 optimizer_cfg:
     # args in tf.KERAS.OPTIMIZERS api docs
@@ -34,7 +34,7 @@ model_cfg:
 
 dataset_cfg:
 #     dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
-     dataset_path : "/home/phil/Scrivania/idxmask_dataset"
+     dataset_path : "/home/phil/Scrivania/idxmask_dataset_nolut"
 #     dataset_path : "/home/phil/repos/neuroseg/neuroseg/tests/test_datasets/stack_1ch"
      mode: "single_images"
      n_channels: 2
@@ -116,6 +116,7 @@ performance_evaluation_cfg:
     add_empty_channel:          true
     enable_curves: false
     padding_mode: "reflect"
+    to_8bit: true
 
 callbacks_cfg:
     checkpoint:
@@ -134,11 +135,11 @@ callbacks_cfg:
         min_lr:     0.00000000067
         verbose:    1
 
-#    wandb:
-#        monitor: "val_loss"
-#        mode: "min"
-#        save_weights_only: false
-#        save_model: true
+    wandb:
+        monitor: "val_loss"
+        mode: "min"
+        save_weights_only: false
+        save_model: true
 
 notes: ""
 
