@@ -111,6 +111,7 @@ def train(train_config: TrainConfig):
         dp = DataPredictor(train_config, model)
         ev = PerformanceEvaluator(train_config, dp.predicted_data)
         performance_dict = ev.measure_dict
+        wc.log_metrics(performance_dict)
     else:
         performance_dict = None
 
