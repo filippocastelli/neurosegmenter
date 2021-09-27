@@ -24,7 +24,7 @@ class PerformanceMetrics:
 
         self.enable_curves = enable_curves
         self.y_true = np.copy(y_true).astype(np.uint8)
-        self.y_pred = np.copy(y_pred).astype(np.uint8)
+        self.y_pred = np.copy(y_pred).astype(np.uint8) # AM I RETARDED
         self.thr = thr
 
         self.y_pred_fuzzy = y_pred
@@ -34,8 +34,10 @@ class PerformanceMetrics:
         self.fuzzy_summation = np.sum(self.y_pred_fuzzy.flatten()) + np.sum(self.y_true_fuzzy.flatten())
         self.fuzzy_union = self.fuzzy_summation - self.fuzzy_intersection
 
-        self.y_pred = self.threshold_array(self.y_pred, thr, to_bool=True)
-        self.y_true = self.threshold_array(self.y_true, thr, to_bool=True)
+        # self.y_pred = self.threshold_array(self.y_pred, thr, to_bool=True)
+        # self.y_true = self.threshold_array(self.y_true, thr, to_bool=True)
+        self.y_true = self.y_true > thr
+        self.y_pred = self.y_pred > thr
 
         self.tp, self.fp, self.tn, self.fn = self.cardinal_metrics()
 
@@ -352,7 +354,7 @@ class bboxPerformanceEvaluator:
                 predictions_flat = predictions.flatten()
                 class_pred_arr = np.append(class_pred_arr, predictions_flat)
 
-                gt = self.gt_vol[bbox_idx, bbox[0]:bbox[2], bbox[1]:bbox[3], idx]
+                gt = self.gt_vol[bbox_idx, bbox[1]:bbox[3], bbox[0]:bbox[2], idx]
                 gt_flat = gt.flatten()
                 class_gt_arr = np.append(class_gt_arr, gt_flat)
 
