@@ -1,5 +1,5 @@
 import logging
-import gc
+import h5py
 from pathlib import Path
 from typing import Union, Callable, Generator, Tuple
 
@@ -48,7 +48,6 @@ class DataGen3D(DataGenBase):
                  config: Union[TrainConfig, PredictConfig],
                  partition: str = "train",
                  data_augmentation: bool = True,
-                 normalize_inputs: bool = True,
                  verbose: bool = False):
         """
         3D data generator
@@ -66,8 +65,6 @@ class DataGen3D(DataGenBase):
             Enables data agumentation pipeline.
             You have to disable it for validation or test.
             The default is True.
-        normalize_inputs : bool, optional
-            if True divides image values by np.iinfo(img.dtype).max. The default is True.
         verbose : bool, optional
             Enable additional verbosity. The default is False.
             
@@ -77,19 +74,14 @@ class DataGen3D(DataGenBase):
         super().__init__(config=config,
                          partition=partition,
                          data_augmentation=data_augmentation,
-                         normalize_inputs=normalize_inputs,
                          verbose=verbose)
-
-        # self._parse_single_stack_paths()
-        # self._load_volumes()
 
         self.shuffle = self.config.da_shuffle
         self.seed = self.config.da_seed
-        # self.pre_crop_scales = self.config.da_pre_crop_scales
 
         self.data = self._setup_gen()
         self.iter = self.data.__iter__
-        self.steps_per_epoch = self._get_steps_per_epoch(self.volume_shape, self.crop_shape, self.batch_size)
+        self.steps_per_epoch = self._get_steps_per_epoch(self.volume_shape, self.crop_shape, self.batch_size, self.n_volumes)
 
     @staticmethod
     def _normalize_stack(stack_arr: np.ndarray,
@@ -101,7 +93,6 @@ class DataGen3D(DataGenBase):
         if self.dataset_mode == "stack":
             self.frames_path = self.frames_paths[0]
             self.masks_path = self.masks_paths[0]
-
             data = {"img": self.frames_path,
                     "label": self.masks_path}
         elif self.dataset_mode == "multi_stack":
@@ -110,45 +101,13 @@ class DataGen3D(DataGenBase):
         elif self.dataset_mode == "single_images":
             data = {"img": self.frames_paths,
                     "label": self.masks_paths}
+        elif self.dataset_mode == "h5_dataset":
+            dataset_path = self.data_path_dict  # not a dict but maintaining same name for consistency
+            assert dataset_path.suffix == ".h5", "not a h5 dataset"
+            data = {"dataset_path": dataset_path}
         else:
             raise ValueError(f"{self.dataset_mode} is not supported")
         return data
-
-    # def _load_volumes(self):
-    #     """load images from file,
-    #     apply normalizations,
-    #     fix stack dimensions,,
-    #     create {"img: img_volume, "label": label_volume} data dict"""
-    #
-    #     if self.dataset_mode in ["single_images", "stack"]:
-    #
-    #         # TODO: MOVE ALL THIS PREPROCESSING INSIDE CROPPED DATA LOADER
-    #         # ONLY data = {img: img_path, label: label_path} must be here
-    #
-    #         # for processing purposes we use "stack" instead of "multi_stack"
-    #         # data_mode = self.dataset_mode if self.dataset_mode != "multi_stack" else "stack"
-    #
-    #         logging.debug("reading from disk, dataset mode: {}...".format(self.dataset_mode))
-    #
-    #         self.data_dict = {
-    #             "img": self.frames_volume,
-    #             "label": self.masks_volume}
-    #         # self.frames_volume and self.masks_volume are redundant at this point
-    #         # they might need to be deleted to free space
-    #
-    #         del self.frames_volume
-    #         del self.masks_volume
-    #         gc.collect()
-    #
-    #
-    #     elif self.dataset_mode == "multi_stack":
-    #
-    #         self.data_dict = {
-    #             "img": self.frames_paths,
-    #             "label": self.masks_paths}
-    #
-    #     else:
-    #         raise NotImplementedError(self.dataset_mode)
 
     def _spatial_transform_cfg(self) -> dict:
         """spatial transform"""
@@ -324,27 +283,50 @@ class DataGen3D(DataGenBase):
         self.data_dict = self._get_data_dict()
 
         if self.dataset_mode in ["single_images", "stack"]:
+
             self.dataLoader = CroppedDataLoaderBG(
                 data=self.data_dict,
+                batch_size=self.batch_size,
+                crop_shape=self.crop_shape,
                 data_mode=self.dataset_mode,
+                num_threads_in_multithreaded=self.threads,
+                shuffle=self.shuffle,
+                seed_for_shuffle=self.seed,
+                infinite=False,
+                normalize_inputs=self.normalize_inputs,
+                normalize_masks=self.normalize_masks,
+                soft_labels=self.soft_labels,
+                positive_class_value=self.positive_class_value
+            )
+            self.n_volumes = 1
+        elif self.dataset_mode == "multi_stack":
+            self.dataLoader = MultiCroppedDataLoaderBG(
+                data=self.data_dict,
                 batch_size=self.batch_size,
                 crop_shape=self.crop_shape,
                 num_threads_in_multithreaded=self.threads,
                 shuffle=self.shuffle,
                 seed_for_shuffle=self.seed,
                 infinite=False,
-                # pre_crop_scales=self.pre_crop_scales
-            )
-        elif self.dataset_mode == "multi_stack":
-            self.dataLoader = MultiCroppedDataLoaderBG(
+                normalize_inputs=self.normalize_inputs,
+                normalize_masks=self.normalize_masks,
+                soft_labels=self.soft_labels,
+                positive_class_value=self.positive_class_value)
+            self.n_volumes = self.dataLoader.n_volumes
+
+        elif self.dataset_mode == "h5_dataset":
+            self.dataLoader = H5DataLoader(
                 data=self.data_dict,
                 batch_size=self.batch_size,
                 crop_shape=self.crop_shape,
-                normalize_inputs=self.normalize_inputs,
                 num_threads_in_multithreaded=self.threads,
                 shuffle=self.shuffle,
                 seed_for_shuffle=self.seed,
-                infinite=False)
+                normalize_inputs=self.normalize_inputs,
+                normalize_masks=self.normalize_masks,
+                infinite=True
+            )
+            self.n_volumes = self.dataLoader.n_volumes
         else:
             raise NotImplementedError(self.dataset_mode)
 
@@ -363,11 +345,12 @@ class DataGen3D(DataGenBase):
     @staticmethod
     def _get_steps_per_epoch(frame_shape: Union[list, tuple],
                              crop_shape: Union[list, tuple],
-                             batch_size: int) -> int:
+                             batch_size: int,
+                             n_volumes: int = 1) -> int:
         """calculate the number of steps per epoch"""
         frame_px = np.prod(frame_shape)
         crop_px = np.prod(crop_shape)
-        return int(np.ceil((frame_px / crop_px) / float(batch_size)))
+        return n_volumes * int(np.ceil((frame_px / crop_px) / float(batch_size)))
 
     @classmethod
     def _get_keras_gen(cls,
@@ -414,7 +397,7 @@ class MultiCroppedDataLoaderBG(DataLoader):
 
     def __init__(
             self,
-            data : dict,
+            data: dict,
             batch_size: int,
             crop_shape: Union[tuple, list],
             num_threads_in_multithreaded: int = 1,
@@ -422,6 +405,8 @@ class MultiCroppedDataLoaderBG(DataLoader):
             seed_for_shuffle: int = 12,
             infinite: bool = False,
             normalize_inputs: bool = True,
+            normalize_masks: bool = False,
+            soft_labels: bool = False,
             positive_class_value: int = 255):
 
         # data = {"img": [img_paths], "label": [label_paths]}}
@@ -438,7 +423,11 @@ class MultiCroppedDataLoaderBG(DataLoader):
         self.label_paths = self._data["label"]
         self.rng_seed = seed_for_shuffle
         self.normalize_inputs = normalize_inputs
+        self.normalize_masks = normalize_masks
+        self.soft_labels = soft_labels
         self.positive_class_value = positive_class_value
+
+        self.n_volumes = len(self.label_paths)
 
         if self.rng_seed is not None:
             np.random.seed(self.rng_seed)
@@ -475,10 +464,17 @@ class MultiCroppedDataLoaderBG(DataLoader):
             label_path = vol_path_dict["label"]
 
             # NOTE LOAD_VOLUME_COUPLE IS NOW IN SINGLE CROPPED DATA LOADER
-            img_volume, label_volume = CroppedDataLoaderBG._load_volume_couple(img_path,
-                                                                               label_path,
-                                                                               self.normalize_inputs,
-                                                                               label_positive_class_value=self.positive_class_value)
+
+            img_volume, label_volume = CroppedDataLoaderBG._load_volume_couple(
+                img_path=img_path,
+                label_path=label_path,
+                normalize_inputs=self.normalize_inputs,
+                normalize_masks=self.normalize_masks,
+                soft_labels=self.soft_labels,
+                data_mode="stack",
+                label_positive_class_value=self.positive_class_value
+            )
+
             key_volume_dict = {
                 "img": img_volume.astype(np.float32),
                 "label": label_volume.astype(np.float32)}
@@ -529,6 +525,8 @@ class CroppedDataLoaderBG(DataLoader):
             seed_for_shuffle: int = 123,
             infinite: bool = False,
             normalize_inputs: bool = True,
+            normalize_masks: bool = False,
+            soft_labels: bool = False,
             positive_class_value: Union[int, float] = 255):
         """
         CroppedDataLoaderBG
@@ -568,6 +566,8 @@ class CroppedDataLoaderBG(DataLoader):
 
         self.data_mode = data_mode
         self.normalize_inputs = normalize_inputs
+        self.normalize_masks = normalize_masks
+        self.soft_labels = soft_labels
         self.positive_class_value = positive_class_value
 
         if self.data_mode not in ["single_images", "stack"]:
@@ -578,6 +578,8 @@ class CroppedDataLoaderBG(DataLoader):
             img_path=self.img_path,
             label_path=self.labels_path,
             normalize_inputs=self.normalize_inputs,
+            normalize_masks=self.normalize_masks,
+            soft_labels=self.soft_labels,
             data_mode=self.data_mode,
             label_positive_class_value=self.positive_class_value)
 
@@ -594,21 +596,28 @@ class CroppedDataLoaderBG(DataLoader):
                             img_path: Path,
                             label_path: Path,
                             normalize_inputs: bool,
+                            normalize_masks: bool = False,
+                            soft_labels: bool = False,
                             data_mode: str = "stack",
                             label_positive_class_value: Union[int, float] = 255) -> Tuple[np.ndarray, np.ndarray]:
 
-        img_volume, norm = load_volume(img_path,
-                                       data_mode=data_mode,
-                                       ignore_last_channel=False,
-                                       return_norm=True)
+        img_volume, img_norm = load_volume(img_path,
+                                           data_mode=data_mode,
+                                           ignore_last_channel=False,
+                                           return_norm=True)
 
-        label_volume = load_volume(label_path,
-                                   data_mode=data_mode,
-                                   ignore_last_channel=False)
+        label_volume, label_norm = load_volume(label_path,
+                                               data_mode=data_mode,
+                                               ignore_last_channel=False,
+                                               return_norm=True)
         if normalize_inputs:
             img_volume = cls._normalize_stack(img_volume,
-                                              norm=norm)
-        label_volume = np.where(label_volume >= label_positive_class_value, 1, 0).astype(img_volume.dtype)
+                                              norm=img_norm)
+        if normalize_masks:
+            label_volume = cls._normalize_stack(label_volume, label_norm)
+
+        if not soft_labels:
+            label_volume = np.where(label_volume >= label_positive_class_value, 1, 0).astype(img_volume.dtype)
 
         img_volume, label_volume = cls._adjust_stack_dims(img_volume, label_volume, to_channel_first=True)
         return img_volume, label_volume
@@ -709,7 +718,7 @@ class CroppedDataLoaderBG(DataLoader):
         assert len(crop_shape) == len(
             volume_shape), f"crop_shape {crop_shape} and volume_shape {volume_shape} have different dimensionalities"
         # assert we're not trying to crop something larger than volume 
-        assert volume_shape > crop_shape, f"crop_shape {crop_shape} > volume_shape {volume_shape}"
+        assert list(volume_shape) > list(crop_shape), f"crop_shape {crop_shape} > volume_shape {volume_shape}"
 
         z_0 = np.random.randint(low=0, high=z_shape - crop_shape[0])
         y_0 = np.random.randint(low=0, high=y_shape - crop_shape[1])
@@ -724,6 +733,117 @@ class CroppedDataLoaderBG(DataLoader):
 
         crop_label = masks_volume[
                      :,
+                     z_0: z_0 + crop_shape[0],
+                     y_0: y_0 + crop_shape[1],
+                     x_0: x_0 + crop_shape[2]
+                     ]
+
+        return crop_img, crop_label
+
+
+class H5DataLoader(DataLoader):
+    def __init__(
+            self,
+            data: dict,
+            batch_size: int,
+            crop_shape: Union[tuple, list],
+            num_threads_in_multithreaded: int = 1,
+            shuffle: bool = False,
+            seed_for_shuffle: int = 123,
+            infinite: bool = False,
+            normalize_inputs: bool = True,
+            normalize_masks: bool = True):
+        # assuming datasets are .h5 np.uint8 un-normalized frames with soft masks
+        # TODO: change this to something more flexible when we have multichannel datasets
+        super().__init__(
+            data=data,  # passing just a path because we don't want to waste memory by dumping datasets in self._data
+            batch_size=batch_size,
+            num_threads_in_multithreaded=num_threads_in_multithreaded,
+            shuffle=shuffle,
+            seed_for_shuffle=seed_for_shuffle,
+            infinite=infinite
+        )
+        self.batch_size = batch_size
+        self.crop_shape = crop_shape
+        self.normalize_inputs = normalize_inputs
+        self.normalize_masks = normalize_masks
+
+        if seed_for_shuffle is not None:
+            np.random.seed(seed_for_shuffle)
+
+        data_path = str(data["dataset_path"])
+        h5_file = h5py.File(str(data_path), "r")
+        self.h5_dataset = h5_file["data"]
+        self.data_shape = self.h5_dataset.shape
+        self.data_dtype = self.h5_dataset.dtype
+
+        # must have a volume_shape attribute for calculating training and validation steps
+        self.volume_shape = self.data_shape[-3:]
+        self.n_volumes = self.data_shape[0]
+
+    @staticmethod
+    def _normalize_stack(stack_arr: np.ndarray, norm: Union[int, float] = 255) -> np.ndarray:
+        return (stack_arr / norm).astype(np.float32)
+
+    def generate_train_batch(self) -> dict:
+        """return a {"data": crooped_data, "seg": crooped_seg} dict"""
+
+        img_batch = []
+        label_batch = []
+
+        for i in range(self.batch_size):
+            crop_img, crop_label = self._get_random_crop(
+                h5_dataset=self.h5_dataset,
+                crop_shape=self.crop_shape,
+                volume_shape=self.volume_shape)
+            img_batch.append(crop_img)
+            label_batch.append(crop_label)
+
+        stack_img = np.stack(img_batch, axis=0)
+        stack_label = np.stack(label_batch, axis=0)
+
+        # I need [batch, ch, z, y, x] shape
+        # adding channel in channel_first format
+        stack_img = np.expand_dims(stack_img, axis=1)
+        stack_label = np.expand_dims(stack_label, axis=1)
+
+        norm_constant = np.iinfo(stack_img.dtype).max
+        if self.normalize_inputs:
+            stack_img = self._normalize_stack(stack_img, norm_constant)
+        if self.normalize_masks:
+            stack_label = self._normalize_stack(stack_label, norm_constant)
+
+        return {"data": stack_img, "seg": stack_label}
+
+    @staticmethod
+    def _get_random_crop(h5_dataset: h5py.Dataset,
+                         volume_shape: Union[tuple, list],
+                         crop_shape: Union[tuple, list]) -> Tuple[np.ndarray, np.ndarray]:
+        """get a random crop_img, crop_label tuple"""
+
+        assert len(crop_shape) == len(
+            volume_shape), f"crop_shape {crop_shape} and vol_shape_spatial {volume_shape} have different dimensionalities"
+        # assert we're not trying to crop something larger than volume
+        assert list(volume_shape) > list(crop_shape), f"crop_shape {crop_shape} > volume_shape {volume_shape}"
+
+        n_img = len(h5_dataset)
+        z_shape, y_shape, x_shape = volume_shape
+        n_extract = np.random.randint(low=0, high=n_img)
+        z_0 = np.random.randint(low=0, high=z_shape - crop_shape[0])
+        y_0 = np.random.randint(low=0, high=y_shape - crop_shape[1])
+        x_0 = np.random.randint(low=0, high=x_shape - crop_shape[2])
+
+        crop_img = h5_dataset[
+                   n_extract,
+                   0,
+                   z_0: z_0 + crop_shape[0],
+                   y_0: y_0 + crop_shape[1],
+                   x_0: x_0 + crop_shape[2]
+                   ]
+
+        crop_label = h5_dataset[
+                     n_extract,
+                     1,
                      z_0: z_0 + crop_shape[0],
                      y_0: y_0 + crop_shape[1],
                      x_0: x_0 + crop_shape[2]

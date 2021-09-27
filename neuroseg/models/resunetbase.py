@@ -7,13 +7,14 @@ from neuroseg.config import TrainConfig, PredictConfig
 class ResUNETBase:
     def __init__(self, config: Union[TrainConfig, PredictConfig]):
         self.config = config
-        self.crop_shape = config.crop_shape
+        self.crop_shape = config.window_size
         self.depth = self.config.unet_depth
         self.base_filters = self.config.base_filters
         self.batch_normalization = self.config.batch_normalization
         self.pre_activation = self.config.residual_preactivation
         self.transposed_convolution = self.config.transposed_convolution
         self.n_channels = self.config.n_channels
+        self.n_output_classes = self.config.n_output_classes
 
         self.input_shape = self._get_input_shape()
 
@@ -25,6 +26,7 @@ class ResUNETBase:
             batch_normalization=self.batch_normalization,
             pre_activation=self.pre_activation,
             transposed_convolution=self.transposed_convolution,
+            output_classes=self.n_output_classes
         )
 
     @abstractmethod
@@ -34,7 +36,8 @@ class ResUNETBase:
                    depth: int,
                    batch_normalization: bool,
                    pre_activation: bool,
-                   transposed_convolution: bool):
+                   transposed_convolution: bool,
+                   output_classes: int):
         pass
 
     def _get_input_shape(self):

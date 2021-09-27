@@ -25,6 +25,17 @@ class RunDescriptorLight:
         self.config_type = config.config_type
         self._dump_descriptor()
 
+    @staticmethod
+    def beautify_dict(dictionary: dict):
+        dict_copy = dictionary.copy()
+        for key, value in dict_copy.items():
+            if isinstance(value, dict):
+                for subkey, subval in value.items():
+                    value[subkey] = str(subval)
+            else:
+                dict_copy[key] = str(value)
+        return dict_copy
+
     def _dump_descriptor(self) -> None:
         self._make_paths()
         self._copy_model()
@@ -66,18 +77,28 @@ class RunDescriptorLight:
         if self.performance_metrics_dict is not None:
             self.performance_metrics_local_pickle_path = self.descriptor_local_path.joinpath("performance.pickle")
             self._to_pickle(self.performance_metrics_dict, self.performance_metrics_local_pickle_path)
+            self.performance_metrics_local_yml_path = self.descriptor_local_path.joinpath("performance.yml")
+            self._to_yml(self.beautify_dict(self.performance_metrics_dict), self.performance_metrics_local_yml_path)
 
     def _serialize_metrics_dict(self) -> None:
         """serialize model history"""
         if self.model_history_dict is not None:
             self.model_history_local_pickle_path = self.descriptor_local_path.joinpath("model_history.pickle")
             self._to_pickle(self.model_history_dict, self.model_history_local_pickle_path)
+            self.model_history_local_yml_path = self.descriptor_local_path.joinpath("model_history.yml")
+            self._to_yml(self.beautify_dict(self.model_history_dict.__dict__), self.model_history_local_yml_path)
 
     @staticmethod
     def _to_pickle(obj, fpath: Path) -> None:
         """Save obj to picklable file in fpath"""
         with fpath.open(mode="wb") as pickle_out:
             pickle.dump(obj, pickle_out)
+
+    @staticmethod
+    def _to_yml(dictionary: dict,
+                fpath: Path) -> None:
+        with fpath.open(mode="w") as outfile:
+            yaml.dump(dictionary,outfile)
 
     def _create_archive(self) -> None:
         self.archive_path = self.descriptor_path.joinpath("{}.zip".format(self.run_name))

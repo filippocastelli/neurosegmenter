@@ -95,8 +95,7 @@ class TestDatagen3D:
 
         datagen = DataGen3D(config=config,
                             partition=partition,
-                            data_augmentation=data_augmentation,
-                            normalize_inputs=normalize_inputs)
+                            data_augmentation=data_augmentation)
 
         # batch_frames and batch_masks are numpy arrays, not Tensors
         batch_frames, batch_masks = next(datagen.data.__iter__())

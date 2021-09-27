@@ -6,6 +6,7 @@ import numpy as np
 from skimage import io as skio
 # import skimage.external.tifffile as tifffile
 import tifffile
+import zetastitcher
 
 SUPPORTED_IMG_FORMATS = ["tif", "tiff", "png", "jpg", "jpeg"]
 SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
@@ -14,6 +15,7 @@ SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
 def load_volume(imgpath,
                 ignore_last_channel=False,
                 data_mode="stack",
+                channel_names=None,
                 return_norm=False):
     # if not is_supported_ext(imgpath):
     #     raise ValueError(imgpath, "unsupported image format")
@@ -28,7 +30,7 @@ def load_volume(imgpath,
                 img_paths = [imgpath]
         else:
             raise TypeError("invalid type for imgpath")
-        return img_paths
+        return sorted(img_paths)
 
     def adjust_dimensions(vol):
         vol_shape = vol.shape
@@ -106,6 +108,23 @@ def load_volume(imgpath,
             return postprocess_vol(vol), norm
         else:
             return postprocess_vol(vol)
+
+    elif data_mode == "zetastitcher":
+        channel_imgs = []
+
+        for chan_name in channel_names:
+            channel_fpath = imgpath.joinpath(chan_name + ".zip")
+            channel_imgs.append(zetastitcher.InputFile(channel_fpath)[...])
+
+        vol = np.stack(channel_imgs, axis=-1)
+        del channel_imgs
+
+        if return_norm:
+            norm = get_norm(vol)
+            return postprocess_vol(vol), norm
+        else:
+            return postprocess_vol(vol)
+
     elif data_mode == "multi_stack":
         img_paths = glob_if_needed(imgpath)
         vols_list = []
@@ -129,12 +148,15 @@ def save_volume(volume,
                 clip=True,
                 save_tiff=True,
                 save_8bit=True,
-                save_pickle=True):
+                save_pickle=True,
+                return_outpaths=False):
+    returns = []
     if save_pickle:
         pickle_out_path = output_path.joinpath(fname + ".pickle")
 
         with pickle_out_path.open(mode="wb") as out_file:
             pickle.dump(volume, out_file)
+        returns.append(pickle_out_path)
 
     if clip:
         volume = np.clip(volume, a_min=0., a_max=1.)
@@ -153,12 +175,18 @@ def save_volume(volume,
             for img_plane in out_volume:
                 stack.save(img_plane)
 
+        return tiff_path
+
     if save_tiff:
-        exp_tiff(volume, name=fname)
+        tiff_path = exp_tiff(volume, name=fname)
+        returns.append(tiff_path)
     if save_8bit:
         # vol_clipped = np.clip(volume, a_min=0., a_max=.99999)
         vol_8bit = (volume * 255).astype(np.uint8)
-        exp_tiff(vol_8bit, name=fname + "_8bit")
+        tiff_8bit_path = exp_tiff(vol_8bit, name=fname + "_8bit")
+        returns.append(tiff_8bit_path)
+
+    return returns
 
 
 def is_supported_ext(path, mode="img"):

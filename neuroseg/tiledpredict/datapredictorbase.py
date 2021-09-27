@@ -1,14 +1,21 @@
 import numpy as np
+from typing import Union
+import h5py
+
 from tensorflow.python.keras.models import load_model
 
 from neuroseg.utils import load_volume, save_volume, glob_imgs
 # from neuroseg.config.config import SUPPORTED_STACK_FORMATS
+from neuroseg.config import TrainConfig, PredictConfig
 
 class DataPredictorBase:
-    def __init__(self, config, model=None):
+    def __init__(self, config: Union[PredictConfig, TrainConfig], model=None, in_fpath=None):
 
         self.config = config
         self.mode = self.config.config_type
+        self.to_segmentation = self.config.to_segmentation
+        self.in_fpath = in_fpath
+
         self._parse_settings()
         self._parse_paths()
         self._load_volume()
@@ -29,6 +36,15 @@ class DataPredictorBase:
                     )[0]
                 else:
                     raise ValueError(f"invalid data path {str(self.data_path)}")
+
+            elif self.data_mode == "zetastitcher":
+                self.data_path = self.config.data_path
+                self.channel_names = self.config.channel_names
+                # self.in_fpath overrides config file setting
+
+                if self.in_fpath is not None:
+                    self.data_path = self.in_fpath
+
             elif self.data_mode == "multi_stack":
                 self.data_path = self.config.data_path
                 # raise NotImplementedError(self.data_mode)
@@ -44,6 +60,8 @@ class DataPredictorBase:
                 self.data_path = glob_imgs(
                     self.config.test_paths["frames"], mode="stack", to_string=True
                 )[0]
+            elif self.data_mode == "h5_dataset":
+                self.data_path = self.config.path_dict["test"]
             elif self.data_mode == "multi_stack":
                 self.data_path = self.config.test_paths["frames"]
                 # raise NotImplementedError(self.data_mode)
@@ -67,18 +85,19 @@ class DataPredictorBase:
         elif self.mode == "training":
             # self.data_mode = self.config.ground_truth_mode
             self.data_mode = self.config.dataset_mode
-            self.normalize_data = True
+            self.normalize_data = self.config.normalize_inputs
             self.output_mode = "stack"
             self.window_size = self.config.crop_shape
             self.batch_size = self.config.batch_size
             # self.chunk_size = self.config.pe_chunk_size
             self.padding_mode = "reflect"
             # self.keep_tmp = False
-            self.n_output_classes = 1
+            self.n_output_classes = self.config.n_output_classes
         self.n_channels = self.config.n_channels
         self.extra_padding_windows = self.config.extra_padding_windows
         self.tiling_mode = self.config.tiling_mode
         self.window_overlap = self.config.window_overlap
+        self.debug = self.config.predict_inspector
 
     def _load_model(self):
         return load_model(filepath=str(self.model_path), compile=False)
@@ -88,13 +107,14 @@ class DataPredictorBase:
     #     paths = [str(imgpath) for imgpath in sorted(dir_path.glob("*.*")) if ]
 
     @staticmethod
-    def _load_single_volume(data_path, n_channels, data_mode, normalize_data=True):
+    def _load_single_volume(data_path, n_channels, data_mode, normalize_data=True, channel_names=None):
         drop_last_channel = True if (n_channels == 2) else False
 
         vol = load_volume(
             data_path,
             ignore_last_channel=drop_last_channel,
             data_mode=data_mode,
+            channel_names=channel_names
         )
         if normalize_data:
             max_norm = np.iinfo(vol.dtype).max
@@ -103,10 +123,21 @@ class DataPredictorBase:
         return vol
 
     def _load_volume(self):
-        if self.data_mode in ["single_images", "stack"]:
+        if self.data_mode in ["single_images", "stack", "zetastitcher"]:
             self.input_data = self._load_single_volume(
-                self.data_path, self.n_channels, self.data_mode
+                data_path=self.data_path, n_channels=self.n_channels, data_mode=self.data_mode, channel_names=self.channel_names
             )
+        elif self.data_mode == "h5_dataset":
+            h5file = h5py.File(str(self.data_path), "r")
+            # n_vols = len(h5file["data"])
+            # loaded_vols = []
+            # for vol_idx in range(n_vols):
+            #     vol = h5file["data"][vol_idx, 0, ...]
+            #     if self.normalize_data:
+            #         norm = np.iinfo(vol.dtype).max
+            #         vol = vol / norm
+            #     loaded_vols.append(vol)
+            self.input_data = h5file["data"]
 
         elif self.data_mode == "multi_stack":
             self.data_paths = glob_imgs(self.data_path, mode="stack")
@@ -121,7 +152,6 @@ class DataPredictorBase:
             raise NotImplementedError(self.data_mode)
 
     def _save_volume(self):
-        
         if self.data_mode in ["single_images", "stack"]:
             if self.output_mode == "stack":
                 save_volume(
@@ -144,7 +174,15 @@ class DataPredictorBase:
                             save_tiff=True,
                             save_pickle=True                            
                     )
-            
-            
-            
-            
+
+        # this occupies way too much resources
+        # best solution would be to override save_volume() in H5DataPredictor
+        # and save each volume in the main predict loop
+        elif self.data_mode == "h5_dataset":
+            for idx, vol in enumerate(self.predicted_data):
+                fname = str(f"{idx}_predict")
+                save_volume(volume=vol,
+                            output_path=self.output_path,
+                            fname=fname,
+                            save_tiff=True,
+                            save_pickle=True)

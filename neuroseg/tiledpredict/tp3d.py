@@ -2,13 +2,15 @@
 # from itertools import product
 # import pickle
 # import shutil
+from typing import Union
 
 import numpy as np
 from tqdm import tqdm
 import scipy.signal as signal
 from skimage.util import view_as_windows
-
+from typing import Union
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
+from neuroseg.utils import BatchInspector3D, save_volume
 
 
 class TiledPredictor3D:
@@ -23,7 +25,8 @@ class TiledPredictor3D:
             padding_mode="reflect",
             extra_padding_windows=0,
             tiling_mode="average",
-            window_overlap=None
+            window_overlap: tuple = None,
+            debug: bool = False
     ):
 
         self.input_volume = input_volume
@@ -36,8 +39,7 @@ class TiledPredictor3D:
         self.tiling_mode = tiling_mode
         self.window_overlap = window_overlap
 
-        if self.window_overlap is not None:
-            assert all(self.window_overlap % 2 == 0), "window overlap must be divisible by 2"
+        self.debug = debug
 
         # self.tmp_folder = Path(tmp_folder)
         # self.keep_tmp = keep_tmp
@@ -48,8 +50,12 @@ class TiledPredictor3D:
         if not (self.crop_shape % 2 == 0).all():
             raise ValueError("crop shape must be divisible by 2 along all dims")
 
-        # calculating steps
+        # # calculating steps
         if self.window_overlap is not None:
+            assert (np.array(self.window_overlap) % 2 == 0).all(), "window overlap must be divisible by 2"
+            assert (np.array(self.window_overlap) - np.array(
+                self.crop_shape) < 0).all(), "Window overlap must not be greater than crop_shape"
+
             self.step = np.array(self.crop_shape) - np.array(self.window_overlap)
         else:
             self.step = np.array(self.crop_shape) // 2
@@ -61,9 +67,10 @@ class TiledPredictor3D:
         #     import pudb
         #     pudb.set_trace()
 
-        self.paddings = self.get_paddings(self.input_volume.shape,
-                                          self.crop_shape,
-                                          extra_windows=self.extra_tiling_windows)
+        self.paddings = self.get_paddings(image_shape=self.input_volume.shape,
+                                          crop_shape=self.crop_shape,
+                                          extra_windows=self.extra_tiling_windows,
+                                          step=self.step)
         self.padded_volume = self.pad_image(
             self.input_volume, self.paddings, mode=self.padding_mode
         )
@@ -80,40 +87,73 @@ class TiledPredictor3D:
                                                       model=self.model,
                                                       batch_size=self.batch_size,
                                                       tiling_mode=self.tiling_mode,
-                                                      window_overlap=self.window_overlap)
+                                                      window_overlap=self.window_overlap,
+                                                      debug=self.debug)
 
         prediction_volume = self.unpad_image(prediction_volume_padded, self.paddings)
         return prediction_volume
 
-    @staticmethod
-    def get_paddings(image_shape, crop_shape, extra_windows=0):
+    @classmethod
+    def get_paddings(cls,
+                     image_shape,
+                     crop_shape,
+                     extra_windows=0,
+                     step=None):
         """given image_shape and crop_shape get [(pad_left, pad_right)] paddings"""
 
-        image_shape = np.array(image_shape)
+        image_shape = np.array(image_shape)[:3]
         crop_shape = np.array(crop_shape)
+
+        if step is None:
+            step = crop_shape // 2
+        step = np.array(step)
 
         if not (crop_shape % 2 == 0).all():
             raise ValueError("crop_shape should be divisible by 2")
 
-        image_shape_spatial = image_shape[:3]
-        pad_list = [(0, 0) for _ in range(len(image_shape_spatial))]
+        pad_list = [(0, 0) for _ in range(len(image_shape))]
 
-        # mod = np.array(image_shape_spatial) % np.array(crop_shape)
-        step = crop_shape // 2
-        mod = (image_shape_spatial - crop_shape) % step
+        # non-distortion condition is (padded_shape - crop_shape) % step == 0
 
-        nonzero_idxs = np.nonzero(mod)[0]
+        # padded_shape = img_shape + paddings
+        # paddings = res_paddings + extra_tiling_windows * crop_shape
+        # padded_shape = img_shape + extra_tiling_windows * crop_shape + res_paddings
+        # condition becomes
+        # img_shape + (extra_tiling_windows - 1) * crop_shape + res_paddings % step = 0
 
-        if len(nonzero_idxs) > 0:
-            for nonzero_idx in nonzero_idxs:
-                idx = int(nonzero_idx)
-                total_pad = (step - mod)[idx] + extra_windows * crop_shape[idx]
-                left_pad = total_pad // 2
-                right_pad = total_pad - left_pad
+        # which is in the form
+        # a + x % b == 0
+        # with a = img_shape + (extra_tiling_windows - 1) * crop_shape
+        # b = step
 
-                pad_list[idx] = (left_pad, right_pad)
+        # im dumb so I bruteforce it.
 
-        return pad_list
+        tot_paddings = [0, 0, 0]
+        tot_res_paddings = [0, 0, 0]
+
+        paddings = [(0, 0) for _ in tot_paddings]
+
+        a = image_shape + (extra_windows - 1) * crop_shape
+        b = step
+
+        tot_res_paddings = -(a % b)
+
+        if any(tot_res_paddings < 0):
+            # making paddings positive
+            for idx in range(len(tot_res_paddings)):
+                if tot_res_paddings[idx] < 0:
+                    tot_res_paddings[idx] = tot_res_paddings[idx] + step[idx]
+
+        assert not any(tot_res_paddings < 0), "paddings must be positive"
+
+        tot_paddings = (extra_windows * crop_shape) + tot_res_paddings
+
+        for idx in range(len(image_shape)):
+            left_pad = tot_paddings[idx] // 2
+            right_pad = tot_paddings[idx] - left_pad
+            paddings[idx] = (left_pad, right_pad)
+
+        return paddings
 
     @staticmethod
     def pad_image(img, pad_widths, mode="constant"):
@@ -169,7 +209,8 @@ class TiledPredictor3D:
             model,
             batch_size,
             tiling_mode="average",
-            window_overlap=None
+            window_overlap=None,
+            debug=False
     ):
         view_shape = img_windows.shape
         if len(view_shape) == 8:
@@ -188,9 +229,9 @@ class TiledPredictor3D:
             raise ValueError("the first two dimensions of window_shape should be divisible by 2")
 
         if window_overlap is not None:
-            step = np.array(window_shape) - np.array(window_overlap)
+            step = np.array(window_shape_spatial) - np.array(window_overlap)
         else:
-            step = np.array(window_shape) // 2
+            step = np.array(window_shape_spatial) // 2
             window_overlap = step
 
         cls.check_distortion_condition(frame_shape, window_shape_spatial, step)
@@ -207,6 +248,10 @@ class TiledPredictor3D:
         for batch_idx, batch in enumerate(tqdm(batched_inputs)):
             batch_global_index = int(batch_idx) * batch_size
             predicted_batch = model.predict(batch)
+
+            if debug:
+                debug_batch = (batch, predicted_batch)
+                BatchInspector3D(debug_batch, title="PREDICTION BATCH DEBUG")
 
             for img_idx, pred_img in enumerate(predicted_batch):
                 tile_idx = img_idx + batch_global_index
@@ -226,8 +271,10 @@ class TiledPredictor3D:
                     weight_img[slice_z, slice_y, slice_x] += weight
 
                 elif tiling_mode == "drop_borders":
+                    assert all(
+                        np.array(window_overlap) % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
                     half_overlap = np.array(window_overlap) // 2
-                    assert all(half_overlap % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
+
                     slice_z = slice(pivot[0] + half_overlap[0], pivot[0] + window_shape[0] - half_overlap[0])
                     slice_y = slice(pivot[1] + half_overlap[1], pivot[1] + window_shape[1] - half_overlap[1])
                     slice_x = slice(pivot[2] + half_overlap[2], pivot[2] + window_shape[2] - half_overlap[2])
@@ -328,11 +375,56 @@ class DataPredictor3D(DataPredictorBase):
             model=self.prediction_model,
             padding_mode=self.padding_mode,
             extra_padding_windows=self.extra_padding_windows,
-            tiling_mode=self.tiling_mode
-
+            tiling_mode=self.tiling_mode,
+            window_overlap=self.window_overlap,
+            debug=self.debug
         )
 
         self.predicted_data = tiledpredictor.predict()
+        return self.predicted_data
+
+
+class H5DataPredictor(DataPredictorBase):
+    # self.predicted_data here is a list of pickle paths
+    def __init__(self, config, model=None):
+        super().__init__(config, model)
+
+    # overriding _save_volume with null function
+    def _save_volume(self):
+        pass
+
+    def predict(self):
+        self.predicted_data = []
+        n_vols = len(self.input_data)
+        for idx in range(n_vols):
+            volume = self.input_data[idx, 0, ...]
+            if self.normalize_data:
+                norm = np.iinfo(volume.dtype).max
+                volume = volume / norm
+            tiledpredictor = TiledPredictor3D(
+                input_volume=volume,
+                batch_size=self.batch_size,
+                n_output_classes=self.n_output_classes,
+                window_size=self.window_size,
+                model=self.prediction_model,
+                padding_mode=self.padding_mode,
+                extra_padding_windows=self.extra_padding_windows,
+                tiling_mode=self.tiling_mode,
+                window_overlap=self.window_overlap,
+                debug=self.debug
+            )
+            output_path = self.output_path
+
+            pred_data = tiledpredictor.predict()
+            saved_paths = save_volume(volume=pred_data,
+                                      output_path=self.output_path,
+                                      save_pickle=True,
+                                      fname=str(idx) + "_predict")
+
+            # if save_pickle == True first element is pickle fpath
+            pickle_fpath = saved_paths[0]
+            self.predicted_data.append(pickle_fpath)
+            del pred_data
         return self.predicted_data
 
 
@@ -352,7 +444,9 @@ class MultiVolumeDataPredictor3D(DataPredictorBase):
                 model=self.prediction_model,
                 padding_mode=self.padding_mode,
                 extra_padding_windows=self.extra_padding_windows,
-                tiling_mode=self.tiling_mode
+                tiling_mode=self.tiling_mode,
+                window_overlap=self.window_overlap,
+                debug=self.debug
             )
 
             tiled_predictors[volume_name] = tiledpredictor
@@ -360,4 +454,5 @@ class MultiVolumeDataPredictor3D(DataPredictorBase):
         self.predicted_data = {
             name: pred.predict() for name, pred in tiled_predictors.items()
         }
+        del tiled_predictors
         return self.predicted_data

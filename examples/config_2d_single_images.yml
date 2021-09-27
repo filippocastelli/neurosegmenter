@@ -1,58 +1,60 @@
 training_cfg:
-    mode: "3d"
+    mode: "2d"
     epochs: 1
-    batch_size: 5
-    loss: "binary_crossentropy"
+    batch_size: 20
+    loss: "weighted_categorical_crossentropy"
 #    class_weights:
 #        0: 05966296
 #        1: 1.0
-#    pos_weight: 10.82
+    pos_weight: 5
+    class_weights: [1.8, 4.3, 3.3, 0.25]
     track_metrics:
         - "accuracy"
         - "jaccard_index"
         - "dice_coefficient"
+    enable_wandb_tracking: true
 
 optimizer_cfg:
     # args in tf.KERAS.OPTIMIZERS api docs
     optimizer: "adam"
-    learning_rate: 0.00067
+    learning_rate: 0.001
     beta_1: 0.9
     beta_2: 0.999
     epsilon: 0.0000001
     amsgrad: false
 
 model_cfg:
-    model: "resunet3d"
-    crop_shape: [16, 200, 200]
-    unet_depth: 2
+    model: "resunet2d"
+    window_size: [256, 256]
+    unet_depth: 3
     base_filters: 16
     batch_normalization: true
     transposed_convolution: false
     residual_preactivation: true
 
 dataset_cfg:
-     dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
+#     dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
+     dataset_path : "/home/phil/Scrivania/idxmask_dataset_nolut"
 #     dataset_path : "/home/phil/repos/neuroseg/neuroseg/tests/test_datasets/stack_1ch"
-     mode: "stack"
-     n_channels: 1
+     mode: "single_images"
+     n_channels: 2
      positive_class_value: 255
      negative_class_value: 0
-     ignore_last_channel: false
-     soft_labels: False
-
-tiled_predictor_cfg:
-    extra_padding_windows: 2
-    window_overlap : [8, 20, 20]
-    tiling_mode: "drop_borders"
+     ignore_last_channel: true
+     use_bboxes: true
+#     n_output_classes: 3
+     class_values: [0, 1, 2, 255]
+ #    background_value: 255
 
 output_cfg:
-    output_path: "/mnt/ssd1/em_training"
-    descriptor_path: "/mnt/ssd1/em_training/descr"
-    enable_wandb_tracking: false
+#    output_path: "/mnt/ssd1/em_training"
+    output_path: "/home/phil/Scrivania/single_images_test_out"
+    #descriptor_path: "/home/phil/Scrivania/single_images_test_descr"
+#    descriptor_path: "/mnt/ssd1/em_training/descr"
 
 data_augmentation_cfg:
     debug_mode: false
-    single_thread: True
+    single_thread:  false
     threads: 6
     buffer_size : 1000
     shuffle: false
@@ -61,11 +63,10 @@ data_augmentation_cfg:
     transform_cfg:
         spatial_transform:
             do_elastic_deform: true
-            deformation_scale: [0, 0.25, 0.25]
+            deformation_scale: [0.15, 0.15]
             do_rotation: true
             angle_x: [-0.314, 0.314]
             angle_y: [0, 6.38]
-            angle_z: [0, 6.38]
             p_rot_per_sample: 0.15
             do_scale: true
             scale: [0.95, 1.05]
@@ -74,7 +75,7 @@ data_augmentation_cfg:
 
         brightness_transform:
             mu: 0
-            sigma: 0.01
+            sigma: 0.1
             p_per_sample: 0.15
 
         brightness_multiplicative_transform:
@@ -95,7 +96,7 @@ data_augmentation_cfg:
             invert_image: false
             per_channel: true
             p_per_sample: 0.15
-            retain_stats: true
+#            retain_stats: true
 
         gaussian_noise_transform:
             noise_variance: [0, 0.00005]
@@ -103,19 +104,19 @@ data_augmentation_cfg:
 
         gaussian_blur_transform:
             p_per_sample: 0.15
-            blur_sigma: [1, 1.2]
+            blur_sigma: [1, 1.5]
             different_sigma_per_channel: true,
             p_per_channel: 1
 
 performance_evaluation_cfg:
-    soft_labels: False
-    normalize_ground_truth: False
-    window_size: [16, 200, 200]
+    window_size: [256, 256]
     batch_size:       15
     chunk_size:       20
     classification_threshold:   0.5
     add_empty_channel:          true
     enable_curves: false
+    padding_mode: "reflect"
+    to_8bit: true
 
 callbacks_cfg:
     checkpoint:
@@ -134,11 +135,21 @@ callbacks_cfg:
         min_lr:     0.00000000067
         verbose:    1
 
+    wandb:
+        monitor: "val_loss"
+        mode: "min"
+        save_weights_only: false
+        save_model: true
+
 notes: ""
 
 debug_cfg:
     test_datagen_inspector: false
     train_datagen_inspector: false
     val_datagen_inspector: false
-    predict_inspector: false
 
+tiled_predictor_cfg:
+    extra_padding_windows: 2
+#    window_overlap : [12, 12]
+    tiling_mode: "drop_borders"
+    to_segmentation: true

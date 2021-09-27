@@ -1,134 +1,16 @@
-from typing import Union
+from typing import Union, List
 import numpy as np
 import sklearn.metrics as skmetrics
 import logging
 from pathlib import Path
+import h5py
+import csv
+import pickle
 
-from neuroseg.utils import load_volume, glob_imgs
+from skimage import io as skio
+
+from neuroseg.utils import load_volume, glob_imgs, save_volume
 from neuroseg.config import TrainConfig, PredictConfig
-
-
-class MultiVolumePerformanceEvaluator:
-
-    def __init__(self,
-                 config: Union[PredictConfig, TrainConfig],
-                 prediction_dict: dict):
-        self.config = config
-        self.prediction_dict = {key: np.squeeze(prediction) for key, prediction in prediction_dict.items()}
-        self.ground_truth_mode = config.ground_truth_mode
-        self.ground_truth_path = config.ground_truth_path
-        self.gt_dict = self._load_gt()
-
-        self.measure_dict = self._calc_aggregated_metrics()
-
-    def _load_gt(self) -> dict:
-        self.ground_truth_volume_fpaths = glob_imgs(self.ground_truth_path, mode="stack", to_string=False)
-        gt_fpath_names = [fpath.name for fpath in self.ground_truth_volume_fpaths]
-        if set(self.prediction_dict.keys()) != set(gt_fpath_names):
-            raise ValueError("GT masks not matching GT frames")
-
-        gt_dict = {}
-        for idx, gt_fpath in enumerate(self.ground_truth_volume_fpaths):
-            volume_name = gt_fpath.name
-            gt_volume = load_volume(gt_fpath,
-                                    ignore_last_channel=False,
-                                    data_mode="stack")
-            norm_constant = np.iinfo(gt_volume.dtype).max
-            gt_volume = gt_volume / norm_constant
-            gt_dict[volume_name] = gt_volume.astype(np.uint8)
-
-        return gt_dict
-
-    def _calc_metrics(self) -> dict:
-        metrics_dict = {}
-        for name, prediction in self.prediction_dict.items():
-            ground_truth = self.gt_dict[name]
-            pe = SingleVolumePerformanceEvaluator(self.config, prediction, ground_truth)
-            metrics_dict[name] = pe.measure_dict
-
-        self.metrics_dict = metrics_dict
-        return metrics_dict
-
-    def _calc_aggregated_metrics(self) -> dict:
-        metrics_dict = self.metrics_dict if hasattr(self, "metrics_dict") else self._calc_metrics()
-        aggregated_dict = self._get_metric_aggregated_dict(metrics_dict)
-        mean_aggregated_dict = {metric: np.mean(metric_array) for metric, metric_array in aggregated_dict.items()}
-        return mean_aggregated_dict
-
-    @staticmethod
-    def _get_metric_aggregated_dict(sample_metric_dict) -> dict:
-        first_elem = list(sample_metric_dict.keys())[0]
-        metrics = list(sample_metric_dict[first_elem].keys())
-
-        aggregated_dict = {metric: [] for metric in metrics}
-
-        for sample_name, metric_dict in sample_metric_dict.items():
-            for metric in metrics:
-                aggregated_dict[metric].append(metric_dict[metric])
-
-        return aggregated_dict
-
-
-class SingleVolumePerformanceEvaluator:
-
-    def __init__(self,
-                 config: Union[PredictConfig, TrainConfig],
-                 predicted_data: np.ndarray = None,
-                 gt_array: np.ndarray = None):
-        self.config = config
-
-        if gt_array is None:
-            self.ground_truth_mode = config.ground_truth_mode
-            self.ground_truth_path = self._get_gt_path()
-            self._load_gt()
-        else:
-            self.ground_truth = gt_array
-
-        self._preprocess_pred(predicted_data)
-
-        self.classification_threshold = config.pe_classification_threshold
-        self.enable_curves = config.pe_enable_curves
-        self._calc_metrics()
-
-    def _get_gt_path(self) -> Union[Path, list]:
-        if self.ground_truth_mode == "stack":
-            if self.config.ground_truth_path.is_file():
-                return self.config.ground_truth_path
-            elif self.config.ground_truth_path.is_dir():
-                return glob_imgs(self.config.ground_truth_path, mode="stack", to_string=False)[0]
-            else:
-                raise ValueError(f"invalid ground truth path {str(self.config.ground_truth_path)}")
-        elif self.ground_truth_mode == "single_images":
-            return self.config.ground_truth_path
-        else:
-            raise NotImplementedError(self.ground_truth_mode)
-
-    def _load_data(self, pred_array):
-        self._load_gt()
-        # self._load_predictions(pred_array)
-
-    def _preprocess_pred(self, pred_array: np.ndarray) -> None:
-        if len(pred_array.shape) > len(self.ground_truth.shape):
-            pred_array = np.squeeze(pred_array)
-
-        assert (pred_array.shape == self.ground_truth.shape), "GT and predictions have different number of channels"
-
-        self.predictions = pred_array
-
-    def _load_gt(self) -> None:
-        gt_vol = (load_volume(self.ground_truth_path,
-                              ignore_last_channel=False,
-                              data_mode=self.ground_truth_mode) / 255).astype(np.uint8)
-        self.ground_truth = gt_vol
-
-    def _calc_metrics(self):
-
-        self.performanceMetrics = PerformanceMetrics(y_true=self.ground_truth,
-                                                     y_pred=self.predictions,
-                                                     thr=self.classification_threshold,
-                                                     enable_curves=self.enable_curves)
-
-        self.measure_dict = self.performanceMetrics.measure_dict
 
 
 class PerformanceMetrics:
@@ -141,8 +23,8 @@ class PerformanceMetrics:
                  enable_curves: bool = False):
 
         self.enable_curves = enable_curves
-        self.y_true = np.copy(y_true)
-        self.y_pred = np.copy(y_pred)
+        self.y_true = np.copy(y_true).astype(np.uint8)
+        self.y_pred = np.copy(y_pred).astype(np.uint8) # AM I RETARDED
         self.thr = thr
 
         self.y_pred_fuzzy = y_pred
@@ -152,8 +34,10 @@ class PerformanceMetrics:
         self.fuzzy_summation = np.sum(self.y_pred_fuzzy.flatten()) + np.sum(self.y_true_fuzzy.flatten())
         self.fuzzy_union = self.fuzzy_summation - self.fuzzy_intersection
 
-        self.y_pred = self.threshold_array(self.y_pred, thr, to_bool=True)
-        self.y_true = self.threshold_array(self.y_true, thr, to_bool=True)
+        # self.y_pred = self.threshold_array(self.y_pred, thr, to_bool=True)
+        # self.y_true = self.threshold_array(self.y_true, thr, to_bool=True)
+        self.y_true = self.y_true > thr
+        self.y_pred = self.y_pred > thr
 
         self.tp, self.fp, self.tn, self.fn = self.cardinal_metrics()
 
@@ -258,8 +142,8 @@ class PerformanceMetrics:
         return self.tp / (self.tp + self.fp)
 
     def crisp_auc(self) -> float:
-        """Estimator of Area under ROC 
-        ROC is defined as TPR vs FPR plot, AUC here is calculated as area of the 
+        """Estimator of Area under ROC
+        ROC is defined as TPR vs FPR plot, AUC here is calculated as area of the
         trapezoid defined by the measurement opint of the lines TPR=0 nad FPR=1.
         Implemented from Taha et al. - Metrics from Evaluating 3D Medical Image Segmentation (47)
         """
@@ -291,8 +175,8 @@ class PerformanceMetrics:
         """Area under ROC curve
         Implemented by scikit-learn"""
         logging.info("Calculating PR curve")
-        flatten_y_true = self.y_true_fuzzy.flatten()
-        flatten_y_pred = self.y_pred_fuzzy.flatten()
+        flatten_y_true = self.y_true.flatten()
+        flatten_y_pred = self.y_pred.flatten()
 
         return skmetrics.roc_auc_score(y_true=flatten_y_true,
                                        y_score=flatten_y_pred)
@@ -354,13 +238,298 @@ class PerformanceMetrics:
         return self.measure_dict
 
 
+class SingleVolumePerformanceEvaluator:
+
+    def __init__(self,
+                 config: Union[PredictConfig, TrainConfig],
+                 predicted_data: np.ndarray = None,
+                 gt_array: np.ndarray = None):
+        self.config = config
+
+        self.n_output_classes = config.n_output_classes
+        self.class_values = config.class_values
+
+        self.soft_labels = config.soft_labels
+        if config.config_type == "predict":
+            self.normalize_ground_truth = config.ground_truth_normalize
+        elif config.config_type == "training":
+            self.normalize_ground_truth = config.normalize_masks
+
+        if gt_array is None:
+            self.ground_truth_mode = config.ground_truth_mode
+            self.ground_truth_path = self._get_gt_path()
+            self._load_gt()
+        else:
+            self.ground_truth = gt_array
+
+        self._preprocess_pred(predicted_data)
+
+        self.classification_threshold = config.pe_classification_threshold
+        self.enable_curves = config.pe_enable_curves
+        self._calc_metrics()
+
+    def _get_gt_path(self) -> Union[Path, list]:
+        if self.ground_truth_mode == "stack":
+            if self.config.ground_truth_path.is_file():
+                return self.config.ground_truth_path
+            elif self.config.ground_truth_path.is_dir():
+                return glob_imgs(self.config.ground_truth_path, mode="stack", to_string=False)[0]
+            else:
+                raise ValueError(f"invalid ground truth path {str(self.config.ground_truth_path)}")
+        elif self.ground_truth_mode == "single_images":
+            return self.config.ground_truth_path
+        else:
+            raise NotImplementedError(self.ground_truth_mode)
+
+    def _load_data(self, pred_array):
+        self._load_gt()
+        # self._load_predictions(pred_array)
+
+    def _preprocess_pred(self, pred_array: np.ndarray) -> None:
+        if len(pred_array.shape) > len(self.ground_truth.shape):
+            pred_array = np.squeeze(pred_array)
+        elif len(pred_array.shape) < len(self.ground_truth.shape):
+            pred_array = np.expand_dims(pred_array, axis=-1)
+        else:
+            pass
+
+        assert (pred_array.shape == self.ground_truth.shape), "GT and predictions have different number of channels"
+
+        self.predictions = pred_array
+
+    def _load_gt(self) -> None:
+        gt_vol, norm = load_volume(self.ground_truth_path,
+                                   ignore_last_channel=False,
+                                   data_mode=self.ground_truth_mode,
+                                   return_norm=True)
+
+        if self.n_output_classes > 1:
+            class_val_img_list = []
+            for output_class_value in self.class_values:
+                class_val_img_list.append(np.where(gt_vol == output_class_value, 1, 0))
+
+            gt_vol = np.stack(class_val_img_list, axis=-1)
+
+        if self.normalize_ground_truth:
+            gt_vol = gt_vol / norm
+
+        # if not self.soft_labels:
+        #     gt_vol = gt_vol.astype(np.uint8)
+
+        self.ground_truth = gt_vol
+
+    def _calc_metrics(self):
+        self.performanceMetrics = PerformanceMetrics(y_true=self.ground_truth,
+                                                     y_pred=self.predictions,
+                                                     thr=self.classification_threshold,
+                                                     enable_curves=self.enable_curves)
+
+        self.measure_dict = self.performanceMetrics.measure_dict
+
+class bboxPerformanceEvaluator:
+
+    def __init__(self,
+                 config: Union[PredictConfig, TrainConfig],
+                 predicted_data: np.ndarray):
+        self.config = config
+
+        # this should be a [z, y, x, ch] volume
+        self.predicted_data = predicted_data
+        self.class_values = self.config.class_values
+        self.n_output_values = self.config.n_output_classes
+
+        if config.config_type == "predict":
+            raise NotImplementedError
+
+        self.gt_vol, self.bboxes = self._load_gt()
+        self.measure_dict = self._calc_metrics()
+
+    def _calc_metrics(self):
+        metrics_dict = {}
+        for idx, output_class_value in enumerate(self.class_values):
+            class_gt_arr = np.array(())
+            class_pred_arr = np.array(())
+            for bbox_idx, bbox in enumerate(self.bboxes):
+                predictions = self.predicted_data[bbox_idx, bbox[1]:bbox[3], bbox[0]:bbox[2], idx]
+                predictions_flat = predictions.flatten()
+                class_pred_arr = np.append(class_pred_arr, predictions_flat)
+
+                gt = self.gt_vol[bbox_idx, bbox[1]:bbox[3], bbox[0]:bbox[2], idx]
+                gt_flat = gt.flatten()
+                class_gt_arr = np.append(class_gt_arr, gt_flat)
+
+            pe = SingleVolumePerformanceEvaluator(self.config, predicted_data=class_pred_arr, gt_array=class_gt_arr)
+            metrics_dict[output_class_value] = pe.measure_dict
+
+        return metrics_dict
+
+
+    def _load_gt(self):
+        gt_img_paths = sorted(glob_imgs(self.config.ground_truth_path, mode="stack"))
+
+        csv_paths = [fpath.parent.joinpath(fpath.name+".csv") for fpath in gt_img_paths]
+        bboxes = [self._parse_csv(fpath) for fpath in csv_paths]
+
+        img_list = []
+        for fpath in gt_img_paths:
+            img = skio.imread(str(fpath), plugin="pil")
+
+            class_value_img_list = []
+            for class_value in self.class_values:
+                val_img = np.where(img == class_value, 1, 0)
+                class_value_img_list.append(val_img)
+
+            img = np.stack(class_value_img_list, axis=-1)
+            img_list.append(img)
+
+        gt_vol = np.stack(img_list, axis=0)
+
+        return gt_vol, bboxes
+
+
+    @staticmethod
+    def _parse_csv(csv_path: Path) -> list:
+        """return the first row of a csv file"""
+        out_list = []
+        with csv_path.open(mode="r") as infile:
+            reader = csv.reader(infile)
+            for row in reader:
+                row_ints = [int(elem) for elem in row]
+                out_list.append(row_ints)
+        return out_list[0]
+
+
+class H5PerformanceEvaluator:
+    def __init__(self,
+                 config: Union[PredictConfig, TrainConfig],
+                 predict_pathlist: list):
+        self.config = config
+
+        self.predict_pathlist = predict_pathlist
+        if config.config_type == "predict":
+            raise NotImplementedError("Performance evaluation for prediction on h5 datasets is not yet supported")
+        elif config.config_type == "training":
+            self.normalize_ground_truth = config.normalize_masks
+
+        self.measure_dict = self._calc_aggregated_metrics()
+
+    def _calc_metrics(self) -> dict:
+        metrics_dict = {}
+        h5file = h5py.File(str(self.config.path_dict["test"]), "r")
+
+        for idx, path in enumerate(self.predict_pathlist):
+            ground_truth = h5file["data"][idx, 1, ...]
+            if self.normalize_ground_truth:
+                norm = np.iinfo(ground_truth.dtype).max
+                ground_truth = ground_truth / norm
+            with self.predict_pathlist[idx].open(mode="rb") as infile:
+                prediction = pickle.load(infile)
+            pe = SingleVolumePerformanceEvaluator(self.config, prediction, ground_truth)
+            metrics_dict[str(idx)] = pe.measure_dict
+
+        self.metrics_dict = metrics_dict
+        return metrics_dict
+
+    def _calc_aggregated_metrics(self) -> dict:
+        metrics_dict = self.metrics_dict if hasattr(self, "metrics_dict") else self._calc_metrics()
+        aggregated_dict = self._get_metric_aggregated_dict(metrics_dict)
+        mean_aggregated_dict = {metric: np.mean(metric_array) for metric, metric_array in aggregated_dict.items()}
+        return mean_aggregated_dict
+
+    @staticmethod
+    def _get_metric_aggregated_dict(sample_metric_dict) -> dict:
+        first_elem = list(sample_metric_dict.keys())[0]
+        metrics = list(sample_metric_dict[first_elem].keys())
+
+        aggregated_dict = {metric: [] for metric in metrics}
+
+        for sample_name, metric_dict in sample_metric_dict.items():
+            for metric in metrics:
+                aggregated_dict[metric].append(metric_dict[metric])
+
+        return aggregated_dict
+
+
+class MultiVolumePerformanceEvaluator:
+    def __init__(self,
+                 config: Union[PredictConfig, TrainConfig],
+                 prediction_dict: dict):
+        self.config = config
+        self.prediction_dict = {key: np.squeeze(prediction) for key, prediction in prediction_dict.items()}
+        self.ground_truth_mode = config.ground_truth_mode
+        self.ground_truth_path = config.ground_truth_path
+
+        if config.config_type == "predict":
+            self.normalize_ground_truth = config.ground_truth_normalize
+        elif config.config_type == "training":
+            self.normalize_ground_truth = config.normalize_masks
+
+        self.gt_dict = self._load_gt()
+
+        self.measure_dict = self._calc_aggregated_metrics()
+
+    def _load_gt(self) -> dict:
+        self.ground_truth_volume_fpaths = glob_imgs(self.ground_truth_path, mode="stack", to_string=False)
+        gt_fpath_names = [fpath.name for fpath in self.ground_truth_volume_fpaths]
+        if set(self.prediction_dict.keys()) != set(gt_fpath_names):
+            raise ValueError("GT masks not matching GT frames")
+
+        gt_dict = {}
+        for idx, gt_fpath in enumerate(self.ground_truth_volume_fpaths):
+            volume_name = gt_fpath.name
+            gt_volume, norm = load_volume(gt_fpath,
+                                          ignore_last_channel=False,
+                                          data_mode="stack",
+                                          return_norm=True)
+            if self.normalize_ground_truth:
+                gt_volume = gt_volume / norm
+            gt_dict[volume_name] = gt_volume
+
+        return gt_dict
+
+    def _calc_metrics(self) -> dict:
+        metrics_dict = {}
+        for name, prediction in self.prediction_dict.items():
+            ground_truth = self.gt_dict[name]
+            pe = SingleVolumePerformanceEvaluator(self.config, prediction, ground_truth)
+            metrics_dict[name] = pe.measure_dict
+
+        self.metrics_dict = metrics_dict
+        return metrics_dict
+
+    def _calc_aggregated_metrics(self) -> dict:
+        metrics_dict = self.metrics_dict if hasattr(self, "metrics_dict") else self._calc_metrics()
+        aggregated_dict = self._get_metric_aggregated_dict(metrics_dict)
+        mean_aggregated_dict = {metric: np.mean(metric_array) for metric, metric_array in aggregated_dict.items()}
+        return mean_aggregated_dict
+
+    @staticmethod
+    def _get_metric_aggregated_dict(sample_metric_dict) -> dict:
+        first_elem = list(sample_metric_dict.keys())[0]
+        metrics = list(sample_metric_dict[first_elem].keys())
+
+        aggregated_dict = {metric: [] for metric in metrics}
+
+        for sample_name, metric_dict in sample_metric_dict.items():
+            for metric in metrics:
+                aggregated_dict[metric].append(metric_dict[metric])
+
+        return aggregated_dict
+
+
 def PerformanceEvaluator(config: Union[TrainConfig, PredictConfig],
-                         predicted_data: Union[np.ndarray, dict] = None) -> Union[
-    MultiVolumePerformanceEvaluator, SingleVolumePerformanceEvaluator]:
+                         predicted_data: Union[np.ndarray, dict, list] = None) -> Union[
+    MultiVolumePerformanceEvaluator, SingleVolumePerformanceEvaluator, H5PerformanceEvaluator, bboxPerformanceEvaluator]:
     data_mode = config.dataset_mode if config.config_type == "training" else config.data_mode
     if data_mode in ["single_images", "stack"]:
         # predicted_data should be an ndarray
-        return SingleVolumePerformanceEvaluator(config, predicted_data=predicted_data)
+        if config.use_bboxes:
+            return bboxPerformanceEvaluator(config, predicted_data=predicted_data)
+        else:
+            return SingleVolumePerformanceEvaluator(config, predicted_data=predicted_data)
     elif data_mode == "multi_stack":
         # predicted_data should be a dict
         return MultiVolumePerformanceEvaluator(config, prediction_dict=predicted_data)
+    elif data_mode == "h5_dataset":
+        return H5PerformanceEvaluator(config, predict_pathlist=predicted_data)
+

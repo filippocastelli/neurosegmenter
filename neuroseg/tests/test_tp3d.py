@@ -56,8 +56,8 @@ BATCH_SIZES = [
 ]
 BATCH_SIZES_IDS = gen_ids(BATCH_SIZES, name="batch_size")
 
-CHUNK_SIZES = [1, 10, 21, None]
-CHUNK_SIZES_IDS = gen_ids(CHUNK_SIZES, name="chunk")
+# CHUNK_SIZES = [1, 10, 21, None]
+# CHUNK_SIZES_IDS = gen_ids(CHUNK_SIZES, name="chunk")
 
 CROP_SHAPES = [
     np.array([32, 128, 128]),
@@ -98,7 +98,7 @@ class mockModel:
             batchsize, n_z, n_y, n_x = inputs.shape
         else:
             raise ValueError("invalid input hsape for mockModel")
-        return np.zeros(shape=(batchsize, n_y, n_x, self.pred_classes))
+        return np.zeros(shape=(batchsize, n_z, n_y, n_x, self.pred_classes))
 
 
 # pudb.set_trace()
@@ -111,9 +111,8 @@ def input_volume_fixture(request):
 class TestDataPredictor3D:
     @pytest.mark.neuroseg_datapredictor3d_ensemble
     @pytest.mark.parametrize("batch_size", BATCH_SIZES, ids=BATCH_SIZES_IDS)
-    @pytest.mark.parametrize("chunk_size", CHUNK_SIZES, ids=CHUNK_SIZES_IDS)
     @pytest.mark.parametrize("crop_shape", CROP_SHAPES, ids=CROP_SHAPES_IDS)
-    def test_init_tiledpredictor3D(self, input_volume_fixture, batch_size, chunk_size, crop_shape):
+    def test_init_tiledpredictor3D(self, input_volume_fixture, batch_size, crop_shape):
         fail_condition = not all((np.array(crop_shape) % 2) == 0)
         if fail_condition:
             context = pytest.raises(ValueError)
@@ -124,7 +123,6 @@ class TestDataPredictor3D:
             tp = TiledPredictor3D(
                 input_volume=input_volume_fixture,
                 batch_size=batch_size,
-                chunk_size=chunk_size,
                 window_size=crop_shape,
                 padding_mode="reflect",
                 model=model

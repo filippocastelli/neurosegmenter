@@ -13,14 +13,12 @@ def Datagen(config: Union[TrainConfig, PredictConfig],
     if config.training_mode == "2d":
         return DataGen2D(config=config,
                          partition=partition,
-                         normalize_inputs=normalize_inputs,
                          verbose=verbose,
                          data_augmentation=data_augmentation)
     elif config.training_mode == "3d":
         return DataGen3D(config=config,
                          partition=partition,
                          data_augmentation=data_augmentation,
-                         verbose=verbose,
-                         normalize_inputs=normalize_inputs)
+                         verbose=verbose)
     else:
         raise NotImplementedError(config.training_mode)

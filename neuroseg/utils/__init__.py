@@ -9,3 +9,5 @@ from neuroseg.utils.volume_io import is_supported_ext
 from neuroseg.utils.volume_io import glob_imgs
 from neuroseg.utils.name_generator import NameGenerator
 
+from neuroseg.utils.to_argmax import toargmax
+

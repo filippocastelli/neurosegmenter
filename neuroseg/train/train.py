@@ -1,13 +1,19 @@
 import logging
 from pathlib import Path
 from typing import Union
+from contextlib import nullcontext
+
+import yaml
 
 from neuroseg.config import (
     TrainConfig,
     CallbackConfigurator,
     ModelConfigurator,
     OptimizerConfigurator,
-    MetricsConfigurator)
+    MetricsConfigurator,
+    WandbConfigurator)
+
+import tensorflow as tf
 
 from neuroseg.datagens import Datagen
 from neuroseg.utils import BatchInspector
@@ -33,13 +39,36 @@ def debug_train_val_datagens(config: TrainConfig,
     """datagens debug batch inspector"""
     if config.train_datagen_inspector:
         train_batch = next(train_datagen.data.__iter__())
-        _ = BatchInspector(config, train_batch)
+        _ = BatchInspector(config, train_batch, title="TRAIN DATAGEN BATCH DEBUG")
     if config.val_datagen_inspector:
         val_batch = next(val_datagen.data.__iter__())
-        _ = BatchInspector(config, val_batch)
+        _ = BatchInspector(config, val_batch, title="VAL DATAGEN BATCH DEBUG")
+
+
+def get_strategy_scope(config: TrainConfig):
+    strategy_name = config.distribute_strategy
+    if strategy_name == "mirrored":
+        return tf.distribute.MirroredStrategy().scope()
+    else:
+        return nullcontext()
+
+
+def dump_custom_objects(config: TrainConfig,
+                        optimizer_cfg: OptimizerConfigurator,
+                        metrics_cfg: MetricsConfigurator):
+    custom_object_names = {
+        "optimizer": optimizer_cfg.optimizer_name,
+        "loss": metrics_cfg.loss_name,
+        "metrics": metrics_cfg.track_metrics_names
+    }
+
+    with config.custom_objects_path.open(mode="w") as custom_objects_dump:
+        yaml.dump(custom_object_names, custom_objects_dump)
 
 
 def train(train_config: TrainConfig):
+    wc = WandbConfigurator(train_config)
+
     setup_logger(train_config.logfile_path)
     train_datagen = Datagen(train_config,
                             partition="train",
@@ -54,17 +83,16 @@ def train(train_config: TrainConfig):
                           data_augmentation=False)
 
     debug_train_val_datagens(train_config, train_datagen, val_datagen)
-
     callback_cfg = CallbackConfigurator(train_config)
     callbacks = callback_cfg.callbacks
 
-    model_cfg = ModelConfigurator(train_config)
-    model = model_cfg.model
+    with get_strategy_scope(train_config):
+        model_cfg = ModelConfigurator(train_config)
+        model = model_cfg.model
+        optimizer_cfg = OptimizerConfigurator(train_config)
+        metrics_cfg = MetricsConfigurator(train_config)
 
-    optimizer_cfg = OptimizerConfigurator(train_config)
-
-    metrics_cfg = MetricsConfigurator(train_config)
-
+    dump_custom_objects(train_config, optimizer_cfg, metrics_cfg)
     model.compile(optimizer=optimizer_cfg.optimizer,
                   loss=metrics_cfg.loss,
                   metrics=metrics_cfg.track_metrics)
@@ -83,6 +111,7 @@ def train(train_config: TrainConfig):
         dp = DataPredictor(train_config, model)
         ev = PerformanceEvaluator(train_config, dp.predicted_data)
         performance_dict = ev.measure_dict
+        wc.log_metrics(performance_dict)
     else:
         performance_dict = None
 

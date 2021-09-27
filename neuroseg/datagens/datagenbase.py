@@ -10,22 +10,25 @@ class DataGenBase:
                  config: Union[TrainConfig, PredictConfig],
                  partition: str = "train",
                  data_augmentation: bool = True,
-                 normalize_inputs: bool = True,
                  verbose: bool = False):
 
         self.config = config
         self.partition = partition
         self.data_path_dict = self.config.path_dict[partition]
         self.dataset_mode = self.config.dataset_mode
+        self.use_bboxes = self.config.use_bboxes
 
+        # TODO: deprecate positive_class_value and negative_class_value
         self.positive_class_value = self.config.positive_class_value
         self.verbose = verbose
         self._path_sanity_check()
 
-        self.crop_shape = config.crop_shape
+        self.crop_shape = config.window_size
         self.batch_size = config.batch_size
 
-        self.normalize_inputs = normalize_inputs
+        self.normalize_inputs = self.config.normalize_inputs
+        self.normalize_masks = self.config.normalize_masks
+        self.soft_labels = self.config.soft_labels
 
         self.single_thread = config.da_single_thread
         self.threads = 1 if config.da_single_thread == True else config.da_threads
@@ -34,6 +37,8 @@ class DataGenBase:
         self.transforms = config.da_transforms
         self.transform_cfg = config.da_transform_cfg
 
+        self.class_values = config.class_values
+        self.background_value = config.background_value
         # init sequence
         self._scan_dirs()
 
@@ -44,14 +49,16 @@ class DataGenBase:
                 raise ValueError("dataset paths are not actual dirs")
 
     def _scan_dirs(self) -> None:
-        self.frames_paths = self._glob_subdirs("frames")
-        self.masks_paths = self._glob_subdirs("masks")
+        if self.dataset_mode in ["single_images", "stack", "multi_stack"]:
+            self.frames_paths = self._glob_subdirs("frames")
+            self.masks_paths = self._glob_subdirs("masks")
+        else:
+            pass
 
-    def _glob_subdirs(self, subdir: Path) -> list:
+    def _glob_subdirs(self, subdir: str) -> list:
         subdir_paths = [str(imgpath) for imgpath in
                         sorted(self.data_path_dict[subdir].glob("*.*"))
                         if self._is_supported_format(imgpath)]
-
         if self.verbose:
             print("there are {} {} imgs".format(len(subdir_paths), subdir))
         return subdir_paths

@@ -24,7 +24,7 @@ class dataGen2D:
         self.verbose = verbose
         self._path_sanity_check()
         
-        self.crop_shape = config.crop_shape
+        self.crop_shape = config.window_size
         self.batch_size = config.batch_size
         
         self.normalize_inputs = normalize_inputs
