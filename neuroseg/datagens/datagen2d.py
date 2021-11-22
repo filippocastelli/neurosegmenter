@@ -1,272 +1,98 @@
-from pathlib import Path
-from functools import partial
-import csv
-import logging
 from typing import Union, Tuple, List, Callable
+import logging
 
 import numpy as np
-from skimage import io as skio
-from batchgenerators.dataloading import SingleThreadedAugmenter, MultiThreadedAugmenter
-from batchgenerators.dataloading.data_loader import DataLoader
-from batchgenerators.transforms import Compose
-from batchgenerators.transforms.spatial_transforms import (
-    MirrorTransform,
-    SpatialTransform_2,
-    Rot90Transform)
-from batchgenerators.transforms.crop_and_pad_transforms import RandomCropTransform
-from batchgenerators.transforms.color_transforms import (
-    BrightnessTransform,
-    BrightnessMultiplicativeTransform,
-    GammaTransform,
-    ClipValueRange)
-from batchgenerators.transforms.noise_transforms import (
-    GaussianNoiseTransform,
-    GaussianBlurTransform)
 
 from neuroseg.config import TrainConfig, PredictConfig
-from neuroseg.datagens.datagenbase import DataGenBase
+from batchgenerators.dataloading.data_loader import DataLoader
 
 
-class DataGen2D(DataGenBase):
+class DataGen2D:
     def __init__(self,
                  config: Union[TrainConfig, PredictConfig],
                  partition: str = "train",
                  data_augmentation: bool = True,
                  verbose: bool = False):
-        super().__init__(config=config,
-                         partition=partition,
-                         data_augmentation=data_augmentation,
-                         verbose=verbose)
-        self.shuffle = self.config.da_shuffle
-        self.seed = self.config.da_seed
 
+        self.config = config
+        self.partition = partition
+        self.data_path_dict = self.config.path_dict[partition]
+        self.dataset_mode = self.config.dataset_mode
         self.ignore_last_channel = self.config.ignore_last_channel
 
-        data_dict = {"img": self.frames_paths,
-                     "label": self.masks_paths}
+        self.frames_paths, self.mask_paths = self._glob_subdirs()
 
-        self.dataLoader = BboxCroppedDataLoader(
+        self.verbose = verbose
+
+        self.window_size = self.config.window_size
+        self.batch_size = self.config.batch_size
+
+        self.data_augmentation = data_augmentation
+        self.data_augmentation_transforms = self.config.da_transforms
+        self.data_augmentation_transforms_config = self.config.da_transform_cfg
+
+        self.single_thread_augmentation = self.config.da_single_thread
+        self.data_augmentation_threads = 1 if config.da_single_thread is True else config.da_threads
+
+        self.class_values = self.config.class_values
+z
+        data_dict = {"img": self.frames_paths,
+                     "label": self.maskpaths}
+
+        self.data_loader = BboxCroppedDataLoader(
             data=data_dict,
             batch_size=self.batch_size,
-            crop_shape=self.crop_shape,
-            data_mode=self.dataset_mode,
-            num_threads_in_multithreaded=self.threads,
-            shuffle=self.shuffle,
-            seed_for_shuffle=self.seed,
-            infinite=True,
-            normalize_inputs=self.normalize_inputs,
-            normalize_masks=self.normalize_masks,
-            ignore_last_channel=self.ignore_last_channel,
-            class_values=self.class_values,
-            background_value=self.background_value
+            window_size=self.window_size,
+            num_threads_in_multithreaded=self.data_augmentation_threads,
+            shuffle=self.shuffle
+
         )
+    def _path_sanity_check(self) -> None:
+        if self.dataset_mode in ["single_images", "stack"]:
+            if not (self.data_path_dict["frames"].is_dir()
+                    and self.data_path_dict["masks"].is_dir()):
+                raise ValueError("dataset paths are not actual dirs")
 
-        self.steps_per_epoch = self.dataLoader.steps_per_epoch
-        self.composed_transform = self.get_transform_chain()
+    def _glob_subdirs(self) -> Tuple[list, list]:
+        assert self.dataset_mode in ["single_images", "stack",
+                                     "multi_stack"], f"unexpected dataset mode {self.dataset_mode}"
+        frames_paths = self._glob_dir("frames")
+        mask_paths = self._glob_dir("masks")
 
-        if self.single_thread:
-            self.gen = SingleThreadedAugmenter(self.dataLoader, self.composed_transform)
-        else:
-            self.gen = MultiThreadedAugmenter(self.dataLoader,
-                                              self.composed_transform,
-                                              self.threads)
+        return frames_paths, mask_paths
 
-        self.data = self.get_keras_gen(self.gen, channel_last=True)
-        self.iter = self.data.__iter__()
+    def _glob_dir(self, subdir: st) -> list:
+        subdir_paths = [
+            str(imgpath) for imgpath in sorted(self.data_path_dict[subdir].glob("*.*"))
+            if self._is_supported_format(imgpath)]
 
-    @classmethod
-    def get_keras_gen(cls,
-                      batchgen: Union[SingleThreadedAugmenter, MultiThreadedAugmenter],
-                      channel_last: bool = True):
-        while True:
-            batch_dict = next(batchgen)
-            frames = batch_dict["data"]
-            masks = batch_dict["seg"]
-
-            if channel_last:
-                frames = cls._to_channel_last(frames)
-                masks = cls._to_channel_last(masks)
-
-            yield frames.astype(np.float32), masks.astype(np.float32)
+        if self.verbose:
+            logging.info("there are {} {} imgs".format(len(subdir_paths), subdir))
+        return subdir_paths
 
     @staticmethod
-    def _to_channel_last(input_tensor: np.ndarray) -> np.ndarray:
-        """convert (batch, ch, z, y, x) tensor to (batch, z, y, x, ch) tensor"""
-        return np.moveaxis(input_tensor, source=1, destination=-1)
+    def _is_supported_format(fpath: Path) -> bool:
+        extension = fpath.suffix.split(".")[1]
+        return extension in SUPPORTED_IMG_FORMATS or extension in SUPPORTED_STACK_FORMATS
 
-    def get_transform_chain(self) -> Compose:
-        if self.data_augmentation:
-            transforms = self.get_augment_transforms()
-        else:
-            transforms = []
 
-        # clip data values to [0. 1.]
-        clip_min = 0. if self.normalize_inputs else np.finfo(np.float32).min
-        clip_max = 1.0 if self.normalize_inputs else np.finfo(np.float32).max
+# need different dataloaders for different modes
 
-        transforms.append(ClipValueRange(min=clip_min, max=clip_max))
-
-        return Compose(transforms)
-
-    def get_augment_transforms(self):
-        transforms = []
-        for transform in self.transforms:
-            transform_fn = self.get_transform_fn(transform)
-            transform_cfg = self.get_transform_cfg(transform)
-
-            transforms.append(transform_fn(**transform_cfg))
-        return transforms
-
-    @classmethod
-    def get_transform_fn(cls, transform: str) -> Callable:
-        TRANSFORM_FNS = {
-            "brightness_transform": BrightnessTransform,
-            "brightness_multiplicative_transform": BrightnessMultiplicativeTransform,
-            "gamma_transform": GammaTransform,
-            "gaussian_noise_transform": GaussianNoiseTransform,
-            "gaussian_blur_transform": GaussianBlurTransform,
-            "mirror_transform": MirrorTransform,
-            "rot90_transform": Rot90Transform,
-            "spatial_transform": SpatialTransform_2,
-        }
-        if transform not in TRANSFORM_FNS:
-            raise NotImplementedError("transform {} not supported".format(transform))
-        return TRANSFORM_FNS[transform] if transform in TRANSFORM_FNS else None
-
-    def get_transform_cfg(self, transform: str) -> dict:
-        TRANSFORM_CFGS = {
-            "brightness_transform": self._brightness_transform_cfg,
-            "brightness_multiplicative_transform": self._brightness_multiplicative_transform_cfg,
-            "gamma_transform": self._gamma_transform_cfg,
-            "gaussian_noise_transform": self._gaussian_noise_transform_cfg,
-            "gaussian_blur_transform": self._gaussian_blur_transform_cfg,
-            "mirror_transform": self._mirror_transform_cfg,
-            "rot90_transform": self._rot90_transform_cfg,
-            "spatial_transform": self._spatial_transform_cfg,
-        }
-        if transform not in TRANSFORM_CFGS:
-            raise NotImplementedError("transform {} not supported".format(transform))
-
-        return TRANSFORM_CFGS[transform]() if transform in TRANSFORM_CFGS else None
-
-    def _brightness_transform_cfg(self) -> dict:
-        """brightness additive transform configurator"""
-        brightness_transform_cfg = {
-            "p_per_sample": 0.15,
-            "mu": 0,
-            "sigma": 0.01,
-        }
-
-        brightness_transform_cfg.update(self.transform_cfg["brightness_transform"])
-        return brightness_transform_cfg
-
-    def _brightness_multiplicative_transform_cfg(self) -> dict:
-        """brightness multiplicative transform configurator"""
-        brightness_multiplicative_transform_cfg = {
-            "multiplier_range": (0.9, 1.1),
-            "per_channel": True,
-            "p_per_sample": 0.15}
-
-        brightness_multiplicative_transform_cfg.update(self.transform_cfg["brightness_multiplicative_transform"])
-        return brightness_multiplicative_transform_cfg
-
-    def _gamma_transform_cfg(self):
-        """gamma trasnform configurator"""
-        gamma_transform_cfg = {
-            "p_per_sample": 0.15,
-            "per_channel": True,
-            "invert_image": False,
-            "retain_stats": True,
-            "gamma_range": (0.9, 1.1)
-        }
-
-        gamma_transform_cfg.update(self.transform_cfg["gamma_transform"])
-        return gamma_transform_cfg
-
-    def _gaussian_noise_transform_cfg(self) -> dict:
-        """gaussian noise additive transform configurator"""
-        gaussian_noise_transform_cfg = {
-            "p_per_sample": 0.15,
-            "noise_variance": [0, 0.0005]
-        }
-
-        gaussian_noise_transform_cfg.update(self.transform_cfg["gaussian_noise_transform"])
-        return gaussian_noise_transform_cfg
-
-    def _gaussian_blur_transform_cfg(self) -> dict:
-        """gaussian filtering transform configurator"""
-        gaussian_blur_transform_cfg = {
-            "p_per_sample": 0.15,
-            "blur_sigma": (1, 5),
-            "different_sigma_per_channel": True,
-            "p_per_channel": True
-        }
-
-        gaussian_blur_transform_cfg.update(self.transform_cfg["gaussian_blur_transform"])
-        return gaussian_blur_transform_cfg
-
-    def _mirror_transform_cfg(self) -> dict:
-        """mirror transform configurator"""
-        mirror_transform_cfg = {
-            "axes": (0, 1)
-        }
-
-        mirror_transform_cfg.update(self.transform_cfg["mirror_transform"])
-        return mirror_transform_cfg
-
-    def _rot90_transform_cfg(self) -> dict:
-        """rigid 90 degree rotation transform configurator"""
-        rotation_axes = (0, 1)
-        rot90_transform_cfg = {
-            "num_rot": (1, 2),
-            # "axes": (0,1,2),
-            "axes": rotation_axes,
-            "p_per_sample": 0.15
-        }
-
-        rot90_transform_cfg.update(self.transform_cfg["rot90_transform"])
-        return rot90_transform_cfg
-
-    def _spatial_transform_cfg(self) -> dict:
-        """spatial transform"""
-        # default options
-        spatial_transform_cfg = {
-            "patch_size": self.crop_shape,
-            "patch_center_dist_from_border": np.array(self.crop_shape) // 2,
-            "do_elastic_deform": False,
-            "deformation_scale": (0.25, 0.25),
-            "do_rotation": False,
-            "angle_x": (-np.pi / 10, np.pi / 10),  # data is in z, y, x format
-            "angle_y": (0, 2 * np.pi),
-            "do_scale": True,
-            "scale": (0.95, 1.05),
-            "border_mode_data": "nearest",
-            "random_crop": True,
-        }
-
-        # user-defined options
-        spatial_transform_cfg.update(self.transform_cfg["spatial_transform"])
-        return spatial_transform_cfg
-
+# BboxCroppedDataLoader for single-images_bbox
+# SingleImagesCroppedDataLoader for single-images
+# StackCroppedDataLoader for stacks
 
 class BboxCroppedDataLoader(DataLoader):
 
     def __init__(self,
                  data: dict,
                  batch_size: int,
-                 crop_shape: Union[tuple, list],
-                 data_mode: str = "single_images",
-                 use_bboxes: bool = False,
+                 window_size: Union[tuple, list],
                  num_threads_in_multithreaded: int = 1,
                  shuffle: bool = False,
                  seed_for_shuffle: int = 123,
-                 infinite: bool = False,
-                 normalize_inputs: bool = True,
-                 normalize_masks: bool = False,
-                 # soft_labels: bool = False,
-                 class_values: list = (0),
-                 background_value: Union[int, float] = 255,
-                 ignore_last_channel: bool = False):
+                 class_values: list = (0,),
+                 ignore_last_channel=False):
 
         super().__init__(
             data=data,
@@ -281,34 +107,36 @@ class BboxCroppedDataLoader(DataLoader):
         self.label_paths = self._data["label"]
 
         self.rng_seed = seed_for_shuffle
-        self.normalize_inputs = normalize_inputs
-        self.normalize_masks = normalize_masks
-        # self.soft_labels = soft_labels
         self.data_mode = data_mode
-        self.crop_shape = crop_shape
-        self.use_bboxes = use_bboxes
-        self.ignore_last_channel = ignore_last_channel
+        self.window_size = window_size
 
         self.class_values = class_values
-        self.background_value = background_value
+        self.ignore_last_channel = ignore_last_channel
 
+        # setting random number generator
         if self.rng_seed is not None:
             np.random.seed(self.rng_seed)
 
+        # asserting right number of images and labels
         if len(self.img_paths) != len(self.label_paths):
             raise ValueError("img and labels have different length, check dataset")
 
-        if use_bboxes is not None:
-            self.csv_paths = [Path(fpath).parent.joinpath(Path(fpath).name + ".csv") for fpath in self.label_paths]
-        else:
-            self.csv_paths = None
+        self.csv_paths = [Path(fpath).parent.joinpath(Path(fpath).name + ".csv") for fpath in self.label_paths]
 
+        # load image volumes
         self.img_volume, self.label_volume, self.bboxes = self._single_images_load(
             frame_paths=self.img_paths,
             mask_paths=self.label_paths,
             csv_paths=self.csv_paths
         )
 
+        self.steps_per_epoch = self._get_steps_per_epoch()
+
+    def _get_steps_per_epoch(self) -> int:
+        """
+        returns the number of steps per epoch based on the total annotated pixels
+        calculated with the csv bboxes
+        """
         annotated_pixels = 0
         for bbox in self.bboxes:
             widht = bbox[2] - bbox[0]
@@ -316,89 +144,23 @@ class BboxCroppedDataLoader(DataLoader):
             annotated_px_bbox = widht * height
             annotated_pixels += annotated_px_bbox
         mask_px = np.prod(self.crop_shape)
-        self.steps_per_epoch = annotated_pixels // (mask_px * self.batch_size)
-
-        # # apply normalization
-        # NORMALIZATION IS ALREADY APPLIED IN LOAD_IMG
-        # if self.normalize_inputs:
-        #     norm = np.iinfo(self.img_volume.dtype).max
-        #     self.img_volume = self.img_volume / norm
-        # if self.normalize_masks:
-        #     norm = np.iinfo(self.label_volume.dtype).max
-        #     self.label_volume = self.label_volume / norm
-
-        dataset_inspect_flag = False
-        if dataset_inspect_flag:
-            from neuroseg.utils import BatchInspector2D
-            BatchInspector2D((self.img_volume, self.label_volume), bboxes=self.bboxes, title="Datagen2D Inspect")
-
-        annotated_pixels = 0
-        for b_box in self.bboxes:
-            width = b_box[2] - b_box[0]
-            height = b_box[3] - b_box[1]
-            annotated_pixels_bbox = width * height
-            annotated_pixels += annotated_pixels_bbox
-
-        mask_px = np.prod(self.crop_shape)
-        self.steps_per_epoch = annotated_pixels // (mask_px * self.batch_size)
-
-    @classmethod
-    def get_random_crop(cls,
-                        frame_volume: np.ndarray,
-                        mask_volume: np.ndarray,
-                        crop_shape: Union[list, tuple, np.ndarray],
-                        b_boxes: Union[list, tuple, np.ndarray]):
-
-        n_planes = frame_volume.shape[0]
-        assert len(b_boxes) == (frame_volume.shape[0])
-        plane_weights = np.array([(box[2] - box[0]) * (box[3] - box[1]) for box in b_boxes])
-        plane_weights = plane_weights / np.sum(plane_weights)
-        planes = list(range(n_planes))
-
-        plane = np.random.choice(a=planes, p=plane_weights)
-        # plane = np.random.randint(low=0, high=frame_volume.shape[0])
-
-        # outputs x_min, y_min, x_max, y_max
-        crop_box = cls._get_bounding_box(frame_shape=frame_volume.shape[1:],
-                                         crop_shape=crop_shape,
-                                         b_box=b_boxes[plane])
-        # but stack ordering is [z,y,x]
-        frame_crop = frame_volume[plane, crop_box[1]:crop_box[3], crop_box[0]:crop_box[2]]
-        mask_crop = mask_volume[plane, crop_box[1]:crop_box[3], crop_box[0]:crop_box[2]]
-
-        return frame_crop, mask_crop
+        return annotated_pixels // (mask_px * self.batch_size)
 
     @staticmethod
-    def _get_bounding_box(frame_shape: Union[list, tuple],
-                          crop_shape: Union[list, tuple],
-                          b_box: np.ndarray = None) -> np.ndarray:
-        """get n_crops random bounding boxes in frame_shape"""
-        if b_box is None:
-            b_box = [0, frame_shape[0], 0, frame_shape[1]]
+    def _parse_csv(csv_path: Path) -> list:
+        """return the first row of a csv file"""
+        out_list = []
+        with csv_path.open(mode="r") as infile:
+            reader = csv.reader(infile)
+            for row in reader:
+                row_ints = [int(elem) for elem in row]
+                out_list.append(row_ints)
+        return out_list[0]
 
-        if not (np.array(crop_shape) > np.array(frame_shape)[1:2]).any():
-            x_low = b_box[0]
-            x_high = b_box[2] - crop_shape[0]
-
-            y_low = b_box[1]
-            y_high = b_box[3] - crop_shape[1]
-        else:
-            raise ValueError("crop_shape is larger than frame_shape")
-        lower_x = int(np.random.uniform(low=x_low, high=x_high))
-        lower_y = int(np.random.uniform(low=y_low, high=y_high))
-
-        upper_x = lower_x + crop_shape[0]
-        upper_y = lower_y + crop_shape[1]
-        # crop_boxes = (lower_x, lower_y, upper_x, upper_y)
-        crop_boxes = np.stack((lower_x, lower_y, upper_x, upper_y), axis=-1)
-        # crop_boxes = np.column_stack((lower_x, lower_y, upper_x, upper_y))
-
-        return crop_boxes
-
-    def _single_images_load(self,
-                            frame_paths: list,
-                            mask_paths: list,
-                            csv_paths: list) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _load_single_images_csv(self,
+                                frame_paths: list,
+                                mask_paths: list,
+                                csv_paths: list) -> Tuple[np.ndarray, np.ndarray.np.ndarray]:
         csv_lists = []
         for fpath in csv_paths:
             if fpath.is_file():
@@ -468,19 +230,6 @@ class BboxCroppedDataLoader(DataLoader):
                 # we should have [y, x, ch]
                 img = np.stack(img_list, axis=-1)
 
-            # if is_binary_mask and not (n_classes > 1):
-            #     # assert len(values) in [1, 2], "mask is not binary {}\n there are {} values".format(str(
-            #     # img_to_load_path), len(values))
-            #     if len(uniques) not in [1, 2]:
-            #         logging.warning(
-            #             "Mask is not binary {}\nthere are {} values\nautomatically converting to binary mask".format(
-            #                 str(img_to_load_path), len(uniques)
-            #             )
-            #         )
-            #     img = np.where(img == class_values[0], 1, 0)
-            #     img = img.astype(np.float64)
-                # img = np.expand_dims(img, axis=-1)
-
             # target shape = [y, x, ch]
             # adjust dimensions to target
             img_shape = img.shape
@@ -501,19 +250,61 @@ class BboxCroppedDataLoader(DataLoader):
                 )
             )
 
+    @classmethod
+    def get_random_crop(cls,
+                        frame_volume: np.ndarray,
+                        mask_volume: np.ndarray,
+                        window_size: Union[list, tuple, np.ndarray],
+                        b_boxes: Union[list, tuple, np.ndarray]):
+
+        n_planes = frame_volume.shape[0]
+        assert len(b_boxes) == (frame_volume.shape[0])
+        plane_weights = np.array([(box[2] - box[0]) * (box[3] - box[1]) for box in b_boxes])
+        plane_weights = plane_weights / np.sum(plane_weights)
+        planes = list(range(n_planes))
+
+        plane = np.random.choice(a=planes, p=plane_weights)
+        # plane = np.random.randint(low=0, high=frame_volume.shape[0])
+
+        # outputs x_min, y_min, x_max, y_max
+        crop_box = cls._get_bounding_box(frame_shape=frame_volume.shape[1:],
+                                         window_size=window_size,
+                                         b_box=b_boxes[plane])
+        # but stack ordering is [z,y,x]
+        frame_crop = frame_volume[plane, crop_box[1]:crop_box[3], crop_box[0]:crop_box[2]]
+        mask_crop = mask_volume[plane, crop_box[1]:crop_box[3], crop_box[0]:crop_box[2]]
+
+        return frame_crop, mask_crop
+
     @staticmethod
-    def _parse_csv(csv_path: Path) -> list:
-        """return the first row of a csv file"""
-        out_list = []
-        with csv_path.open(mode="r") as infile:
-            reader = csv.reader(infile)
-            for row in reader:
-                row_ints = [int(elem) for elem in row]
-                out_list.append(row_ints)
-        return out_list[0]
+    def _get_bounding_box(frame_shape: Union[list, tuple],
+                          window_size: Union[list, tuple],
+                          b_box: np.ndarray = None) -> np.ndarray:
+        """get n_crops random bounding boxes in frame_shape"""
+        if b_box is None:
+            b_box = [0, frame_shape[0], 0, frame_shape[1]]
+
+        if not (np.array(crop_shape) > np.array(frame_shape)[1:2]).any():
+            x_low = b_box[0]
+            x_high = b_box[2] - window_size[0]
+
+            y_low = b_box[1]
+            y_high = b_box[3] - window_size[1]
+        else:
+            raise ValueError("crop_shape is larger than frame_shape")
+        lower_x = int(np.random.uniform(low=x_low, high=x_high))
+        lower_y = int(np.random.uniform(low=y_low, high=y_high))
+
+        upper_x = lower_x + window_size[0]
+        upper_y = lower_y + window_size[1]
+        # crop_boxes = (lower_x, lower_y, upper_x, upper_y)
+        crop_boxes = np.stack((lower_x, lower_y, upper_x, upper_y), axis=-1)
+        # crop_boxes = np.column_stack((lower_x, lower_y, upper_x, upper_y))
+
+        return crop_boxes
 
     def generate_train_batch(self) -> dict:
-
+        """generates a {"data": stack_img, "seg": stack_label} batch dictionary"""
         img_batch = []
         label_batch = []
 
