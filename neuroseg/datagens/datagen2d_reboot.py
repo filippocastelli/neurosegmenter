@@ -5,9 +5,10 @@ import random
 import numpy as np
 
 from neuroseg.config import TrainConfig, PredictConfig
-from batchgenerators.dataloading import SingleThreadedAugmenter, MultiThreadedAugmenter
+from batchgenerators.dataloading.single_threaded_augmenter import SingleThreadedAugmenter
+from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAugmenter
 from batchgenerators.dataloading.data_loader import DataLoader
-from batchgenerators.transforms import Compose
+from batchgenerators.transforms.abstract_transforms import Compose
 from batchgenerators.transforms.spatial_transforms import (
     MirrorTransform,
     SpatialTransform_2,
