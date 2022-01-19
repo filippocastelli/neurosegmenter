@@ -12,7 +12,7 @@ training_cfg:
         - "accuracy"
         - "jaccard_index"
         - "dice_coefficient"
-    enable_wandb_tracking: true
+    enable_wandb_tracking: false
 
 optimizer_cfg:
     # args in tf.KERAS.OPTIMIZERS api docs
@@ -25,8 +25,8 @@ optimizer_cfg:
 
 model_cfg:
     model: "resunet2d"
-    window_size: [256, 256]
-    unet_depth: 3
+    window_size: [128, 128]
+    unet_depth: 2
     base_filters: 16
     batch_normalization: true
     transposed_convolution: false
@@ -34,27 +34,26 @@ model_cfg:
 
 dataset_cfg:
 #     dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
-     dataset_path : "/home/phil/Scrivania/idxmask_dataset_nolut"
-#     dataset_path : "/home/phil/repos/neuroseg/neuroseg/tests/test_datasets/stack_1ch"
+     #dataset_path : "/home/phil/Scrivania/idxmask_dataset_nolut"
+     dataset_path : "/home/castelli/repos/neuroseg/neuroseg/tests/test_datasets/single_images_1ch_tif"
      mode: "single_images"
-     n_channels: 2
-     positive_class_value: 255
-     negative_class_value: 0
-     ignore_last_channel: true
-     use_bboxes: true
+     n_channels: 1
+#     positive_class_value: 255
+#     negative_class_value: 0
+#     ignore_last_channel: false
 #     n_output_classes: 3
-     class_values: [0, 1, 2, 255]
+#     class_values: [0, 1, 2, 255]
  #    background_value: 255
 
 output_cfg:
 #    output_path: "/mnt/ssd1/em_training"
-    output_path: "/home/phil/Scrivania/single_images_test_out"
+    output_path: "/home/castelli/Desktop/single_images_test_out"
     #descriptor_path: "/home/phil/Scrivania/single_images_test_descr"
 #    descriptor_path: "/mnt/ssd1/em_training/descr"
 
 data_augmentation_cfg:
     debug_mode: false
-    single_thread:  false
+    single_thread:  true
     threads: 6
     buffer_size : 1000
     shuffle: false
@@ -135,11 +134,11 @@ callbacks_cfg:
         min_lr:     0.00000000067
         verbose:    1
 
-    wandb:
-        monitor: "val_loss"
-        mode: "min"
-        save_weights_only: false
-        save_model: true
+#    wandb:
+#        monitor: "val_loss"
+#        mode: "min"
+#        save_weights_only: false
+#        save_model: true
 
 notes: ""
 

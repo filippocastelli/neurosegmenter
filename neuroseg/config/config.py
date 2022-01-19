@@ -214,10 +214,11 @@ class TrainConfig(Config):
         self.use_bboxes = self.get_param(dataset_cfg, "use_bboxes", False)
 
         # TODO: deprecate n_output_classes (inferred from class_values)
-        self.class_values = self.get_param(dataset_cfg, "class_values", [1, ])
-        self.background_value = self.get_param(dataset_cfg, "background_value", 255)
-        self.n_output_classes = len(self.class_values)
-
+#        self.class_values = self.get_param(dataset_cfg, "class_values", [1, ])
+#        self.background_value = self.get_param(dataset_cfg, "background_value", 255)
+#        self.n_output_classes = len(self.class_values)
+        # TODO: n_output_classes is not used anymore
+        self.n_output_classes = 1
         return
 
     def _parse_model_cfg(self,

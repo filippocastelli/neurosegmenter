@@ -6,7 +6,7 @@ class WandbConfigurator:
 
     def __init__(self,
                  train_config: TrainConfig):
-
+        self.train_config = train_config
         if train_config.enable_wandb_tracking:
             self.train_config = train_config
             self.project_name = "unet_spim"
