@@ -8,8 +8,8 @@ import tifffile
 
 from neuroseg.config import TrainConfig, PredictConfig
 from batchgenerators.dataloading.data_loader import DataLoader
-from batchgenerators.dataloading.single_threaded_augmenter import SingleThreadedAugmenter
-from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAugmenter
+# from batchgenerators.dataloading.single_threaded_augmenter import SingleThreadedAugmenter
+# from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAugmenter
 from batchgenerators.dataloading.single_threaded_augmenter import SingleThreadedAugmenter
 from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAugmenter
 from batchgenerators.transforms.color_transforms import (
@@ -66,7 +66,8 @@ class DataGen2D:
         if self.data_augmentation_single_thread:
             self.generator_bg = SingleThreadedAugmenter(self.data_loader, self.composed_transform)
         else:
-            self.generator_bg = MultiThreadedAugmenter(self.data_loader, self.composed_transform, self.data_augmentation_threads)
+            self.generator_bg = MultiThreadedAugmenter(self.data_loader, self.composed_transform,
+                                                       self.data_augmentation_threads)
 
         # passing data to a keras-understandable format
         self.data = self._get_keras_gen(self.generator_bg, channel_last=True)
@@ -100,7 +101,15 @@ class DataGen2D:
         elif dataset_mode == "stack":
             raise NotImplementedError("stack mode is not implemented yet")
         elif dataset_mode == "multi_stack":
-            raise NotImplementedError("multi_stack mode is not implemented yet")
+            data_loader = MultiStackDataLoader(
+                data=self.data_dict,
+                batch_size=self.batch_size,
+                window_size=self.window_size,
+                num_threads_in_multithreaded=self.data_augmentation_threads,
+                shuffle=self.data_augmentation_shuffle,
+                seed_for_shuffle=self.data_augmentation_seed
+            )
+            # raise NotImplementedError("multi_stack mode is not implemented yet")
         else:
             raise ValueError(f"{dataset_mode} is not supported")
         return data_loader
@@ -144,8 +153,6 @@ class DataGen2D:
         transforms.append(ClipValueRange(min=0., max=1.))
 
         return Compose(transforms)
-
-
 
     @staticmethod
     def _get_transform_fn(transform_str: str) -> Callable:
@@ -199,7 +206,8 @@ class DataGen2D:
             "per_channel": True,
             "p_per_sample": 0.15}
 
-        brightness_multiplicative_transform_cfg.update(self.data_augmentation_transforms_config["brightness_multiplicative_transform"])
+        brightness_multiplicative_transform_cfg.update(
+            self.data_augmentation_transforms_config["brightness_multiplicative_transform"])
         return brightness_multiplicative_transform_cfg
 
     def _gamma_transform_cfg(self):
@@ -368,7 +376,7 @@ class SingleImagesDataLoader(DataLoader):
         label_batch = []
 
         for _ in range(self.batch_size):
-            crop_img, crop_label = self._get_random_crop(
+            crop_img, crop_label = self.get_random_crop(
                 frame_volume=self.img_volume,
                 mask_volume=self.label_volume,
                 window_size=self.window_size)
@@ -386,10 +394,10 @@ class SingleImagesDataLoader(DataLoader):
         return {"data": stack_img, "seg": stack_label}
 
     @classmethod
-    def _get_random_crop(cls,
-                         frame_volume: np.ndarray,
-                         mask_volume: np.ndarray,
-                         window_size: Union[list, tuple, np.ndarray]):
+    def get_random_crop(cls,
+                        frame_volume: np.ndarray,
+                        mask_volume: np.ndarray,
+                        window_size: Union[list, tuple, np.ndarray]):
         img_plane = np.random.randint(0, frame_volume.shape[0])
 
         # assert that the window size is less than the image size
@@ -414,3 +422,100 @@ class SingleImagesDataLoader(DataLoader):
 
         crop_box = np.stack((lower_x, lower_y, upper_x, upper_y), axis=-1)
         return crop_box
+
+
+class MultiStackDataLoader(DataLoader):
+    def __init__(self,
+                 data: dict,
+                 batch_size: int,
+                 window_size: Union[list, tuple],
+                 num_threads_in_multithreaded: int = 1,
+                 shuffle: bool = False,
+                 seed_for_shuffle: int = 123,
+                 infinite: bool = False):
+
+        super().__init__(
+            data=data,
+            batch_size=batch_size,
+            num_threads_in_multithreaded=num_threads_in_multithreaded,
+            shuffle=shuffle,
+            seed_for_shuffle=seed_for_shuffle,
+            infinite=infinite)
+
+        self.img_paths = self._data["img"]
+        self.label_paths = self._data["label"]
+
+        self.rng_seed = seed_for_shuffle
+        if self.rng_seed is not None:
+            np.random.seed(self.rng_seed)
+
+        self.window_size = window_size
+
+        if len(self.img_paths) != len(self.label_paths):
+            raise ValueError("img and label paths must have the same length")
+
+        self.dataset_list = self._load_data()
+        self.steps_per_epoch = self._get_steps_per_epoch()
+
+    def generate_train_batch(self):
+        img_batch = []
+        label_batch = []
+
+        for _ in range(self.batch_size):
+            random_idx = np.random.randint(0, len(self.dataset_list))
+
+            crop_img, crop_label = SingleImagesDataLoader.get_random_crop(
+                frame_volume=self.dataset_list[random_idx][0],
+                mask_volume=self.dataset_list[random_idx][1],
+                window_size=self.window_size)
+
+            img_batch.append(crop_img)
+            label_batch.append(crop_label)
+
+        stack_img = np.stack(img_batch, axis=0)
+        stack_label = np.stack(label_batch, axis=0)
+
+        # target shape is [batch, ch, z, y, x]
+        # adding channel in channel_first format
+        stack_img = np.moveaxis(stack_img, -1, 1)
+        stack_label = np.moveaxis(stack_label, -1, 1)
+
+        return {"data": stack_img, "seg": stack_label}
+
+    def _load_data(self):
+        dataset_list = []
+        for img_path, label_path in zip(self.img_paths, self.label_paths):
+            img = self._load_img(img_path, normalize=True)
+            label = self._load_img(label_path, normalize=True)
+            dataset_list.append((img, label))
+        return dataset_list
+
+    @staticmethod
+    def _load_img(img_path: Path,
+                  normalize: bool = True) -> np.ndarray:
+        img = tifffile.imread(img_path)
+
+        if normalize:
+            norm_constant = np.iinfo(img.dtype).max
+            img = img / norm_constant
+
+        # target shape is [z, y, x, channels]
+
+        if len(img.shape) == 3:
+            logging.debug("image shape is [z, y, x], adding channel dimension")
+            img = np.expand_dims(img, axis=-1)
+        elif len(img.shape) == 4:
+            pass
+        else:
+            raise ValueError("image shape must be 3 or 4")
+
+        return img
+
+    def _get_steps_per_epoch(self):
+        tot_img_px = 0
+        for img, mask in self.dataset_list:
+            tot_img_px += np.prod(img.shape)
+
+        tot_window_px = np.prod(self.window_size)
+
+        return tot_img_px // (tot_window_px * self.batch_size)

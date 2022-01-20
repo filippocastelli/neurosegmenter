@@ -87,7 +87,7 @@ class DataPredictorBase:
             self.data_mode = self.config.dataset_mode
             self.normalize_data = self.config.normalize_inputs
             self.output_mode = "stack"
-            self.window_size = self.config.crop_shape
+            self.window_size = self.config.window_size
             self.batch_size = self.config.batch_size
             # self.chunk_size = self.config.pe_chunk_size
             self.padding_mode = "reflect"
