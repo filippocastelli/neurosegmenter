@@ -31,7 +31,7 @@ class WandbConfigurator:
             "mode": self.train_config.training_mode,
             "loss": self.train_config.loss,
             "metrics": self.train_config.track_metrics,
-            "classes": self.train_config.class_values,
+            # "classes": self.train_config.class_values,
             "model": self.train_config.model,
             "crop_shape": self.train_config.window_size,
             "unet_depth": self.train_config.unet_depth,
@@ -57,5 +57,8 @@ class WandbConfigurator:
                     for key, item in class_dict.items():
                         class_key_str = key + "_" + str(class_value)
                         wandb.run.summary[class_key_str] = item
+            else:
+                for key, item in metrics_dict.items():
+                    wandb.run.summary[key] = item
         else:
             pass
