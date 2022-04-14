@@ -33,9 +33,7 @@ model_cfg:
     residual_preactivation: true
 
 dataset_cfg:
-#     dataset_path : "/mnt/ssd1/datasets/em_neuroseg"
-     #dataset_path : "/home/phil/Scrivania/idxmask_dataset_nolut"
-     dataset_path : "/home/castelli/repos/neuroseg/neuroseg/tests/test_datasets/single_images_1ch_tif"
+     dataset_path : "/home/phil/repos/neuroseg/neuroseg/tests/test_datasets/single_images_1ch_tif"
      mode: "single_images"
      n_channels: 1
 #     positive_class_value: 255
@@ -47,7 +45,7 @@ dataset_cfg:
 
 output_cfg:
 #    output_path: "/mnt/ssd1/em_training"
-    output_path: "/home/castelli/Desktop/single_images_test_out"
+    output_path: "/home/phil/Desktop/single_images_test_out"
     #descriptor_path: "/home/phil/Scrivania/single_images_test_descr"
 #    descriptor_path: "/mnt/ssd1/em_training/descr"
 
