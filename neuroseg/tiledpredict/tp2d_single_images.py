@@ -46,7 +46,7 @@ class SingleImagesDataPredictor:
             pred = SingleImageTiledPredictor(input_img=img,
                                              batch_size=self.config.batch_size,
                                              window_size=self.config.window_size,
-                                             output_class_values=self.config.class_values,
+                                             # output_class_values=self.config.class_values,
                                              model=self.model,
                                              padding_mode=self.config.padding_mode,
                                              extra_padding_windows=self.config.extra_padding_windows,
@@ -101,7 +101,7 @@ class SingleImageTiledPredictor:
                  input_img: np.ndarray,
                  batch_size: int = 5,
                  window_size: tuple = (128, 128),
-                 output_class_values: tuple = (0, 1, 2, 255),
+                 # output_class_values: tuple = (0, 1, 2, 255),
                  model=None,
                  padding_mode: str = "reflect",
                  extra_padding_windows: int = 2,
@@ -111,7 +111,7 @@ class SingleImageTiledPredictor:
         self.input_img = input_img
         self.batch_size = batch_size
         self.window_size = np.array(window_size)
-        self.output_class_values = output_class_values
+        # self.output_class_values = output_class_values
         self.model = model
         self.padding_mode = padding_mode
         self.extra_padding_windows = extra_padding_windows
@@ -148,7 +148,10 @@ class SingleImageTiledPredictor:
             step = np.array(self.step)
 
         # tot_paddings = [0, 0]
-        paddings = [(0, 0), (0, 0), (0, 0)]
+        # paddings = [(0, 0), (0, 0), (0, 0)]
+        paddings = [(0, 0) for _ in range(len(self.input_img.shape))]
+
+        paddings = [(0, 0), (0, 0)]
         a = image_shape + (self.extra_padding_windows - 1) * self.window_size
 
         tot_res_paddings = - (a % step)
@@ -238,7 +241,8 @@ class SingleImageTiledPredictor:
         reshaped_windows = self.patch_window_view.reshape((-1, *window_shape))
         batched_inputs = self.divide_into_batches(reshaped_windows, self.batch_size)
 
-        out_img_shape = [*self.padded_img.shape[:2], len(self.output_class_values)]
+        # out_img_shape = [*self.padded_img.shape[:2], len(self.output_class_values)]
+        out_img_shape = [*self.padded_img.shape[:2], 1]
         output_img = np.zeros(out_img_shape, dtype=np.float32)
         weight_img = np.zeros(out_img_shape, dtype=np.float32)
 

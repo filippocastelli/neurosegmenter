@@ -3,11 +3,11 @@ import h5py
 from pathlib import Path
 from typing import Union, Callable, Generator, Tuple
 
-from batchgenerators.dataloading import (
-    MultiThreadedAugmenter,
-    SingleThreadedAugmenter)
+from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAugmenter
+from batchgenerators.dataloading.single_threaded_augmenter import SingleThreadedAugmenter
+
 from batchgenerators.dataloading.data_loader import DataLoader
-from batchgenerators.transforms import Compose
+from batchgenerators.transforms.abstract_transforms import Compose
 from batchgenerators.transforms.spatial_transforms import (
     MirrorTransform,
     SpatialTransform_2,

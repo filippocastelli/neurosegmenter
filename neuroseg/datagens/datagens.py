@@ -13,7 +13,6 @@ def Datagen(config: Union[TrainConfig, PredictConfig],
     if config.training_mode == "2d":
         return DataGen2D(config=config,
                          partition=partition,
-                         verbose=verbose,
                          data_augmentation=data_augmentation)
     elif config.training_mode == "3d":
         return DataGen3D(config=config,

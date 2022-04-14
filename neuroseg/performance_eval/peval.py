@@ -247,7 +247,7 @@ class SingleVolumePerformanceEvaluator:
         self.config = config
 
         self.n_output_classes = config.n_output_classes
-        self.class_values = config.class_values
+        # self.class_values = config.class_values
 
         self.soft_labels = config.soft_labels
         if config.config_type == "predict":
