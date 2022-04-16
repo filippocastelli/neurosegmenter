@@ -30,11 +30,12 @@ class ResUNET3D(ResUNETBase):
     def _get_model(
         cls,
         input_shape: Union[list, tuple] = (64, 64, 64, 1),
+        output_classes: int = 1,
         base_filters: int = 16,
         depth: int = 2,
         batch_normalization: bool = True,
-        transposed_convolution: bool = False,
         pre_activation: bool = True,
+        transposed_convolution: bool = False,
     ):
         """
     resUnet3D
