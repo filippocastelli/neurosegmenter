@@ -446,7 +446,11 @@ class MultiCroppedDataLoaderBG(DataLoader):
         self.volume_names = list(self.volume_dict.keys())
         self.volume_shape_dict = {key: vol_dict_item["img"].shape[1:] for key, vol_dict_item in
                                   self.volume_dict.items()}
-        self.volume_shape = self.volume_shape_dict[list(self.volume_shape_dict.keys())[0]][1:]
+
+        self.volume_shape = self.volume_shape_dict[list(self.volume_shape_dict.keys())[0]]
+
+        if len(self.volume_shape) > 3:
+            self.volume_shape = self.volume_shape[1:]
 
     def _get_nested_path_dict(self) -> dict:
         nested_dict = {}
@@ -583,7 +587,9 @@ class CroppedDataLoaderBG(DataLoader):
             data_mode=self.data_mode,
             label_positive_class_value=self.positive_class_value)
 
-        self.volume_shape = self.frames_volume.shape[1:]
+        self.volume_shape = self.frames_volume.shape
+        if len(self.volume_shape) > 3:
+            self.volume_shape = self.volume_shape[1:]
         self.crop_shape = crop_shape
         # self.pre_crop_scales = pre_crop_scales
         self.rng_seed = seed_for_shuffle
