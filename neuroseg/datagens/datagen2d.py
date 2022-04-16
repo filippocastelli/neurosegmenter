@@ -493,7 +493,7 @@ class MultiStackDataLoader(DataLoader):
     @staticmethod
     def _load_img(img_path: Path,
                   normalize: bool = True) -> np.ndarray:
-        img = tifffile.imread(img_path)
+        img = tifffile.imread(str(img_path))
 
         if normalize:
             norm_constant = np.iinfo(img.dtype).max
