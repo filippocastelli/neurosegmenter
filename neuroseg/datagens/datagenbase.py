@@ -37,8 +37,8 @@ class DataGenBase:
         self.transforms = config.da_transforms
         self.transform_cfg = config.da_transform_cfg
 
-        self.class_values = config.class_values
-        self.background_value = config.background_value
+        # self.class_values = config.class_values
+        # self.background_value = config.background_value
         # init sequence
         self._scan_dirs()
 
