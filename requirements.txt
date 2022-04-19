@@ -1,4 +1,4 @@
-tensorflow-gpu==2.5.0
+tensorflow-gpu==2.7.0
 numpy==1.19.5
 pandas==1.2.4
 scikit-image==0.18.1
@@ -9,6 +9,6 @@ tifffile==2021.4.8
 tqdm==4.60.0
 batchgenerators==0.21
 pyyaml==5.4.1
-tensorflow-addons==0.13.0
+tensorflow-addons==0.16.1
 wandb==0.10.33
 zetastitcher
