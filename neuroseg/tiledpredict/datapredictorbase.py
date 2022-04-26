@@ -25,6 +25,7 @@ class DataPredictorBase:
 
     def _parse_paths(self):
         if self.mode == "predict":
+            self.channel_names = None
             if self.data_mode == "single_images":
                 self.data_path = self.config.data_path
             elif self.data_mode == "stack":
