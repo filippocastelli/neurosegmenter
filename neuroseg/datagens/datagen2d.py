@@ -419,11 +419,11 @@ class SingleImagesDataLoader(DataLoader):
     @staticmethod
     def _get_bounding_box(frame_shape: Union[list, tuple],
                           window_size: Union[list, tuple, np.ndarray]) -> np.ndarray:
-        lower_x = int(np.random.uniform(low=0, high=frame_shape[0] - window_size[0]))
-        lower_y = int(np.random.uniform(low=0, high=frame_shape[1] - window_size[1]))
+        lower_x = int(np.random.uniform(low=0, high=frame_shape[1] - window_size[1]))
+        lower_y = int(np.random.uniform(low=0, high=frame_shape[0] - window_size[0]))
 
-        upper_x = lower_x + window_size[0]
-        upper_y = lower_y + window_size[1]
+        upper_x = lower_x + window_size[1]
+        upper_y = lower_y + window_size[0]
 
         crop_box = np.stack((lower_x, lower_y, upper_x, upper_y), axis=-1)
         return crop_box
