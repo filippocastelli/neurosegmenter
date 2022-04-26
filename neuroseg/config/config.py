@@ -196,6 +196,8 @@ class TrainConfig(Config):
         self.class_weights = self.get_param(training_cfg, "class_weights", None)
         self.distribute_strategy = self.get_param(training_cfg, "distribute_strategy", None)
         self.enable_wandb_tracking = self.get_param(training_cfg, "enable_wandb_tracking", False)
+        self.wandb_project = self.get_param(training_cfg, "wandb_project", None)
+        self.wandb_entity = self.get_param(training_cfg, "wandb_entity", None)
         return
 
     def _parse_dataset_cfg(self,

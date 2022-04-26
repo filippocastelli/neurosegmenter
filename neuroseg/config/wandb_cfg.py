@@ -9,16 +9,16 @@ class WandbConfigurator:
         self.train_config = train_config
         if train_config.enable_wandb_tracking:
             self.train_config = train_config
-            self.project_name = "unet_spim"
-            self.entity = "filippocastelli"
+            self.project_name = train_config.wandb_project
+            self.entity = train_config.wandb_entity
             self.init_wandb()
         else:
             pass
 
     def init_wandb(self):
         wandb.init(
-            project="unet_spim",
-            entity="filippocastelli",
+            project=self.project_name,
+            entity=self.entity,
             name=self.train_config.run_name,
             dir=self.train_config.wandb_path,
             config=self.get_wandb_config_dict()

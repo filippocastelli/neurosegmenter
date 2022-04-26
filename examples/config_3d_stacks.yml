@@ -10,7 +10,10 @@ training_cfg:
         - "accuracy"
         - "jaccard_index"
         - "dice_coefficient"
-    enable_wandb_tracking: false
+    enable_wandb_tracking: true
+    # optional
+    wandb_project: "unet3d_em"
+    wandb_entity: "filippocastelli"
 
 optimizer_cfg:
     # args in tf.KERAS.OPTIMIZERS api docs
@@ -130,11 +133,11 @@ callbacks_cfg:
         min_lr:     0.00000000067
         verbose:    1
 
-#    wandb:
-#        monitor: "val_loss"
-#        mode: "min"
-#        save_weights_only: false
-#        save_model: true
+    wandb:
+        monitor: "val_loss"
+        mode: "min"
+        save_weights_only: false
+        save_model: true
 
 notes: ""
 
