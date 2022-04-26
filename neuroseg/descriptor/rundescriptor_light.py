@@ -58,19 +58,20 @@ class RunDescriptorLight:
             self.final_model_original_path = self.config.final_model_path
             self.final_model_local_path = self.descriptor_local_path.joinpath("final_model.hdf5")
 
-            shutil.copy(str(self.final_model_original_path), str(self.final_model_local_path))
+            shutil.copyfile(str(self.final_model_original_path), str(self.final_model_local_path))
 
     def _copy_logs(self) -> None:
         """copy logs path"""
         self.log_dir_local_path = self.descriptor_local_path.joinpath("logs")
-        shutil.copytree(str(self.original_logs_path), str(self.log_dir_local_path))
+        self._copydir(source_dir=self.original_logs_path, dest_dir=self.log_dir_local_path)
+        # shutil.copytree(str(self.original_logs_path), str(self.log_dir_local_path), copy_function=shutil.copyfile)
         # python 3.6 is not compatible with dirs_exist_ok argument, only 3.8
         # shutil.copytree(str(self.original_logs_path), str(self.log_dir_local_path), dirs_exist_ok=True)
 
     def _copy_config(self) -> None:
         """copy yml config"""
         self.yml_local_path = self.descriptor_local_path.joinpath("config.yml")
-        shutil.copy(str(self.yml_path), str(self.yml_local_path))
+        shutil.copyfile(str(self.yml_path), str(self.yml_local_path))
 
     def _serialize_performance_dict(self) -> None:
         """serialize model performance metrics as a pickle"""
@@ -87,6 +88,16 @@ class RunDescriptorLight:
             self._to_pickle(self.model_history_dict, self.model_history_local_pickle_path)
             self.model_history_local_yml_path = self.descriptor_local_path.joinpath("model_history.yml")
             self._to_yml(self.beautify_dict(self.model_history_dict.__dict__), self.model_history_local_yml_path)
+
+    @staticmethod
+    def _copydir(source_dir: Path,
+                 dest_dir: Path):
+        for fpath in source_dir.rglob("*"):
+            relative_parent = fpath.relative_to(source_dir).parent
+            out_dir_path = dest_dir.joinpath(relative_parent)
+            out_dir_path.mkdir(exist_ok=True, parents=True)
+            out_path = out_dir_path.joinpath(fpath.name)
+            shutil.copyfile(str(fpath), str(out_path))
 
     @staticmethod
     def _to_pickle(obj, fpath: Path) -> None:
