@@ -409,6 +409,11 @@ class SingleImagesDataLoader(DataLoader):
         frame_crop = frame_volume[img_plane, crop_box[1]:crop_box[3], crop_box[0]:crop_box[2]]
         mask_crop = mask_volume[img_plane, crop_box[1]:crop_box[3], crop_box[0]:crop_box[2]]
 
+        if not all(np.array(frame_crop.shape)[0:2] == np.array(window_size)):
+            raise ValueError("frame and window size are not equal")
+        if not all(np.array(mask_crop.shape)[0:2] == np.array(window_size)):
+            raise ValueError("mask and window size are not equal")
+
         return frame_crop, mask_crop
 
     @staticmethod
