@@ -49,7 +49,7 @@ class WandbConfigurator:
 
     def log_metrics(self, metrics_dict: dict):
         if self.train_config.enable_wandb_tracking:
-            if len(self.train_config.class_values) > 1:
+            if len(self.train_config.n_output_classes) > 1:
                 class_values = list(metrics_dict.keys())
                 for class_value in class_values:
                     class_dict = metrics_dict[class_value]
