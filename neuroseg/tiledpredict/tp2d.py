@@ -316,6 +316,8 @@ class TiledPredictor2D:
             raise ValueError("the first two dimensions of window_shape should be divisible by 2")
 
         if window_overlap is not None:
+            if len(window_overlap) != len(window_shape):
+                window_overlap = np.append(window_overlap, 0)
             step = np.array(window_shape) - np.array(window_overlap)
         else:
             step = np.array(window_shape) // 2
