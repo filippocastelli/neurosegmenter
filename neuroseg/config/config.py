@@ -41,6 +41,10 @@ class Config:
                 "performance_evaluation_cfg"] if "performance_evaluation_cfg" in self.cfg_dict else None
             self._parse_performance_evaluation_cfg(self.pe_cfg)
 
+            # instance segmentation parsing
+            self.is_cfg = self.get_param(self.cfg_dict, "instance_segmentation_cfg", None)
+            self._parse_instance_segmentation_cfg(self.is_cfg)
+
             # notes parsing
             self.notes = self.cfg_dict["notes"]
 
@@ -94,6 +98,23 @@ class Config:
 
         self.run_name = run_name if run_name is not None else NameGenerator().name
 
+        return
+
+    def _parse_instance_segmentation_cfg(self, instance_segmentation_cfg: dict) -> None:
+        self.enable_instance_segmentation = self.get_param(instance_segmentation_cfg,
+                                                           "enable_instance_segmentation", False)
+        self.instance_segmentation_kernel_size = self.get_param(instance_segmentation_cfg,
+                                                                "kernel_size", (5, 5, 5))
+        self.instance_segmentation_clear_borders = self.get_param(instance_segmentation_cfg,
+                                                                  "clear_borders", False)
+        self.instance_segmentation_distance_transform_threshold = self.get_param(instance_segmentation_cfg,
+                                                                                 "distance_transform_threshold", 0.2)
+        self.instance_segmentation_distance_transform_sampling = self.get_param(instance_segmentation_cfg,
+                                                                                "distance_transform_sampling", 5)
+        self.instance_segmentation_watershed_line = self.get_param(instance_segmentation_cfg,
+                                                                   "watershed_line", False)
+        self.instance_segmentation_bg_level = self.get_param(instance_segmentation_cfg,
+                                                             "bg_level", 10)
         return
 
     @staticmethod
@@ -216,9 +237,9 @@ class TrainConfig(Config):
         self.use_bboxes = self.get_param(dataset_cfg, "use_bboxes", False)
 
         # TODO: deprecate n_output_classes (inferred from class_values)
-#        self.class_values = self.get_param(dataset_cfg, "class_values", [1, ])
-#        self.background_value = self.get_param(dataset_cfg, "background_value", 255)
-#        self.n_output_classes = len(self.class_values)
+        #        self.class_values = self.get_param(dataset_cfg, "class_values", [1, ])
+        #        self.background_value = self.get_param(dataset_cfg, "background_value", 255)
+        #        self.n_output_classes = len(self.class_values)
         # TODO: n_output_classes is not used anymore
         self.n_output_classes = 1
         return

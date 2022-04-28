@@ -151,3 +151,12 @@ tiled_predictor_cfg:
 #    window_overlap : [12, 12]
     tiling_mode: "drop_borders"
     to_segmentation: true
+
+instance_segmentation_cfg:
+    enable_instance_segmentation: true
+    kernel_size: (5,5,5)
+    clear_borders: false
+    distance_transform_threhsold: 0.2
+    distance_transform_sampling: 5
+    watershed_line: false
+    bg_level: 10
