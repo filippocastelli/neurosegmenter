@@ -187,3 +187,5 @@ class DataPredictorBase:
                             fname=fname,
                             save_tiff=True,
                             save_pickle=True)
+        else:
+            raise NotImplementedError(self.data_mode)
