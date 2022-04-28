@@ -34,7 +34,7 @@ class InstanceSegmenter:
             self.bg_level = int(self.config.instance_segmentation_bg_level)
 
             for key, value in self.predicted_data_dict.items():
-                segmented_volume, segmented_volume_rgb = self.instance_segment_img(input_img=value)
+                segmented_volume, segmented_volume_rgb = self.instance_segment_img(input_img=np.squeeze(value))
                 img_name = key.split(".")[0]
                 self.save_segmentation(
                     segmented_volume=segmented_volume,
