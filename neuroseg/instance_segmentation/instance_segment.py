@@ -32,9 +32,13 @@ class InstanceSegmenter:
             self.dist_thresh = float(self.config.instance_segmentation_distance_transform_threshold)
             self.watershed_line = bool(self.config.instance_segmentation_watershed_line)
             self.bg_level = int(self.config.instance_segmentation_bg_level)
+            self.segmented_data_dict = {}
+            self.segmented_data_rgb_dict = {}
 
             for key, value in self.predicted_data_dict.items():
                 segmented_volume, segmented_volume_rgb = self.instance_segment_img(input_img=np.squeeze(value))
+                self.segmented_data_dict[key] = segmented_volume
+                self.segmented_data_rgb_dict[key] = segmented_volume_rgb
                 img_name = key.split(".")[0]
                 self.save_segmentation(
                     segmented_volume=segmented_volume,
