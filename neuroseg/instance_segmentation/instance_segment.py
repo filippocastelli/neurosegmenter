@@ -17,13 +17,13 @@ class InstanceSegmenter:
 
     def __init__(self,
                  config: Union[TrainConfig, PredictConfig],
-                 predicted_data: np.ndarray):
+                 predicted_data: dict):
         self.config = config
 
         self.enable_instance_segmentation = self.config.enable_instance_segmentation
 
         if self.enable_instance_segmentation:
-            self.predicted_data = predicted_data
+            self.predicted_data_dict = predicted_data
 
             self.kernel_size = self.config.instance_segmentation_kernel_size
             self.kernel_sem = np.ones(self.kernel_size, np.uint8)
@@ -33,17 +33,22 @@ class InstanceSegmenter:
             self.watershed_line = bool(self.config.instance_segmentation_watershed_line)
             self.bg_level = int(self.config.instance_segmentation_bg_level)
 
-            self.segmented_vol, self.segmented_vol_rgb = self.instance_segment()
-            self.save_segmentation()
+            for key, value in self.predicted_data_dict.items():
+                segmented_volume, segmented_volume_rgb = self.instance_segment_img(input_img=value)
+                img_name = key.split(".")[0]
+                self.save_segmentation(
+                    segmented_volume=segmented_volume,
+                    segmented_volume_rgb=segmented_volume_rgb,
+                    img_name=img_name)
 
-    def instance_segment(self) -> Tuple[np.ndarray, np.ndarray]:
+    def instance_segment_img(self, input_img: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
         logging.info('Segmenting instances...')
 
         logging.info("Applying morphological operations...")
         # Threshold the image
-        threshold = threshold_otsu(self.predicted_data)
-        img = np.where(self.predicted_data > threshold, 255, 0)
+        threshold = threshold_otsu(input_img)
+        img = np.where(input_img > threshold, 255, 0)
 
         # Remove small objects by applying an opening operation
         img = skmorph.opening(img, selem=self.kernel_sem)
@@ -70,17 +75,21 @@ class InstanceSegmenter:
 
         # apply watershed
         logging.info("Applying watershed...")
-        labels = skseg.watershed(self.predicted_data, markers=markers, watershed_line=self.watershed_line)
+        labels = skseg.watershed(input_img, markers=markers, watershed_line=self.watershed_line)
 
         rgb_labels = skcolor.label2rgb(labels, bg_label=self.bg_level, bg_color=(0, 0, 0))
 
         return labels, rgb_labels
 
-    def save_segmentation(self):
+    def save_segmentation(self,
+                          segmented_volume:np.ndarray,
+                          segmented_volume_rgb: np.ndarray,
+                          img_name: str = 'segmented_vol'):
+
         output_path = self.config.output_path
         logging.info(f'Saving segmentation to {output_path}')
-        save_volume(self.segmented_vol, output_path, fname="instance_segmentation")
-        save_volume(self.segmented_vol_rgb, output_path, fname="instance_segmentation_rgb")
+        save_volume(segmented_volume, output_path, fname=f"{img_name}_instance_segmentation")
+        save_volume(segmented_volume_rgb, output_path, fname=f"{img_name}_instance_segmentation_rgb")
 
 
 
