@@ -357,7 +357,7 @@ class TiledPredictor2D:
             ds = ds.with_options(batch_options)
 
         with context():
-            predictions = model.predict(ds)
+            predictions = model.predict(ds).astype(np.float)
 
         for img_idx, pred_img in enumerate(predictions):
             canvas_index = np.array(np.unravel_index(img_idx, img_windows.shape[:2]))
