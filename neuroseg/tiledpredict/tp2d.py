@@ -2,7 +2,7 @@
 # import shutil
 # from itertools import product
 # import pickle
-
+from contextlib import nullcontext
 import numpy as np
 import scipy
 from skimage.util import view_as_windows
@@ -10,6 +10,8 @@ from tqdm import tqdm
 
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
 from neuroseg.utils import BatchInspector2D, toargmax
+import tensorflow as tf
+
 
 class DataPredictor2D(DataPredictorBase):
     def __init__(self, config, model=None, in_fpath=None):
@@ -26,7 +28,8 @@ class DataPredictor2D(DataPredictorBase):
             extra_padding_windows=self.extra_padding_windows,
             tiling_mode=self.tiling_mode,
             window_overlap=self.window_overlap,
-            debug=self.debug
+            debug=self.debug,
+            multi_gpu=self.multi_gpu,
         )
 
         self.predicted_data = self.tiledpredictor.predict()
@@ -56,7 +59,8 @@ class MultiVolumeDataPredictor2D(DataPredictorBase):
                 extra_padding_windows=self.extra_padding_windows,
                 tiling_mode=self.tiling_mode,
                 window_overlap=self.window_overlap,
-                debug=self.debug
+                debug=self.debug,
+                multi_gpu=self.multi_gpu
             )
 
             tiled_predictors[volume_name] = tiled_predictor
@@ -83,7 +87,8 @@ class TiledPredictor2D:
             extra_padding_windows=0,
             tiling_mode="average",
             window_overlap: tuple = None,
-            debug: bool = False
+            debug: bool = False,
+            multi_gpu: bool = False
     ):
         self.input_volume = input_volume
         self.is_volume = is_volume
@@ -96,6 +101,7 @@ class TiledPredictor2D:
         self.extra_padding_windows = extra_padding_windows
         self.window_overlap = window_overlap
         self.debug = debug
+        self.multi_gpu = multi_gpu
 
         # self.tmp_folder = Path(tmp_folder)
         # self.keep_tmp = keep_tmp
@@ -151,7 +157,8 @@ class TiledPredictor2D:
                                                  batch_size=self.batch_size,
                                                  window_overlap=self.window_overlap,
                                                  tiling_mode=self.tiling_mode,
-                                                 n_output_classes=self.n_output_classes)
+                                                 n_output_classes=self.n_output_classes,
+                                                 multi_gpu=self.multi_gpu)
             self.prediction_volume[idx] = predicted_tiles
 
         self.prediction_volume = self.unpad_volume(self.prediction_volume, self.paddings)
@@ -172,7 +179,8 @@ class TiledPredictor2D:
                                                            model=self.model,
                                                            batch_size=self.batch_size,
                                                            tiling_mode=self.tiling_mode,
-                                                           window_overlap=self.window_overlap)
+                                                           window_overlap=self.window_overlap,
+                                                           multi_gpu=self.multi_gpu)
 
         self.prediction_volume = self.unpad_image(self.prediction_volume_padded, self.paddings)
         return self.prediction_volume
@@ -297,7 +305,8 @@ class TiledPredictor2D:
             n_output_classes=1,
             window_overlap=None,
             tiling_mode="average",
-            debug: bool = False
+            debug: bool = False,
+            multi_gpu: bool = False
     ):
         view_shape = img_windows.shape
         if len(view_shape) == 6:
@@ -336,7 +345,15 @@ class TiledPredictor2D:
         # print(weight.shape)
         for batch_idx, batch in enumerate(batched_inputs):
             batch_global_index = int(batch_idx) * batch_size
-            predicted_batch = model.predict(batch).astype(np.float)
+
+            if not multi_gpu:
+                context = nullcontext
+            else:
+                gpus = tf.config.list_logical_devices('GPU')
+                context = tf.distribute.MirroredStrategy(gpus).scope
+
+            with context():
+                predicted_batch = model.predict(batch).astype(np.float)
 
             if debug:
                 debug_batch = (batch, predicted_batch)

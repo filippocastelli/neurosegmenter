@@ -29,6 +29,7 @@ prediction_cfg:
   n_output_classes: 1
   model_path: "/mnt/ssd1/em_training/shrill-turtle-429/final_model.hdf5"
   window_size: [16, 200, 200]
+  multi_gpu: true
   batch_size: 5
   padding_mode: "reflect"
 

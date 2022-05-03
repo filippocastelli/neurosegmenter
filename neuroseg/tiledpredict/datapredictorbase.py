@@ -16,6 +16,9 @@ class DataPredictorBase:
         self.to_segmentation = self.config.to_segmentation
         self.in_fpath = in_fpath
 
+        if self.config.multi_gpu or self.config.pe_multigpu:
+            self.multi_gpu = True
+
         self._parse_settings()
         self._parse_paths()
         self._load_volume()

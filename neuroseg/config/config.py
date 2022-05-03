@@ -86,6 +86,7 @@ class Config:
             self.pe_classification_threshold = self.get_param(pe_cfg, "classification_threshold", 0.5)
             self.add_empty_channel = self.get_param(pe_cfg, "add_empty_channel", False)
             self.pe_enable_curves = self.get_param(pe_cfg, "enable_curves", False)
+            self.pe_multigpu = self.get_param(pe_cfg, "multi_gpu", False)
         else:
             self.evaluate_performance = False
         return
@@ -442,6 +443,7 @@ class PredictConfig(Config):
         self.n_output_classes = self.get_param(prediction_cfg, "n_output_classes", 1)
         self.class_values = self.get_param(prediction_cfg, "class_values", None)
         self.to_8bit = self.get_param(prediction_cfg, "to_8bit", False)
+        self.multi_gpu = self.get_param(prediction_cfg, "multi_gpu", False)
         return
 
     def _gen_paths(self) -> None:
