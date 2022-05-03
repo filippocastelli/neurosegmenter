@@ -250,65 +250,65 @@ class TiledPredictor3D:
 
         weight = cls.get_weighting_window(window_shape_spatial) if tiling_mode == "weighted_average" else 1
         # print(weight.shape)
-        for batch_idx, batch in enumerate(tqdm(batched_inputs)):
-            batch_global_index = int(batch_idx) * batch_size
 
-            if not multi_gpu:
-                context = nullcontext
+        ds = tf.data.Dataset.from_tensor_slices(reshaped_windows)
+        ds = ds.batch(batch_size)
+
+        if not multi_gpu:
+            context = nullcontext
+        else:
+            gpus = tf.config.list_logical_devices('GPU')
+            context = tf.distribute.MirroredStrategy(gpus).scope
+            batch_options = tf.data.Options()
+            batch_options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+            ds = ds.with_options(batch_options)
+
+        with context():
+            predictions = model.predict(ds).astype(np.float)
+
+        if debug:
+            deb_arr = next(ds.as_numpy_iterator())
+            debug_batch = (deb_arr, predictions[0:len(deb_arr)])
+            BatchInspector3D(debug_batch, title="PREDICTION BATCH DEBUG")
+
+        for img_idx, pred_img in enumerate(predictions):
+            canvas_index = np.array(np.unravel_index(img_idx, img_windows.shape[:3]))
+            pivot = canvas_index * step[:3]
+
+            if tiling_mode in ["average", "weighted_average"]:
+                slice_z = slice(pivot[0], pivot[0] + window_shape[0])
+                slice_y = slice(pivot[1], pivot[1] + window_shape[1])
+                slice_x = slice(pivot[2], pivot[2] + window_shape[2])
+
+                output_patch_shape = output_img[slice_z, slice_y, slice_x].shape
+                if output_patch_shape != pred_img.shape:
+                    raise ValueError("incorrect sliding window shape, check padding")
+
+                output_img[slice_z, slice_y, slice_x] += pred_img
+                weight_img[slice_z, slice_y, slice_x] += weight
+
+            elif tiling_mode == "drop_borders":
+                assert all(
+                    np.array(window_overlap) % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
+                half_overlap = np.array(window_overlap) // 2
+
+                slice_z = slice(pivot[0] + half_overlap[0], pivot[0] + window_shape[0] - half_overlap[0])
+                slice_y = slice(pivot[1] + half_overlap[1], pivot[1] + window_shape[1] - half_overlap[1])
+                slice_x = slice(pivot[2] + half_overlap[2], pivot[2] + window_shape[2] - half_overlap[2])
+
+                pred_img_dropped_borders = pred_img[
+                                           half_overlap[0]: -half_overlap[0],
+                                           half_overlap[1]: -half_overlap[1],
+                                           half_overlap[2]: -half_overlap[2],
+                                           ]
+
+                output_patch_shape = output_img[slice_z, slice_y, slice_x].shape
+                if output_patch_shape != pred_img_dropped_borders.shape:
+                    raise ValueError("incorrect sliding window shape, check padding")
+
+                output_img[slice_z, slice_y, slice_x] = pred_img_dropped_borders
             else:
-                gpus = tf.config.list_logical_devices('GPU')
-                context = tf.distribute.MirroredStrategy(gpus).scope
-
-            with context():
-                batch_options = tf.data.Options()
-                batch_options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
-
-                batch_ds = tf.data.Dataset.from_tensor_slices(batch).with_options(batch_options)
-                predicted_batch = model.predict(batch_ds).astype(np.float)
-
-            if debug:
-                debug_batch = (batch, predicted_batch)
-                BatchInspector3D(debug_batch, title="PREDICTION BATCH DEBUG")
-
-            for img_idx, pred_img in enumerate(predicted_batch):
-                tile_idx = img_idx + batch_global_index
-                canvas_index = np.array(np.unravel_index(tile_idx, img_windows.shape[:3]))
-                pivot = canvas_index * step[:3]
-
-                if tiling_mode in ["average", "weighted_average"]:
-                    slice_z = slice(pivot[0], pivot[0] + window_shape[0])
-                    slice_y = slice(pivot[1], pivot[1] + window_shape[1])
-                    slice_x = slice(pivot[2], pivot[2] + window_shape[2])
-
-                    output_patch_shape = output_img[slice_z, slice_y, slice_x].shape
-                    if output_patch_shape != pred_img.shape:
-                        raise ValueError("incorrect sliding window shape, check padding")
-
-                    output_img[slice_z, slice_y, slice_x] += pred_img
-                    weight_img[slice_z, slice_y, slice_x] += weight
-
-                elif tiling_mode == "drop_borders":
-                    assert all(
-                        np.array(window_overlap) % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
-                    half_overlap = np.array(window_overlap) // 2
-
-                    slice_z = slice(pivot[0] + half_overlap[0], pivot[0] + window_shape[0] - half_overlap[0])
-                    slice_y = slice(pivot[1] + half_overlap[1], pivot[1] + window_shape[1] - half_overlap[1])
-                    slice_x = slice(pivot[2] + half_overlap[2], pivot[2] + window_shape[2] - half_overlap[2])
-
-                    pred_img_dropped_borders = pred_img[
-                                               half_overlap[0]: -half_overlap[0],
-                                               half_overlap[1]: -half_overlap[1],
-                                               half_overlap[2]: -half_overlap[2],
-                                               ]
-
-                    output_patch_shape = output_img[slice_z, slice_y, slice_x].shape
-                    if output_patch_shape != pred_img_dropped_borders.shape:
-                        raise ValueError("incorrect sliding window shape, check padding")
-
-                    output_img[slice_z, slice_y, slice_x] = pred_img_dropped_borders
-                else:
-                    raise ValueError(f"unsuppported tiling mode {tiling_mode}")
+                raise ValueError(f"unsuppported tiling mode {tiling_mode}")
 
         final_img = output_img / weight_img
         SAVE_DEBUG_TIFFS_FLAG = True
