@@ -18,6 +18,8 @@ class DataPredictorBase:
 
         if self.config.multi_gpu or self.config.pe_multigpu:
             self.multi_gpu = True
+        else:
+            self.multi_gpu = False
 
         self._parse_settings()
         self._parse_paths()
