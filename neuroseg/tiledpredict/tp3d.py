@@ -260,7 +260,11 @@ class TiledPredictor3D:
                 context = tf.distribute.MirroredStrategy(gpus).scope
 
             with context():
-                predicted_batch = model.predict(batch)
+                batch_options = tf.data.Options()
+                batch_options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+
+                batch_ds = tf.data.Dataset(batch).with_options(batch_options)
+                predicted_batch = model.predict(batch_ds).astype(np.float)
 
             if debug:
                 debug_batch = (batch, predicted_batch)
