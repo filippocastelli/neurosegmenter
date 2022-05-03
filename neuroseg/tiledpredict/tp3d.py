@@ -263,7 +263,7 @@ class TiledPredictor3D:
                 batch_options = tf.data.Options()
                 batch_options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
 
-                batch_ds = tf.data.Dataset(batch).with_options(batch_options)
+                batch_ds = tf.data.Dataset.from_tensor_slices(batch).with_options(batch_options)
                 predicted_batch = model.predict(batch_ds).astype(np.float)
 
             if debug:
