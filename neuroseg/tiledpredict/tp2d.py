@@ -333,7 +333,7 @@ class TiledPredictor2D:
             window_overlap = step
 
         cls.check_distortion_condition(frame_shape, window_shape_spatial, step)
-        reshaped_windows = img_windows.reshape((-1 *window_shape))
+        reshaped_windows = img_windows.reshape((-1, *window_shape))
 
         batched_inputs = cls.divide_into_batches(reshaped_windows, batch_size)
 
