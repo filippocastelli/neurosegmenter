@@ -7,6 +7,7 @@ import numpy as np
 import scipy
 from skimage.util import view_as_windows
 from tqdm import tqdm
+import multiprocessing
 
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
 from neuroseg.utils import BatchInspector2D, toargmax
@@ -88,7 +89,8 @@ class TiledPredictor2D:
             tiling_mode="average",
             window_overlap: tuple = None,
             debug: bool = False,
-            multi_gpu: bool = False
+            multi_gpu: bool = False,
+            n_tiling_threads: int = 1,
     ):
         self.input_volume = input_volume
         self.is_volume = is_volume
@@ -102,6 +104,7 @@ class TiledPredictor2D:
         self.window_overlap = window_overlap
         self.debug = debug
         self.multi_gpu = multi_gpu
+        self.n_tiling_threads = n_tiling_threads
 
         # self.tmp_folder = Path(tmp_folder)
         # self.keep_tmp = keep_tmp
@@ -136,7 +139,7 @@ class TiledPredictor2D:
     def predict_volume(self):
         self.paddings = self.get_paddings(self.input_volume[0].shape,
                                           self.crop_shape,
-                                          extra_windows=self.extra_padding_windows)
+                                          extra_windows=self.extra_padding_windows,)
         # not padding z
         self.paddings.insert(0, (0, 0))
         self.padded_volume = self.pad_image(self.input_volume, self.paddings, mode=self.padding_mode)
@@ -146,23 +149,46 @@ class TiledPredictor2D:
         #self.prediction_volume = np.zeros_like(self.padded_volume)
         self.prediction_volume = np.zeros(shape=[*self.padded_volume.shape[:3], self.n_output_classes])
 
-        for idx, img in enumerate(tqdm(self.padded_volume)):
-            img_windows = self.get_patch_windows(img=img,
-                                                 crop_shape=self.crop_shape,
-                                                 step=self.step)
+        # run self._pred_volume_slice() for each slice in volume using multiprocessing
+        print("Making volume predictions...")
+        with multiprocessing.Pool(processes=self.n_tiling_threads) as pool:
+            pool_results = tqdm(pool.imap(self._pred_volume_slice, range(self.padded_volume.shape[0])),
+                                total=self.padded_volume.shape[0])
+        self.prediction_volume = np.array(pool_results)
 
-            predicted_tiles = self.predict_tiles(img_windows=img_windows,
-                                                 frame_shape=self.padded_img_shape,
-                                                 model=self.model,
-                                                 batch_size=self.batch_size,
-                                                 window_overlap=self.window_overlap,
-                                                 tiling_mode=self.tiling_mode,
-                                                 n_output_classes=self.n_output_classes,
-                                                 multi_gpu=self.multi_gpu)
-            self.prediction_volume[idx] = predicted_tiles
+        # for idx, img in enumerate(tqdm(self.padded_volume)):
+        #     img_windows = self.get_patch_windows(img=img,
+        #                                          crop_shape=self.crop_shape,
+        #                                          step=self.step)
+        #
+        #     predicted_tiles = self.predict_tiles(img_windows=img_windows,
+        #                                          frame_shape=self.padded_img_shape,
+        #                                          model=self.model,
+        #                                          batch_size=self.batch_size,
+        #                                          window_overlap=self.window_overlap,
+        #                                          tiling_mode=self.tiling_mode,
+        #                                          n_output_classes=self.n_output_classes,
+        #                                          multi_gpu=self.multi_gpu)
+        #     self.prediction_volume[idx] = predicted_tiles
 
         self.prediction_volume = self.unpad_volume(self.prediction_volume, self.paddings)
         return self.prediction_volume
+
+    def _pred_volume_slice(self, vol_idx: bool):
+        img = self.padded_volume[vol_idx]
+        img_windows = self.get_patch_windows(img=img,
+                                             crop_shape=self.crop_shape,
+                                             step=self.step)
+        predicted_tiles = self.predict_tiles(img_windows=img_windows,
+                                             frame_shape=self.padded_img_shape,
+                                             model=self.model,
+                                             batch_size=self.batch_size,
+                                             window_overlap=self.window_overlap,
+                                             tiling_mode=self.tiling_mode,
+                                             n_output_classes=self.n_output_classes,
+                                             multi_gpu=self.multi_gpu)
+        return predicted_tiles
+
 
     def predict_image(self):
         self.paddings = self.get_paddings(self.input_volume.shape, self.crop_shape)
@@ -359,7 +385,6 @@ class TiledPredictor2D:
         with context():
             predictions = model.predict(ds).astype(np.float)
 
-        print("Reconstructing prediction from tiles")
         for img_idx, pred_img in tqdm(enumerate(predictions)):
             canvas_index = np.array(np.unravel_index(img_idx, img_windows.shape[:2]))
 

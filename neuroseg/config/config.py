@@ -1,6 +1,7 @@
 from pathlib import Path
 import yaml
 from typing import Union
+from multiprocessing import cpu_count
 
 from neuroseg.utils import NameGenerator
 
@@ -64,6 +65,7 @@ class Config:
         assert type(self.extra_padding_windows) == int, "must have an integer number of extra padding windows"
         self.tiling_mode = self.get_param(tiled_predictor_cfg, "tiling_mode", "average")
         self.to_segmentation = self.get_param(tiled_predictor_cfg, "to_segmentation", False)
+        self.n_tiling_threads = self.get_param(tiled_predictor_cfg, "n_threads", cpu_count())
         return
 
     def _parse_output_cfg(self, out_cfg: dict) -> None:

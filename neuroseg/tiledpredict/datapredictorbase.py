@@ -21,6 +21,7 @@ class DataPredictorBase:
         else:
             self.multi_gpu = False
 
+        self.n_threads = self.config.n_tiling_threads
         self._parse_settings()
         self._parse_paths()
         self._load_volume()
