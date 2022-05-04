@@ -326,8 +326,6 @@ class TiledPredictor2D:
             window_shape = crop_shape
             view_step = step
 
-        window_shape = crop_shape
-
         if img_chans is not None:
             window_shape.append(img_chans)
             view_step.append(1)
