@@ -31,6 +31,7 @@ class DataPredictor2D(DataPredictorBase):
             window_overlap=self.window_overlap,
             debug=self.debug,
             multi_gpu=self.multi_gpu,
+            n_tiling_threads=self.n_tiling_threads,
         )
 
         self.predicted_data = self.tiledpredictor.predict()
