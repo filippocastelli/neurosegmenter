@@ -151,25 +151,27 @@ class TiledPredictor2D:
 
         # run self._pred_volume_slice() for each slice in volume using multiprocessing
         print("Making volume predictions...")
-        with multiprocessing.Pool(processes=self.n_tiling_threads) as pool:
-            pool_results = tqdm(pool.imap(self._pred_volume_slice, range(self.padded_volume.shape[0])),
-                                total=self.padded_volume.shape[0])
-        self.prediction_volume = np.array(pool_results)
 
-        # for idx, img in enumerate(tqdm(self.padded_volume)):
-        #     img_windows = self.get_patch_windows(img=img,
-        #                                          crop_shape=self.crop_shape,
-        #                                          step=self.step)
-        #
-        #     predicted_tiles = self.predict_tiles(img_windows=img_windows,
-        #                                          frame_shape=self.padded_img_shape,
-        #                                          model=self.model,
-        #                                          batch_size=self.batch_size,
-        #                                          window_overlap=self.window_overlap,
-        #                                          tiling_mode=self.tiling_mode,
-        #                                          n_output_classes=self.n_output_classes,
-        #                                          multi_gpu=self.multi_gpu)
-        #     self.prediction_volume[idx] = predicted_tiles
+        if self.n_tiling_threads > 1:
+            with multiprocessing.Pool(processes=self.n_tiling_threads) as pool:
+                pool_results = tqdm(pool.imap(self._pred_volume_slice, range(self.padded_volume.shape[0])),
+                                    total=self.padded_volume.shape[0])
+            self.prediction_volume = np.array(pool_results)
+        else:
+            for idx, img in enumerate(tqdm(self.padded_volume)):
+                img_windows = self.get_patch_windows(img=img,
+                                                     crop_shape=self.crop_shape,
+                                                     step=self.step)
+
+                predicted_tiles = self.predict_tiles(img_windows=img_windows,
+                                                     frame_shape=self.padded_img_shape,
+                                                     model=self.model,
+                                                     batch_size=self.batch_size,
+                                                     window_overlap=self.window_overlap,
+                                                     tiling_mode=self.tiling_mode,
+                                                     n_output_classes=self.n_output_classes,
+                                                     multi_gpu=self.multi_gpu)
+                self.prediction_volume[idx] = predicted_tiles
 
         self.prediction_volume = self.unpad_volume(self.prediction_volume, self.paddings)
         return self.prediction_volume
