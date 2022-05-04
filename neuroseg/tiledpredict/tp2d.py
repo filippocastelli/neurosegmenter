@@ -141,19 +141,30 @@ class TiledPredictor2D:
     def predict_volume(self):
         self.paddings = self.get_paddings(self.input_volume[0].shape,
                                           self.crop_shape,
-                                          extra_windows=self.extra_padding_windows,)
+                                          extra_windows=self.extra_padding_windows, )
         # not padding z
         self.paddings.insert(0, (0, 0))
         self.padded_volume = self.pad_image(self.input_volume, self.paddings, mode=self.padding_mode)
         self.padded_volume_shape = self.padded_volume.shape
         self.padded_img_shape = self.padded_volume[0].shape
 
-        #self.prediction_volume = np.zeros_like(self.padded_volume)
+        # self.prediction_volume = np.zeros_like(self.padded_volume)
         self.prediction_volume = np.zeros(shape=[*self.padded_volume.shape[:3], self.n_output_classes])
 
         # run self._pred_volume_slice() for each slice in volume using multiprocessing
         print("Making volume predictions...")
 
+        img_windows = self.get_patch_windows(img=self.padded_volume, step=self.step, crop_shape=self.crop_shape,
+                                             is_volume=True)
+        self.prediction_volume = self.predict_tiles_volume(img_windows=img_windows,
+                                                           frame_shape=self.padded_img_shape,
+                                                           model=self.model,
+                                                           batch_size=self.batch_size,
+                                                           window_overlap=self.window_overlap,
+                                                           tiling_mode=self.tiling_mode,
+                                                           n_output_classes=self.n_output_classes,
+                                                           multi_gpu=self.multi_gpu)
+        """
         if self.n_tiling_threads > 1:
             with multiprocessing.Pool(processes=self.n_tiling_threads) as pool:
                 pool_results = tqdm(pool.imap(self._pred_volume_slice, range(self.padded_volume.shape[0])),
@@ -176,6 +187,7 @@ class TiledPredictor2D:
                                                      n_output_classes=self.n_output_classes,
                                                      multi_gpu=self.multi_gpu)
                 self.prediction_volume[idx] = predicted_tiles
+        """
 
         self.prediction_volume = self.unpad_volume(self.prediction_volume, self.paddings)
         return self.prediction_volume
@@ -194,7 +206,6 @@ class TiledPredictor2D:
                                              n_output_classes=self.n_output_classes,
                                              multi_gpu=self.multi_gpu)
         return predicted_tiles
-
 
     def predict_image(self):
         self.paddings = self.get_paddings(self.input_volume.shape, self.crop_shape)
@@ -252,10 +263,10 @@ class TiledPredictor2D:
 
         # im dumb so I bruteforce it.
 
-        tot_paddings = [0,0]
-        tot_res_paddings = [0,0]
+        tot_paddings = [0, 0]
+        tot_res_paddings = [0, 0]
 
-        paddings = [(0,0) for _ in tot_paddings]
+        paddings = [(0, 0) for _ in tot_paddings]
 
         a = image_shape + (extra_windows - 1) * crop_shape
         b = step
@@ -294,7 +305,7 @@ class TiledPredictor2D:
         return img
 
     @classmethod
-    def get_patch_windows(cls, img, crop_shape, step):
+    def get_patch_windows(cls, img, crop_shape, step, is_volume=False):
         crop_shape = list(crop_shape)
 
         if isinstance(step, int):
@@ -302,10 +313,17 @@ class TiledPredictor2D:
         else:
             step = list(step)
 
-        img_spatial_shape = img.shape[:2]
-        cls.check_distortion_condition(img_spatial_shape, crop_shape, step)
+        if is_volume:
+            img_spatial_shape = img.shape[1:3]
+            img_chans = None if len(img.shape) == 3 else img.shape[3]
+            cls.check_distortion_condition(img_spatial_shape, crop_shape, step)
+            step = [1] + step
+            window_shape = [1] + crop_shape
+        else:
+            img_spatial_shape = img.shape[:2]
+            img_chans = None if len(img.shape) == 2 else img.shape[2]
+            cls.check_distortion_condition(img_spatial_shape, crop_shape, step)
 
-        img_chans = None if len(img.shape) == 2 else img.shape[2]
         window_shape = crop_shape
 
         if img_chans is not None:
@@ -326,6 +344,103 @@ class TiledPredictor2D:
                 "(img_shape - crop_shape) % step must be zeros to avoid reconstruction distorsions"
             )
 
+    @classmethod
+    def predict_tiles_volume(cls,
+                             img_windows,
+                             frame_shape,
+                             model,
+                             batch_size,
+                             n_output_classes=1,
+                             window_overlap=None,
+                             tiling_mode="average",
+                             multi_gpu: bool = False):
+
+        view_shape = img_windows.shape
+        if len(view_shape) == 8:
+            canvas_z, canvas_y, canvas_x, _, window_z, window_y, window_x, channels = view_shape
+            window_shape_spatial = np.array([window_y, window_x])
+            window_shape = np.array([1, window_y, window_x, channels])
+        elif len(view_shape) == 6:
+            canvas_z, canvas_y, canvas_x, _, window_y, window_x = view_shape
+            window_shape = np.array([1, window_y, window_x])
+            window_shape_spatial = window_shape
+        else:
+            raise ValueError("unrecognized img_windows shape")
+
+        if all((window_shape_spatial % 2) != 0):
+            raise ValueError("the first two dimensions of window_shape should be divisible by 2")
+
+        if window_overlap is not None:
+            step = np.array(window_shape_spatial) - np.array(window_overlap)
+        else:
+            step = np.array(window_shape_spatial) // 2
+            window_overlap = step
+
+        reshaped_windows = img_windows.reshape((-1, *window_shape))
+
+        out_img_shape = [*frame_shape[:2], n_output_classes]
+        output_img = np.zeros(out_img_shape, dtype=np.float)
+        weight_img = np.ones_like(output_img)
+
+        weight = cls.get_weighting_window(window_shape_spatial) if tiling_mode == "weighted_average" else 1
+
+        ds = tf.data.Dataset.from_tensor_slices(reshaped_windows)
+        ds = ds.batch(batch_size)
+
+        if not multi_gpu:
+            context = nullcontext
+        else:
+            gpus = tf.config.list_logical_devices('GPU')
+            context = tf.distribute.MirroredStrategy(gpus).scope
+            batch_options = tf.data.Options()
+            batch_options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+            ds = ds.with_options(batch_options)
+
+        with context():
+            predictions = model.predict(ds).astype(np.float)
+
+        for img_idx, pred_img in tqdm(enumerate(predictions)):
+            canvas_index = np.array(np.unravel_index(img_idx, img_windows.shape[:2]))
+
+            pivot = canvas_index * step[:2]
+
+            if tiling_mode in ["average", "weighted_average"]:
+                slice_y = slice(pivot[0], pivot[0] + window_shape[0])
+                slice_x = slice(pivot[1], pivot[1] + window_shape[1])
+
+                output_patch_shape = output_img[slice_y, slice_x].shape
+                if output_patch_shape != pred_img.shape:
+                    raise ValueError("incorrect sliding window shape, check padding")
+                output_img[slice_y, slice_x] += pred_img
+                weight_img[slice_y, slice_x] += weight
+
+            elif tiling_mode == "drop_borders":
+                assert all(
+                    np.array(window_overlap[:2]) % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
+                half_overlap = np.array(window_overlap) // 2
+                slice_y = slice(pivot[0] + half_overlap[0], pivot[0] + window_shape[0] - half_overlap[0])
+                slice_x = slice(pivot[1] + half_overlap[1], pivot[1] + window_shape[1] - half_overlap[1])
+
+                pred_img_dropped_borders = pred_img[
+                                           half_overlap[0]: -half_overlap[0],
+                                           half_overlap[1]: -half_overlap[1]]
+
+                output_patch_shape = output_img[slice_y, slice_x].shape
+                if output_patch_shape != pred_img_dropped_borders.shape:
+                    raise ValueError("incorrect sliding window shape, check padding")
+
+                output_img[slice_y, slice_x] = pred_img_dropped_borders
+            else:
+                raise ValueError(f"unsuppported tiling mode {tiling_mode}")
+
+            final_img = output_img / weight_img
+            SAVE_DEBUG_TIFFS_FLAG = False
+            if SAVE_DEBUG_TIFFS_FLAG:
+                import tifffile
+                tifffile.imsave("debug_output.tiff", output_img)
+                tifffile.imsave("debug_weight.tiff", weight_img)
+                tifffile.imsave("debug_final.tiff", final_img)
+            return final_img
 
     @classmethod
     def predict_tiles(
@@ -407,7 +522,8 @@ class TiledPredictor2D:
                 weight_img[slice_y, slice_x] += weight
 
             elif tiling_mode == "drop_borders":
-                assert all(np.array(window_overlap[:2]) % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
+                assert all(
+                    np.array(window_overlap[:2]) % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
                 half_overlap = np.array(window_overlap) // 2
                 slice_y = slice(pivot[0] + half_overlap[0], pivot[0] + window_shape[0] - half_overlap[0])
                 slice_x = slice(pivot[1] + half_overlap[1], pivot[1] + window_shape[1] - half_overlap[1])
