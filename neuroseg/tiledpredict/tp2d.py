@@ -62,7 +62,8 @@ class MultiVolumeDataPredictor2D(DataPredictorBase):
                 tiling_mode=self.tiling_mode,
                 window_overlap=self.window_overlap,
                 debug=self.debug,
-                multi_gpu=self.multi_gpu
+                multi_gpu=self.multi_gpu,
+                n_tiling_threads=self.n_tiling_threads,
             )
 
             tiled_predictors[volume_name] = tiled_predictor
