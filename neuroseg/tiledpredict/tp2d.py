@@ -317,12 +317,14 @@ class TiledPredictor2D:
             img_spatial_shape = img.shape[1:3]
             img_chans = None if len(img.shape) == 3 else img.shape[3]
             cls.check_distortion_condition(img_spatial_shape, crop_shape, step)
-            step = [1] + step
             window_shape = [1] + crop_shape
+            view_step = [1] + step
         else:
             img_spatial_shape = img.shape[:2]
             img_chans = None if len(img.shape) == 2 else img.shape[2]
             cls.check_distortion_condition(img_spatial_shape, crop_shape, step)
+            window_shape = crop_shape
+            view_step = step
 
         window_shape = crop_shape
 
@@ -330,7 +332,7 @@ class TiledPredictor2D:
             window_shape.append(img_chans)
             step.append(1)
 
-        view = view_as_windows(arr_in=img, window_shape=window_shape, step=step)
+        view = view_as_windows(arr_in=img, window_shape=window_shape, step=view_step)
         return view
 
     @staticmethod
