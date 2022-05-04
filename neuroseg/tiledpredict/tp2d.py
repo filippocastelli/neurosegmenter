@@ -330,7 +330,7 @@ class TiledPredictor2D:
 
         if img_chans is not None:
             window_shape.append(img_chans)
-            step.append(1)
+            view_step.append(1)
 
         view = view_as_windows(arr_in=img, window_shape=window_shape, step=view_step)
         return view
