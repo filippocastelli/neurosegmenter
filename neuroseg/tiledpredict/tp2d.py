@@ -158,8 +158,8 @@ class TiledPredictor2D:
             with multiprocessing.Pool(processes=self.n_tiling_threads) as pool:
                 pool_results = tqdm(pool.imap(self._pred_volume_slice, range(self.padded_volume.shape[0])),
                                     total=self.padded_volume.shape[0])
+                res = tuple(pool_results)
 
-            res = tuple(pool_results)
             self.prediction_volume = np.array(res)
         else:
             for idx, img in enumerate(tqdm(self.padded_volume)):
