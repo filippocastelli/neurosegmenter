@@ -110,14 +110,16 @@ def load_volume(imgpath,
             return postprocess_vol(vol)
 
     elif data_mode == "zetastitcher":
-        channel_imgs = []
+        # channel_imgs = []
 
-        for chan_name in channel_names:
-            channel_fpath = imgpath.joinpath(chan_name + ".zip")
-            channel_imgs.append(zetastitcher.InputFile(channel_fpath)[...])
+        # for chan_name in channel_names:
+        #     channel_fpath = imgpath.joinpath(chan_name + ".zip")
+        #     channel_imgs.append(zetastitcher.InputFile(channel_fpath)[...])
 
-        vol = np.stack(channel_imgs, axis=-1)
-        del channel_imgs
+        # vol = np.stack(channel_imgs, axis=-1)
+        # del channel_imgs
+
+        vol = zetastitcher.InputFile(imgpath)[...]
 
         if return_norm:
             norm = get_norm(vol)
