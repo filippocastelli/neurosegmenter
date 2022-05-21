@@ -159,15 +159,13 @@ class DataPredictorBase:
             raise NotImplementedError(self.data_mode)
 
     def _save_volume(self):
-        if self.data_mode in ["single_images", "stack"]:
-            if self.output_mode == "stack":
-                save_volume(
-                    self.predicted_data, self.output_path, save_tiff=True, save_pickle=True
-                )
-            else:
-                raise NotImplementedError(self.output_mode)
-                
-        elif self.data_mode == "multi_stack":
+        if self.output_mode == "single_images":
+            raise NotImplementedError(self.output_mode)
+        elif self.output_mode == "stack":
+            save_volume(
+                self.predicted_data, self.output_path, save_tiff=True, save_pickle=True
+            )     
+        elif self.output_mode == "multi_stack":
             # self.predicted data is a list of numpy arrays
             # self.data_paths is assigned in _load_volume
             # should be aligned with self.predicted_data
@@ -185,7 +183,7 @@ class DataPredictorBase:
         # this occupies way too much resources
         # best solution would be to override save_volume() in H5DataPredictor
         # and save each volume in the main predict loop
-        elif self.data_mode == "h5_dataset":
+        elif self.output_mode == "h5_dataset":
             for idx, vol in enumerate(self.predicted_data):
                 fname = str(f"{idx}_predict")
                 save_volume(volume=vol,
