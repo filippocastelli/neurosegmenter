@@ -91,6 +91,7 @@ class Config:
             self.pe_multigpu = self.get_param(pe_cfg, "multi_gpu", False)
         else:
             self.evaluate_performance = False
+            self.pe_multigpu = False
         return
 
     def _parse_run_name(self) -> None:
@@ -446,6 +447,8 @@ class PredictConfig(Config):
         self.class_values = self.get_param(prediction_cfg, "class_values", None)
         self.to_8bit = self.get_param(prediction_cfg, "to_8bit", False)
         self.multi_gpu = self.get_param(prediction_cfg, "multi_gpu", False)
+        self.autocrop = self.get_param(prediction_cfg, "autocrop", False)
+        self.horizontal_crop_range = self.get_param(prediction_cfg, "horizontal_crop_range", None)
         return
 
     def _gen_paths(self) -> None:
