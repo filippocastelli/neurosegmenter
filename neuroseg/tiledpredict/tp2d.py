@@ -19,6 +19,16 @@ class DataPredictor2D(DataPredictorBase):
         super().__init__(config, model, in_fpath=in_fpath)
 
     def predict(self):
+
+        if self.config.autocrop:
+            horizontal_crop_range = self._get_autocrop_range(self.input_data)
+        else:
+            horizontal_crop_range = self.config.horizontal_crop_range
+        
+        if horizontal_crop_range is not None:
+            original_shape = self.input_data.shape
+            self.input_data = self.input_data[:, :, horizontal_crop_range[0]:horizontal_crop_range[1]]
+
         self.tiledpredictor = TiledPredictor2D(
             input_volume=self.input_data,
             batch_size=self.batch_size,
@@ -35,6 +45,9 @@ class DataPredictor2D(DataPredictorBase):
         )
 
         self.predicted_data = self.tiledpredictor.predict()
+        if horizontal_crop_range is not None:
+            pad = ((0,0), (0,0), (horizontal_crop_range[0], original_shape[2] - horizontal_crop_range[1]), (0,0))
+            self.predicted_data = np.pad(self.predicted_data, pad, mode="constant")
 
         if self.to_segmentation:
             self.predicted_data = toargmax(self.predicted_data, self.config.class_values, pos_value=1)

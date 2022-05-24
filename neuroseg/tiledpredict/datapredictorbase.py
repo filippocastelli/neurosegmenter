@@ -193,3 +193,23 @@ class DataPredictorBase:
                             save_pickle=True)
         else:
             raise NotImplementedError(self.data_mode)
+
+    @staticmethod
+    def _get_autocrop_range(vol: np.ndarray, grad_threshold:float=0.01):
+        """
+        Returns the range of indices to horizontally crop the volume.
+        :param vol: 3D volume
+        :param grad_threshold: threshold for the gradient of the volume
+        :return: (start_idx, end_idx)
+        """
+        profile = np.sum(vol, axis=0)
+        profile = np.sum(profile, axis=0)
+        gradient = np.gradient(profile)
+
+        gradient = gradient / gradient.max()
+
+        filtered_grad = np.where(np.abs(gradient) > grad_threshold, gradient, 0)
+        start_idx = np.min(np.nonzero(filtered_grad))
+        end_idx = len(filtered_grad) - np.min(np.nonzero(np.flip(filtered_grad)))
+        
+        return start_idx, end_idx
