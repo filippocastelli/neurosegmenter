@@ -171,7 +171,7 @@ class DataPredictorBase:
             # should be aligned with self.predicted_data
             for idx, input_data_fpath in enumerate(self.data_paths):
                 
-                fname = input_data_fpath.name
+                fname = input_data_fpath.stem
                 
                 save_volume(self.predicted_data[fname],
                             self.output_path,
