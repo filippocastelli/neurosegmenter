@@ -36,6 +36,7 @@ prediction_cfg:
   multi_gpu: false
   padding_mode: "reflect"
   autocrop: true
+  chunk_size: 2
 
 instance_segmentation_cfg:
     enable_instance_segmentation: false

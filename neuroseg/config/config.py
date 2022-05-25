@@ -84,7 +84,6 @@ class Config:
             self.evaluate_performance = True
             self.pe_window_size = pe_cfg["window_size"]
             self.pe_batch_size = pe_cfg["batch_size"]
-            # self.pe_chunk_size = pe_cfg["chunk_size"]
             self.pe_classification_threshold = self.get_param(pe_cfg, "classification_threshold", 0.5)
             self.add_empty_channel = self.get_param(pe_cfg, "add_empty_channel", False)
             self.pe_enable_curves = self.get_param(pe_cfg, "enable_curves", False)
@@ -449,6 +448,7 @@ class PredictConfig(Config):
         self.multi_gpu = self.get_param(prediction_cfg, "multi_gpu", False)
         self.autocrop = self.get_param(prediction_cfg, "autocrop", False)
         self.horizontal_crop_range = self.get_param(prediction_cfg, "horizontal_crop_range", None)
+        self.chunk_size = self.get_param(prediction_cfg, "chunk_size", None)
         return
 
     def _gen_paths(self) -> None:

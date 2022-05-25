@@ -12,6 +12,97 @@ import multiprocessing
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
 from neuroseg.utils import BatchInspector2D, toargmax
 import tensorflow as tf
+import zetastitcher
+import tifffile
+
+class ChunkDataPredictor2D(DataPredictorBase):
+    def __init__(self, config, model=None, in_fpath=None):
+        if config.config_type != "predict":
+            raise NotImplementedError("ChunkDataPredictor2D only supports predict mode")
+        if config.data_mode != "zetastitcher":
+            raise NotImplementedError("ChunkDataPredictor2D only supports zetastitcher data mode")
+        if config.output_mode != "stack":
+            raise NotImplementedError("ChunkDataPredictor2D only supports stack output mode")
+        super().__init__(config, model, in_fpath=in_fpath)
+
+    def predict(self):
+        # in this case ChunkDataPredictor2D.predict() handles loading, prediction, and saving
+        # chunk_size is the size of the chunks to be processed in parallel
+        # chunk_size is None by default, which means that all chunks will be processed in parallel
+        inpf = zetastitcher.InputFile(self.data_path)
+        inpf_shape = inpf.shape
+
+        chunk_size = self.config.chunk_size
+        if chunk_size is None:
+            chunk_size = inpf_shape[0]
+        
+        data_ranges = self._get_chunk_ranges(
+            n_imgs=inpf_shape[0],
+            chunk_size=chunk_size)
+        
+        for chunk_idx, chunk_range in enumerate(tqdm(data_ranges)):
+            # load chunk
+            print("Loading chunk {}".format(chunk_idx))
+            vol = inpf[chunk_range[0]:chunk_range[1], :, :]
+            vol = np.expand_dims(vol, axis=-1)
+            norm = np.iinfo(vol.dtype).max
+            vol = vol / norm
+
+            # predict chunk
+            if self.config.autocrop:
+                horizontal_crop_range = self._get_autocrop_range(vol)
+            else:
+                horizontal_crop_range = self.config.horizontal_crop_range
+            
+            if horizontal_crop_range is not None:
+                vol_shape = vol.shape
+                vol = vol[:, :, horizontal_crop_range[0]:horizontal_crop_range[1]]
+
+            tiledpredictor = TiledPredictor2D(
+                input_volume=vol,
+                batch_size=self.batch_size,
+                n_output_classes=self.n_output_classes,
+                window_size=self.window_size,
+                model=self.prediction_model,
+                padding_mode=self.padding_mode,
+                extra_padding_windows=self.extra_padding_windows,
+                tiling_mode=self.tiling_mode,
+                window_overlap=self.window_overlap,
+                debug=self.debug,
+                multi_gpu=self.multi_gpu,
+                n_tiling_threads=self.n_tiling_threads,
+            )
+
+            predicted_vol = tiledpredictor.predict()
+            if horizontal_crop_range is not None:
+                pad = ((0,0), (0,0), (horizontal_crop_range[0], vol_shape[2] - horizontal_crop_range[1]), (0,0))
+                predicted_vol = np.pad(predicted_vol, pad, mode="constant")
+
+            # save chunk
+            name = self.data_path.stem + ".tif"
+            out_fpath = self.output_path.joinpath(name)
+
+            with tifffile.TiffWriter(str(out_fpath), append=True) as tif:
+                for img_plane in vol:
+                    tif.write(img_plane)
+            # repeat
+        self.predicted_data = out_fpath
+    
+    @staticmethod
+    def _get_chunk_ranges(n_imgs: int, chunk_size: int):
+        """
+        Returns a list of tuples of the form (start, end)
+        where start and end are inclusive indices of the chunk
+        """
+        n_chunks = n_imgs // chunk_size
+        if n_imgs % chunk_size != 0:
+            n_chunks += 1
+        return [(i * chunk_size, (i + 1) * chunk_size) for i in range(n_chunks)]
+
+    def _load_volume(self):
+        pass
+    def _save_volume(self):
+        pass
 
 
 class DataPredictor2D(DataPredictorBase):

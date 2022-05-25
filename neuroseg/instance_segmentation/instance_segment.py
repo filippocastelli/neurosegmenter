@@ -18,8 +18,12 @@ class InstanceSegmenter:
     def __init__(self,
                  config: Union[TrainConfig, PredictConfig],
                  predicted_data: dict):
-        self.config = config
 
+        if config.data_mode == "zetastitcher":
+            raise NotImplementedError("ZetaStitcher data mode not supported yet.")
+            # TODO: implement chunk-based instance segmentation 
+
+        self.config = config
         self.enable_instance_segmentation = self.config.enable_instance_segmentation
 
         if self.enable_instance_segmentation:
