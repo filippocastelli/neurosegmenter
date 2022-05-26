@@ -33,7 +33,7 @@ model_cfg:
     residual_preactivation: true
 
 dataset_cfg:
-     dataset_path : "/mnt/NASoneScratch/castelli/webknossos_download/ds"
+     dataset_path : "/mnt/ssd1/datasets/i48/minids"
      mode: "multi_stack"
      n_channels: 1
      binarize_labels: true
@@ -47,6 +47,7 @@ dataset_cfg:
 output_cfg:
 #    output_path: "/mnt/ssd1/em_training"
     output_path: "/mnt/ssd2/train_spim/2d"
+    output_mode: "multi_stack"
 #    output_path: "/home/phil/Desktop/3d_multi_stack_test_out"
     #descriptor_path: "/home/phil/Scrivania/single_images_test_descr"
 #    descriptor_path: "/mnt/ssd1/em_training/descr"
@@ -153,6 +154,7 @@ tiled_predictor_cfg:
 #    window_overlap : [12, 12]
     tiling_mode: "drop_borders"
     to_segmentation: true
+    n_threads: 1
 
 instance_segmentation_cfg:
     enable_instance_segmentation: true
