@@ -71,7 +71,7 @@ class Config:
     def _parse_output_cfg(self, out_cfg: dict) -> None:
         self.output_root_path = self._decode_path(out_cfg["output_path"])
         self.output_path = self.output_root_path.joinpath(self.run_name)
-
+        self.output_mode = self.get_param(out_cfg, "output_mode", "stack")
         if "descriptor_path" not in out_cfg:
             self.descriptor_path = self.output_path.joinpath("descr")
         else:
@@ -413,7 +413,6 @@ class PredictConfig(Config):
 
         debug_cfg = self.get_param(self.cfg_dict, "debug_cfg", None)
         self.predict_inspector = self.get_param(debug_cfg, "predict_inspector", False)
-        self.output_mode = self.output_cfg["output_mode"]
 
         self._gen_paths()
 
