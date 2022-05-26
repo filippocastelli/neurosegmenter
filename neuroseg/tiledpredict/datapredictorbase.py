@@ -19,8 +19,8 @@ class DataPredictorBase:
         if self.mode == "predict":
             if self.config.multi_gpu or self.config.pe_multigpu:
                 self.multi_gpu = True
-            else:
-                self.multi_gpu = False
+        else:
+            self.multi_gpu = False
 
         self.n_tiling_threads = self.config.n_tiling_threads
         self._parse_settings()
@@ -94,7 +94,7 @@ class DataPredictorBase:
             # self.data_mode = self.config.ground_truth_mode
             self.data_mode = self.config.dataset_mode
             self.normalize_data = self.config.normalize_inputs
-            self.output_mode = "stack"
+            self.output_mode = self.config.output_mode
             self.window_size = self.config.window_size
             self.batch_size = self.config.batch_size
             # self.chunk_size = self.config.pe_chunk_size
@@ -173,8 +173,9 @@ class DataPredictorBase:
             for idx, input_data_fpath in enumerate(self.data_paths):
                 
                 fname = input_data_fpath.stem
+                key = input_data_fpath.name
                 
-                save_volume(self.predicted_data[fname],
+                save_volume(self.predicted_data[key],
                             self.output_path,
                             fname=fname,
                             save_tiff=True,
