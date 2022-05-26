@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from neuroseg.tiledpredict.tp2d import DataPredictor2D, MultiVolumeDataPredictor2D
+from neuroseg.tiledpredict.tp2d import DataPredictor2D, MultiVolumeDataPredictor2D, ChunkDataPredictor2D
 from neuroseg.tiledpredict.tp3d import DataPredictor3D, MultiVolumeDataPredictor3D, H5DataPredictor
 from neuroseg.tiledpredict.tp2d_single_images import SingleImagesDataPredictor
 
@@ -12,10 +12,12 @@ def DataPredictor(config, model=None, in_fpath: Path = None):
     if mode == "2d":
         if data_mode == "single_images":
             return SingleImagesDataPredictor(config, model, in_fpath)
-        elif data_mode in ["stack", "zetastitcher"]:
+        elif data_mode in ["stack"]:
             return DataPredictor2D(config, model, in_fpath)
         elif data_mode == "multi_stack":
             return MultiVolumeDataPredictor2D(config, model)
+        elif data_mode == "zetastitcher":
+            return ChunkDataPredictor2D(config, model)
         else:
             raise NotImplementedError(data_mode)
         

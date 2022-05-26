@@ -115,6 +115,7 @@ performance_evaluation_cfg:
     enable_curves: false
     padding_mode: "reflect"
     to_8bit: true
+    multi_gpu: true
 
 callbacks_cfg:
     checkpoint:

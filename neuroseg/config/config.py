@@ -1,6 +1,7 @@
 from pathlib import Path
 import yaml
 from typing import Union
+from multiprocessing import cpu_count
 
 from neuroseg.utils import NameGenerator
 
@@ -64,6 +65,7 @@ class Config:
         assert type(self.extra_padding_windows) == int, "must have an integer number of extra padding windows"
         self.tiling_mode = self.get_param(tiled_predictor_cfg, "tiling_mode", "average")
         self.to_segmentation = self.get_param(tiled_predictor_cfg, "to_segmentation", False)
+        self.n_tiling_threads = self.get_param(tiled_predictor_cfg, "n_threads", cpu_count())
         return
 
     def _parse_output_cfg(self, out_cfg: dict) -> None:
@@ -82,12 +84,13 @@ class Config:
             self.evaluate_performance = True
             self.pe_window_size = pe_cfg["window_size"]
             self.pe_batch_size = pe_cfg["batch_size"]
-            # self.pe_chunk_size = pe_cfg["chunk_size"]
             self.pe_classification_threshold = self.get_param(pe_cfg, "classification_threshold", 0.5)
             self.add_empty_channel = self.get_param(pe_cfg, "add_empty_channel", False)
             self.pe_enable_curves = self.get_param(pe_cfg, "enable_curves", False)
+            self.pe_multigpu = self.get_param(pe_cfg, "multi_gpu", False)
         else:
             self.evaluate_performance = False
+            self.pe_multigpu = False
         return
 
     def _parse_run_name(self) -> None:
@@ -234,6 +237,7 @@ class TrainConfig(Config):
         self.ignore_last_channel = self.get_param(dataset_cfg, "ignore_last_channel", False)
         self.normalize_inputs = self.get_param(dataset_cfg, "normalize_inputs", True)
         self.normalize_masks = self.get_param(dataset_cfg, "normalize_masks", False)
+        self.binarize_labels = self.get_param(dataset_cfg, "binarize_labels", False)
         self.use_bboxes = self.get_param(dataset_cfg, "use_bboxes", False)
 
         # TODO: deprecate n_output_classes (inferred from class_values)
@@ -442,6 +446,10 @@ class PredictConfig(Config):
         self.n_output_classes = self.get_param(prediction_cfg, "n_output_classes", 1)
         self.class_values = self.get_param(prediction_cfg, "class_values", None)
         self.to_8bit = self.get_param(prediction_cfg, "to_8bit", False)
+        self.multi_gpu = self.get_param(prediction_cfg, "multi_gpu", False)
+        self.autocrop = self.get_param(prediction_cfg, "autocrop", False)
+        self.horizontal_crop_range = self.get_param(prediction_cfg, "horizontal_crop_range", None)
+        self.chunk_size = self.get_param(prediction_cfg, "chunk_size", None)
         return
 
     def _gen_paths(self) -> None:

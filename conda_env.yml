@@ -1,0 +1,14 @@
+name: neuroseg
+channels:
+#    - conda-forge
+    - defaults
+dependencies:
+    - python=3.8
+    - anaconda
+    - cudatoolkit=11.3.1
+    - cudnn=8.2.1
+    - pip
+    - pip:
+        - -r requirements.txt
+variables:
+    LD_LIBRARY_PATH: /home/castelli/anaconda3/envs/neuroseg/lib
