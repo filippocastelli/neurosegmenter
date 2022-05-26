@@ -46,6 +46,7 @@ class DataGen2D:
 
         self.window_size = self.config.window_size
         self.batch_size = self.config.batch_size
+        self.binarize_labels = self.config.binarize_labels
 
         # data augmentation config
         self.data_augmentation_transforms = self.config.da_transforms
@@ -107,7 +108,8 @@ class DataGen2D:
                 window_size=self.window_size,
                 num_threads_in_multithreaded=self.data_augmentation_threads,
                 shuffle=self.data_augmentation_shuffle,
-                seed_for_shuffle=self.data_augmentation_seed
+                seed_for_shuffle=self.data_augmentation_seed,
+                binarize_labels=self.binarize_labels
             )
             # raise NotImplementedError("multi_stack mode is not implemented yet")
         else:
@@ -437,7 +439,8 @@ class MultiStackDataLoader(DataLoader):
                  num_threads_in_multithreaded: int = 1,
                  shuffle: bool = False,
                  seed_for_shuffle: int = 123,
-                 infinite: bool = False):
+                 infinite: bool = False,
+                 binarize_labels: bool = False):
 
         super().__init__(
             data=data,
@@ -449,6 +452,7 @@ class MultiStackDataLoader(DataLoader):
 
         self.img_paths = self._data["img"]
         self.label_paths = self._data["label"]
+        self.binarize_labels = binarize_labels
 
         self.rng_seed = seed_for_shuffle
         if self.rng_seed is not None:
@@ -491,17 +495,20 @@ class MultiStackDataLoader(DataLoader):
         dataset_list = []
         for img_path, label_path in zip(self.img_paths, self.label_paths):
             img = self._load_img(img_path, normalize=True)
-            label = self._load_img(label_path, normalize=True)
-            dataset_list.append((img, label))
+            label = self._load_img(label_path, binarize=self.binarize_labels)
+            dataset_list.append((img, label, ))
         return dataset_list
 
     @staticmethod
     def _load_img(img_path: Path,
-                  normalize: bool = True) -> np.ndarray:
+                  normalize: bool = True,
+                  binarize: bool = False) -> np.ndarray:
         img = tifffile.imread(str(img_path))
 
+        norm_constant = np.iinfo(img.dtype).max
+        if binarize:
+            img = np.where(img > 0, norm_constant, 0)
         if normalize:
-            norm_constant = np.iinfo(img.dtype).max
             img = img / norm_constant
 
         # target shape is [z, y, x, channels]
