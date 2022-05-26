@@ -152,9 +152,10 @@ class MultiVolumeDataPredictor2D(DataPredictorBase):
 
     def predict(self):
         tiled_predictors = {}
-        for idx, volume in enumerate(tqdm(self.input_data)):
+        for idx, volume in enumerate(self.input_data):
             volume_name = self.data_paths[idx].name
 
+            print("Predicting volume {} of {}".format(idx + 1, len(self.data_paths)))
             tiled_predictor = TiledPredictor2D(
                 input_volume=volume,
                 batch_size=self.batch_size,
@@ -197,6 +198,7 @@ class TiledPredictor2D:
             debug: bool = False,
             multi_gpu: bool = False,
             n_tiling_threads: int = 1,
+            verbose: bool = False
     ):
         self.input_volume = input_volume
         self.is_volume = is_volume
@@ -211,6 +213,7 @@ class TiledPredictor2D:
         self.debug = debug
         self.multi_gpu = multi_gpu
         self.n_tiling_threads = n_tiling_threads
+        self.verbose = verbose
 
         # self.tmp_folder = Path(tmp_folder)
         # self.keep_tmp = keep_tmp
@@ -256,7 +259,7 @@ class TiledPredictor2D:
         self.prediction_volume = np.zeros(shape=[*self.padded_volume.shape[:3], self.n_output_classes])
 
         # run self._pred_volume_slice() for each slice in volume using multiprocessing
-        print("Making volume predictions...")
+        # print("Making volume predictions...")
 
         if self.n_tiling_threads > 1:
             with multiprocessing.Pool(processes=self.n_tiling_threads) as pool:
@@ -266,7 +269,7 @@ class TiledPredictor2D:
 
             self.prediction_volume = np.array(res)
         else:
-            for idx, img in enumerate(tqdm(self.padded_volume)):
+            for idx, img in enumerate(self.padded_volume):
                 img_windows = self.get_patch_windows(img=img,
                                                      crop_shape=self.crop_shape,
                                                      step=self.step)
@@ -495,7 +498,7 @@ class TiledPredictor2D:
         with context():
             predictions = model.predict(ds).astype(np.float)
 
-        for img_idx, pred_img in tqdm(enumerate(predictions)):
+        for img_idx, pred_img in enumerate(predictions):
             canvas_index = np.array(np.unravel_index(img_idx, img_windows.shape[:2]))
 
             pivot = canvas_index * step[:2]

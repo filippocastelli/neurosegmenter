@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 # from skimage import io as skio
 import tifffile
+from tqdm import tqdm
 
 from neuroseg.config import TrainConfig, PredictConfig
 from batchgenerators.dataloading.data_loader import DataLoader
@@ -493,7 +494,8 @@ class MultiStackDataLoader(DataLoader):
 
     def _load_data(self):
         dataset_list = []
-        for img_path, label_path in zip(self.img_paths, self.label_paths):
+        print("Loading data from disk...")
+        for img_path, label_path in tqdm(zip(self.img_paths, self.label_paths), total=len(self.img_paths)):
             img = self._load_img(img_path, normalize=True)
             label = self._load_img(label_path, binarize=self.binarize_labels)
             dataset_list.append((img, label, ))
