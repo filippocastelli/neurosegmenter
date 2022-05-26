@@ -5,6 +5,16 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: train 2D EM",
+            "type": "python",
+            "request": "launch",
+            "program": "train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}/examples",
+            "args": ["-c", "epfl_em_2d.yml"]
+        },
+        {
             "name": "Python: predict 2d EM",
             "type": "python",
             "request": "launch",
@@ -21,6 +31,24 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "cwd": "${workspaceFolder}/examples"
+        },
+        {
+            "name": "Python: split webknossos dataset",
+            "type": "python",
+            "request": "launch",
+            "program": "dataset_splitter.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}/neuroseg/utils",
+            "args": [
+                "-d", "/mnt/NASoneScratch/castelli/webknossos_downloads/completed",
+                "--train", "0.7",
+                "--test", "0.2",
+                "--val", "0.1",
+                "-m", "normal",
+                "--frame_pattern", "_frame",
+                "--mask_pattern", "_annotation",
+                "-e", "tiff"]
         }
     ]
 }

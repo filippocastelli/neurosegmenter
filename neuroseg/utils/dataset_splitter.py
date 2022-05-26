@@ -3,6 +3,8 @@ from shutil import copy
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 
+from tqdm import tqdm
+
 
 def main():
     parser = ArgumentParser()
@@ -34,21 +36,68 @@ def main():
                         dest="val_ratio",
                         help="val ratio")
 
+    parser.add_argument("-m", "--mode",
+                        type=str,
+                        action="store",
+                        default="normal",
+                        dest="dataset_mode",
+                        help="dataset mode selection [\"normal\", \"csv\"]")
+
+    parser.add_argument("--frame_pattern",
+                        type=str,
+                        action="store",
+                        default="_frame",
+                        dest="frame_pattern",
+                        help="frame pattern")
+
+    parser.add_argument("--mask_pattern",
+                        type=str,
+                        action="store",
+                        default="_mask",
+                        dest="mask_pattern",
+                        help="mask pattern")
+    
+    parser.add_argument("-e", "--extension",
+                        type=str,
+                        action="store",
+                        default="tif",
+                        dest="extension",
+                        help="extension")
+
+
     args = parser.parse_args()
     dataset_path = Path(args.dataset_path)
     train_ratio = float(args.train_ratio)
     test_ratio = float(args.test_ratio)
     val_ratio = float(args.val_ratio)
 
-    ds = DatasetSplitter(
-        dataset_path=dataset_path,
-        train_ratio=train_ratio,
-        test_ratio=test_ratio,
-        val_ratio=val_ratio
-    )
+    dataset_mode = args.dataset_mode
+    frame_pattern = args.frame_pattern
+    mask_pattern = args.mask_pattern
+    extension = args.extension
+
+    if dataset_mode == "normal":
+        ds = DatasetSplitter(
+            dataset_path=dataset_path,
+            train_ratio=train_ratio,
+            test_ratio=test_ratio,
+            val_ratio=val_ratio,
+            frame_pattern=frame_pattern,
+            mask_pattern=mask_pattern,
+            extension=extension
+        )
+    elif dataset_mode == "csv":
+        ds = CSVDatasetSplitter(
+            dataset_path=dataset_path,
+            train_ratio=train_ratio,
+            test_ratio=test_ratio,
+            val_ratio=val_ratio
+        )
+    else:
+        raise ValueError("dataset mode not supported")
 
 
-class DatasetSplitter:
+class CSVDatasetSplitter:
     def __init__(self,
                  dataset_path: Path,
                  train_ratio: float = 0.7,
@@ -73,14 +122,12 @@ class DatasetSplitter:
         train_img, test_img, train_mask, test_mask, train_csv, test_csv = train_test_split(self.img_list,
                                                                                            self.mask_list,
                                                                                            self.csv_list,
-                                                                                           test_size=1 - self.train_ratio,
                                                                                            train_size=self.train_ratio)
 
         norm = self.test_ratio + self.val_ratio
         split_ratio = self.test_ratio/norm
 
         test_img, val_img, test_mask, val_mask, test_csv, val_csv = train_test_split(test_img, test_mask, test_csv,
-                                                                                     test_size=1 - split_ratio,
                                                                                      train_size=split_ratio)
 
         return {
@@ -111,6 +158,75 @@ class DatasetSplitter:
                 copy(str(mask_fpath), str(out_mask))
                 copy(str(csv_fpath), str(out_csv))
 
+class DatasetSplitter:
+    def __init__(self,
+                 dataset_path: Path,
+                 train_ratio: float = 0.7,
+                 test_ratio: float = 0.2,
+                 val_ratio: float = 0.1,
+                 extension: str = "tiff",
+                 frame_pattern: str = "_frame",
+                 mask_pattern: str = "_mask",
+                 ):
+
+        self.dataset_path = dataset_path
+        self.train_ratio = train_ratio
+        self.val_ratio = val_ratio
+        self.test_ratio = test_ratio
+
+        self.frame_pattern = frame_pattern
+        self.mask_pattern = mask_pattern
+
+        self.tiff_paths = list(self.dataset_path.glob(f"*.{extension}"))
+
+        self.img_paths = [fpath for fpath in self.tiff_paths if self.frame_pattern in fpath.name]
+        self.mask_paths = [fpath for fpath in self.tiff_paths if self.mask_pattern in fpath.name]
+
+        self.split_dict = self.split_dataset()
+        self.copy_ds(self.split_dict)
+
+    def split_dataset(self):
+        
+        train_img, test_img, train_mask, test_mask  = train_test_split(
+            self.img_paths,
+            self.mask_paths,
+            train_size=self.train_ratio
+            )
+        norm = self.test_ratio + self.val_ratio
+        split_ratio = self.test_ratio/norm
+
+        test_img, val_img, test_mask, val_mask = train_test_split(
+            test_img,
+            test_mask,
+            train_size=split_ratio
+        )
+
+        return {
+            "train": (train_img, train_mask),
+            "test": (test_img, test_mask),
+            "val": (val_img, val_mask)
+        }
+    
+    def copy_ds(self, split_dict: dict):
+        for section, arg_tuple in split_dict.items():
+            print("copying", section)
+            section_dir = self.dataset_path.joinpath(section)
+            section_dir.mkdir(exist_ok=True)
+
+            frames_subdir = section_dir.joinpath("frames")
+            frames_subdir.mkdir(exist_ok=True)
+            masks_subdir = section_dir.joinpath("masks")
+            masks_subdir.mkdir(exist_ok=True)
+
+            for idx, img_fpath in enumerate(tqdm(arg_tuple[0])):
+                mask_fpath = arg_tuple[1][idx]
+
+                out_img = frames_subdir.joinpath(img_fpath.name)
+                out_mask = masks_subdir.joinpath(mask_fpath.name)
+
+                print("Copying", img_fpath, "to", out_img)
+                copy(str(img_fpath), str(out_img))
+                copy(str(mask_fpath), str(out_mask))
 
 if __name__ == "__main__":
     main()
