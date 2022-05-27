@@ -1,17 +1,16 @@
 from pathlib import Path
-import yaml
-from pathlib import Path
-import yaml
-import tifffile
-
+from argparse import ArgumentParser
 from neuroseg import PredictConfig, predict
 
+def main():
+    parser = ArgumentParser()
+    parser.add_argument("-c", "--config", type=str, required=True, dest="config_path", help="config_path")
+    
+    args = parser.parse_args()
+    config_path = Path(args.config_path)
 
-print(Path.cwd())
-config_path = Path("config_predict.yml")
+    config = PredictConfig(yml_path=config_path)
+    predict(config)
 
-with config_path.open(mode="r") as infile:
-    yaml.load(infile, Loader=yaml.FullLoader)
-config = PredictConfig(config_path)
-
-predicted_data = predict(config, in_fpath=Path("/home/phil/substack"))
+if __name__ == "__main__":
+    main()
