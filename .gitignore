@@ -10,3 +10,4 @@ __pycache__
 clean_build.sh
 /.idea
 /neuroseg/.idea
+dev_notebooks
