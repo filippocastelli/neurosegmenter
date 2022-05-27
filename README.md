@@ -22,7 +22,7 @@ docker build -t neuroseg:latest .
 
 ### Running an example script
 ```
-sudo docker run -it -v /home/castelli/neuroseg/examples:/opt/examples python /opt/examples/example_script.py
+sudo docker run -it -v /home/castelli/neuroseg/examples:/opt/examples neuroseg:latest python /opt/examples/example_script.py
 ```
 
 ### resolving TF 2.7.0 issues: wrong CUDA libs
