@@ -24,6 +24,7 @@ class Config:
                 self.cfg_dict = {}
                 self.cfg_dict = self.load_yml(yml_path)
             else:
+                self.yml_path = None
                 self.cfg_dict = cfg_dict
 
             self._parse_run_name()
