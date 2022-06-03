@@ -36,15 +36,19 @@ class WandbConfigurator:
             "crop_shape": self.train_config.window_size,
             "unet_depth": self.train_config.unet_depth,
             "base_filters": self.train_config.base_filters,
+            "initial_learning_rate": self.train_config.optimizer_cfg["learning_rate"],
             "batch_normalization": self.train_config.batch_normalization,
             "transposed_convolution": self.train_config.transposed_convolution,
             "residual_preactivation": self.train_config.residual_preactivation,
             "dataset_path": str(self.train_config.dataset_path),
             "output_path": str(self.train_config.output_path),
             "descr_path": str(self.train_config.descriptor_path),
-            "use_bboxes": self.train_config.use_bboxes,
             "data_augmentation_transforms": self.train_config.da_transforms,
             "data_augmentation_transforms_cfg": self.train_config.da_transform_cfg,
+            "data_augmentation_seed": self.train_config.da_seed,
+            "tiling_mode": self.train_config.tiling_mode,
+            "window_overlap": self.train_config.window_overlap,
+            "notes": self.train_config.notes
         }
 
     def log_metrics(self, metrics_dict: dict):
