@@ -3,12 +3,13 @@
 # import pickle
 # import shutil
 from typing import Union
-
+from contextlib import nullcontext
 import numpy as np
 from tqdm import tqdm
 import scipy.signal as signal
 from skimage.util import view_as_windows
 from typing import Union
+import tensorflow as tf
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
 from neuroseg.utils import BatchInspector3D, save_volume
 
@@ -26,7 +27,8 @@ class TiledPredictor3D:
             extra_padding_windows=0,
             tiling_mode="average",
             window_overlap: tuple = None,
-            debug: bool = False
+            debug: bool = False,
+            multi_gpu: bool = False,
     ):
 
         self.input_volume = input_volume
@@ -38,6 +40,7 @@ class TiledPredictor3D:
         self.extra_tiling_windows = extra_padding_windows
         self.tiling_mode = tiling_mode
         self.window_overlap = window_overlap
+        self.multi_gpu = multi_gpu
 
         self.debug = debug
 
@@ -88,7 +91,8 @@ class TiledPredictor3D:
                                                       batch_size=self.batch_size,
                                                       tiling_mode=self.tiling_mode,
                                                       window_overlap=self.window_overlap,
-                                                      debug=self.debug)
+                                                      debug=self.debug,
+                                                      multi_gpu=self.multi_gpu)
 
         prediction_volume = self.unpad_image(prediction_volume_padded, self.paddings)
         return prediction_volume
@@ -210,7 +214,8 @@ class TiledPredictor3D:
             batch_size,
             tiling_mode="average",
             window_overlap=None,
-            debug=False
+            debug=False,
+            multi_gpu=False,
     ):
         view_shape = img_windows.shape
         if len(view_shape) == 8:
@@ -245,53 +250,66 @@ class TiledPredictor3D:
 
         weight = cls.get_weighting_window(window_shape_spatial) if tiling_mode == "weighted_average" else 1
         # print(weight.shape)
-        for batch_idx, batch in enumerate(tqdm(batched_inputs)):
-            batch_global_index = int(batch_idx) * batch_size
-            predicted_batch = model.predict(batch)
 
-            if debug:
-                debug_batch = (batch, predicted_batch)
-                BatchInspector3D(debug_batch, title="PREDICTION BATCH DEBUG")
+        ds = tf.data.Dataset.from_tensor_slices(reshaped_windows)
+        ds = ds.batch(batch_size)
 
-            for img_idx, pred_img in enumerate(predicted_batch):
-                tile_idx = img_idx + batch_global_index
-                canvas_index = np.array(np.unravel_index(tile_idx, img_windows.shape[:3]))
-                pivot = canvas_index * step[:3]
+        if not multi_gpu:
+            context = nullcontext
+        else:
+            gpus = tf.config.list_logical_devices('GPU')
+            context = tf.distribute.MirroredStrategy(gpus).scope
+            batch_options = tf.data.Options()
+            batch_options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+            ds = ds.with_options(batch_options)
 
-                if tiling_mode in ["average", "weighted_average"]:
-                    slice_z = slice(pivot[0], pivot[0] + window_shape[0])
-                    slice_y = slice(pivot[1], pivot[1] + window_shape[1])
-                    slice_x = slice(pivot[2], pivot[2] + window_shape[2])
+        with context():
+            predictions = model.predict(ds).astype(np.float)
 
-                    output_patch_shape = output_img[slice_z, slice_y, slice_x].shape
-                    if output_patch_shape != pred_img.shape:
-                        raise ValueError("incorrect sliding window shape, check padding")
+        if debug:
+            deb_arr = next(ds.as_numpy_iterator())
+            debug_batch = (deb_arr, predictions[0:len(deb_arr)])
+            BatchInspector3D(debug_batch, title="PREDICTION BATCH DEBUG")
 
-                    output_img[slice_z, slice_y, slice_x] += pred_img
-                    weight_img[slice_z, slice_y, slice_x] += weight
+        print("Reconstructing prediction from tiles")
+        for img_idx, pred_img in tqdm(enumerate(predictions)):
+            canvas_index = np.array(np.unravel_index(img_idx, img_windows.shape[:3]))
+            pivot = canvas_index * step[:3]
 
-                elif tiling_mode == "drop_borders":
-                    assert all(
-                        np.array(window_overlap) % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
-                    half_overlap = np.array(window_overlap) // 2
+            if tiling_mode in ["average", "weighted_average"]:
+                slice_z = slice(pivot[0], pivot[0] + window_shape[0])
+                slice_y = slice(pivot[1], pivot[1] + window_shape[1])
+                slice_x = slice(pivot[2], pivot[2] + window_shape[2])
 
-                    slice_z = slice(pivot[0] + half_overlap[0], pivot[0] + window_shape[0] - half_overlap[0])
-                    slice_y = slice(pivot[1] + half_overlap[1], pivot[1] + window_shape[1] - half_overlap[1])
-                    slice_x = slice(pivot[2] + half_overlap[2], pivot[2] + window_shape[2] - half_overlap[2])
+                output_patch_shape = output_img[slice_z, slice_y, slice_x].shape
+                if output_patch_shape != pred_img.shape:
+                    raise ValueError("incorrect sliding window shape, check padding")
 
-                    pred_img_dropped_borders = pred_img[
-                                               half_overlap[0]: -half_overlap[0],
-                                               half_overlap[1]: -half_overlap[1],
-                                               half_overlap[2]: -half_overlap[2],
-                                               ]
+                output_img[slice_z, slice_y, slice_x] += pred_img
+                weight_img[slice_z, slice_y, slice_x] += weight
 
-                    output_patch_shape = output_img[slice_z, slice_y, slice_x].shape
-                    if output_patch_shape != pred_img_dropped_borders.shape:
-                        raise ValueError("incorrect sliding window shape, check padding")
+            elif tiling_mode == "drop_borders":
+                assert all(
+                    np.array(window_overlap) % 2 == 0), "drop_borders mode need window_overlap to be divisible by 2"
+                half_overlap = np.array(window_overlap) // 2
 
-                    output_img[slice_z, slice_y, slice_x] = pred_img_dropped_borders
-                else:
-                    raise ValueError(f"unsuppported tiling mode {tiling_mode}")
+                slice_z = slice(pivot[0] + half_overlap[0], pivot[0] + window_shape[0] - half_overlap[0])
+                slice_y = slice(pivot[1] + half_overlap[1], pivot[1] + window_shape[1] - half_overlap[1])
+                slice_x = slice(pivot[2] + half_overlap[2], pivot[2] + window_shape[2] - half_overlap[2])
+
+                pred_img_dropped_borders = pred_img[
+                                           half_overlap[0]: -half_overlap[0],
+                                           half_overlap[1]: -half_overlap[1],
+                                           half_overlap[2]: -half_overlap[2],
+                                           ]
+
+                output_patch_shape = output_img[slice_z, slice_y, slice_x].shape
+                if output_patch_shape != pred_img_dropped_borders.shape:
+                    raise ValueError("incorrect sliding window shape, check padding")
+
+                output_img[slice_z, slice_y, slice_x] = pred_img_dropped_borders
+            else:
+                raise ValueError(f"unsuppported tiling mode {tiling_mode}")
 
         final_img = output_img / weight_img
         SAVE_DEBUG_TIFFS_FLAG = True
@@ -377,7 +395,8 @@ class DataPredictor3D(DataPredictorBase):
             extra_padding_windows=self.extra_padding_windows,
             tiling_mode=self.tiling_mode,
             window_overlap=self.window_overlap,
-            debug=self.debug
+            debug=self.debug,
+            multi_gpu=self.multi_gpu,
         )
 
         self.predicted_data = tiledpredictor.predict()
@@ -411,7 +430,8 @@ class H5DataPredictor(DataPredictorBase):
                 extra_padding_windows=self.extra_padding_windows,
                 tiling_mode=self.tiling_mode,
                 window_overlap=self.window_overlap,
-                debug=self.debug
+                debug=self.debug,
+                multi_gpu=self.multi_gpu
             )
             output_path = self.output_path
 
@@ -446,7 +466,8 @@ class MultiVolumeDataPredictor3D(DataPredictorBase):
                 extra_padding_windows=self.extra_padding_windows,
                 tiling_mode=self.tiling_mode,
                 window_overlap=self.window_overlap,
-                debug=self.debug
+                debug=self.debug,
+                multi_gpu=self.multi_gpu
             )
 
             tiled_predictors[volume_name] = tiledpredictor

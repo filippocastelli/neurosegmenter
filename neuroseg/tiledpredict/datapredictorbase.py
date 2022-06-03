@@ -16,6 +16,13 @@ class DataPredictorBase:
         self.to_segmentation = self.config.to_segmentation
         self.in_fpath = in_fpath
 
+        if self.mode == "predict":
+            if self.config.multi_gpu or self.config.pe_multigpu:
+                self.multi_gpu = True
+        else:
+            self.multi_gpu = False
+
+        self.n_tiling_threads = self.config.n_tiling_threads
         self._parse_settings()
         self._parse_paths()
         self._load_volume()
@@ -87,7 +94,7 @@ class DataPredictorBase:
             # self.data_mode = self.config.ground_truth_mode
             self.data_mode = self.config.dataset_mode
             self.normalize_data = self.config.normalize_inputs
-            self.output_mode = "stack"
+            self.output_mode = self.config.output_mode
             self.window_size = self.config.window_size
             self.batch_size = self.config.batch_size
             # self.chunk_size = self.config.pe_chunk_size
@@ -153,23 +160,22 @@ class DataPredictorBase:
             raise NotImplementedError(self.data_mode)
 
     def _save_volume(self):
-        if self.data_mode in ["single_images", "stack"]:
-            if self.output_mode == "stack":
-                save_volume(
-                    self.predicted_data, self.output_path, save_tiff=True, save_pickle=True
-                )
-            else:
-                raise NotImplementedError(self.output_mode)
-                
-        elif self.data_mode == "multi_stack":
+        if self.output_mode == "single_images":
+            raise NotImplementedError(self.output_mode)
+        elif self.output_mode == "stack":
+            save_volume(
+                self.predicted_data, self.output_path, save_tiff=True, save_pickle=True
+            )     
+        elif self.output_mode == "multi_stack":
             # self.predicted data is a list of numpy arrays
             # self.data_paths is assigned in _load_volume
             # should be aligned with self.predicted_data
             for idx, input_data_fpath in enumerate(self.data_paths):
                 
-                fname = input_data_fpath.name
+                fname = input_data_fpath.stem
+                key = input_data_fpath.name
                 
-                save_volume(self.predicted_data[fname],
+                save_volume(self.predicted_data[key],
                             self.output_path,
                             fname=fname,
                             save_tiff=True,
@@ -179,7 +185,7 @@ class DataPredictorBase:
         # this occupies way too much resources
         # best solution would be to override save_volume() in H5DataPredictor
         # and save each volume in the main predict loop
-        elif self.data_mode == "h5_dataset":
+        elif self.output_mode == "h5_dataset":
             for idx, vol in enumerate(self.predicted_data):
                 fname = str(f"{idx}_predict")
                 save_volume(volume=vol,
@@ -189,3 +195,27 @@ class DataPredictorBase:
                             save_pickle=True)
         else:
             raise NotImplementedError(self.data_mode)
+
+    @staticmethod
+    def _get_autocrop_range(vol: np.ndarray, grad_threshold:float=0.01):
+        """
+        Returns the range of indices to horizontally crop the volume.
+        :param vol: 3D volume
+        :param grad_threshold: threshold for the gradient of the volume
+        :return: (start_idx, end_idx)
+        """
+        # vol is assumed to be [z, y, x, ch]
+        if len(vol.shape) == 4:
+            vol = np.sum(vol, axis=-1)
+            assert len(vol.shape) == 3, "vol.shape = {}".format(vol.shape)
+        profile = np.sum(vol, axis=0)
+        profile = np.sum(profile, axis=0)
+        gradient = np.gradient(profile)
+
+        gradient = gradient / gradient.max()
+
+        filtered_grad = np.where(np.abs(gradient) > grad_threshold, gradient, 0)
+        start_idx = np.min(np.nonzero(filtered_grad))
+        end_idx = len(filtered_grad) - np.min(np.nonzero(np.flip(filtered_grad)))
+        
+        return start_idx, end_idx

@@ -18,8 +18,17 @@ class InstanceSegmenter:
     def __init__(self,
                  config: Union[TrainConfig, PredictConfig],
                  predicted_data: dict):
-        self.config = config
+        if config.config_type == 'training':
+            data_mode = config.dataset_mode
+        elif config.config_type == "predict":
+            data_mode = config.data_mode
+        else:
+            raise NotImplementedError(config.config_type)
+        if data_mode == "zetastitcher":
+            raise NotImplementedError("ZetaStitcher data mode not supported yet.")
+            # TODO: implement chunk-based instance segmentation 
 
+        self.config = config
         self.enable_instance_segmentation = self.config.enable_instance_segmentation
 
         if self.enable_instance_segmentation:
@@ -35,6 +44,7 @@ class InstanceSegmenter:
             self.segmented_data_dict = {}
             self.segmented_data_rgb_dict = {}
 
+            print("Performing instance segmentation...")
             for key, value in self.predicted_data_dict.items():
                 segmented_volume, segmented_volume_rgb = self.instance_segment_img(input_img=np.squeeze(value))
                 self.segmented_data_dict[key] = segmented_volume

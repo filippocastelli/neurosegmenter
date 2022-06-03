@@ -1,0 +1,47 @@
+output_cfg:
+  output_path: "/mnt/ssd2/predict_em/2d"
+  descriptor_path: "/mnt/ssd1/predict_em/2d/descr"
+  enable_wandb_tracking: false
+  output_mode: "multi_stack"
+
+tiled_predictor_cfg:
+#  window_overlap: [64, 64]
+  extra_padding_windows: 2
+  tiling_mode: "drop_borders"
+  n_threads: 1
+
+performance_evaluation_cfg:
+  window_size: [256, 256]
+  batch_size: 64
+  classification_threshold: 0.5
+  add_empty_channel: false
+  enable_curves: false
+  ground_truth_path: "/mnt/ssd1/datasets/epfl_em_dataset/test/masks"
+  data_mode: "stack"
+
+data_cfg:
+  image_path: "/mnt/ssd1/datasets/epfl_em_dataset/test/frames"
+  mode: "zetastitcher"
+  normalize_data: true
+  n_channels: 1
+
+prediction_cfg:
+  mode: "2d"
+  n_output_classes: 1
+  model_path: "/mnt/ssd2/train_em/2d/foolish-leopard-426/final_model.hdf5"
+  custom_objects_path: "/mnt/ssd2/train_em/2d/foolish-leopard-426/custom_objects.yml"
+  window_size: [256, 256]
+  batch_size: 64
+  multi_gpu: false
+  padding_mode: "reflect"
+
+instance_segmentation_cfg:
+    enable_instance_segmentation: false
+    kernel_size: [5,5,5]
+    clear_borders: false
+    distance_transform_threhsold: 0.2
+    distance_transform_sampling: 5
+    watershed_line: false
+    bg_level: 10
+
+notes: "note_example"

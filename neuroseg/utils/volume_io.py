@@ -110,14 +110,16 @@ def load_volume(imgpath,
             return postprocess_vol(vol)
 
     elif data_mode == "zetastitcher":
-        channel_imgs = []
+        # channel_imgs = []
 
-        for chan_name in channel_names:
-            channel_fpath = imgpath.joinpath(chan_name + ".zip")
-            channel_imgs.append(zetastitcher.InputFile(channel_fpath)[...])
+        # for chan_name in channel_names:
+        #     channel_fpath = imgpath.joinpath(chan_name + ".zip")
+        #     channel_imgs.append(zetastitcher.InputFile(channel_fpath)[...])
 
-        vol = np.stack(channel_imgs, axis=-1)
-        del channel_imgs
+        # vol = np.stack(channel_imgs, axis=-1)
+        # del channel_imgs
+
+        vol = zetastitcher.InputFile(imgpath)[...]
 
         if return_norm:
             norm = get_norm(vol)
@@ -149,6 +151,7 @@ def save_volume(volume,
                 save_tiff=True,
                 save_8bit=True,
                 save_pickle=True,
+                append_tiff=False,
                 return_outpaths=False):
     returns = []
     if save_pickle:
@@ -171,9 +174,9 @@ def save_volume(volume,
         tiff_path = output_path.joinpath(name + ".tif")
         # skio.imsave(tiff_path, volume, plugin="pil", check_contrast=False)
         # tifffile.imsave(tiff_path, volume.astype(np.float32), photometric="minisblack")
-        with tifffile.TiffWriter(str(tiff_path)) as stack:
+        with tifffile.TiffWriter(str(tiff_path), append=append_tiff) as stack:
             for img_plane in out_volume:
-                stack.save(img_plane)
+                stack.write(img_plane)
 
         return tiff_path
 
