@@ -64,6 +64,11 @@ def main():
                         dest="extension",
                         help="extension")
 
+    parser.add_argument("-n", "--no_pattern_out",
+                        action="store_true",
+                        default=False,
+                        dest="no_pattern_out",
+                        help="substitute pattern with empty str in output fnames")
 
     args = parser.parse_args()
     dataset_path = Path(args.dataset_path)
@@ -75,6 +80,7 @@ def main():
     frame_pattern = args.frame_pattern
     mask_pattern = args.mask_pattern
     extension = args.extension
+    no_pattern_out = args.no_pattern_out
 
     if dataset_mode == "normal":
         ds = DatasetSplitter(
@@ -84,7 +90,8 @@ def main():
             val_ratio=val_ratio,
             frame_pattern=frame_pattern,
             mask_pattern=mask_pattern,
-            extension=extension
+            extension=extension,
+            no_pattern_out=no_pattern_out,
         )
     elif dataset_mode == "csv":
         ds = CSVDatasetSplitter(
@@ -102,7 +109,7 @@ class CSVDatasetSplitter:
                  dataset_path: Path,
                  train_ratio: float = 0.7,
                  test_ratio: float = 0.2,
-                 val_ratio: float = 0.1
+                 val_ratio: float = 0.1,
                  ):
         self.dataset_path = dataset_path
 
@@ -166,7 +173,8 @@ class DatasetSplitter:
                  val_ratio: float = 0.1,
                  extension: str = "tiff",
                  frame_pattern: str = "_frame",
-                 mask_pattern: str = "_mask",
+                 mask_pattern: str = "_annotation",
+                 no_pattern_out: bool = False
                  ):
 
         self.dataset_path = dataset_path
@@ -176,6 +184,8 @@ class DatasetSplitter:
 
         self.frame_pattern = frame_pattern
         self.mask_pattern = mask_pattern
+
+        self.no_pattern_out = no_pattern_out
 
         self.tiff_paths = list(self.dataset_path.glob(f"*.{extension}"))
 
@@ -220,9 +230,16 @@ class DatasetSplitter:
 
             for idx, img_fpath in enumerate(tqdm(arg_tuple[0])):
                 mask_fpath = arg_tuple[1][idx]
+                
+                img_name = img_fpath.name
+                mask_name = mask_fpath.name
 
-                out_img = frames_subdir.joinpath(img_fpath.name)
-                out_mask = masks_subdir.joinpath(mask_fpath.name)
+                if self.no_pattern_out:
+                    img_name = img_name.replace(self.frame_pattern, "")
+                    mask_name = mask_name.replace(self.mask_pattern, "")
+
+                out_img = frames_subdir.joinpath(img_name)
+                out_mask = masks_subdir.joinpath(mask_name)
 
                 print("Copying", img_fpath, "to", out_img)
                 copy(str(img_fpath), str(out_img))
