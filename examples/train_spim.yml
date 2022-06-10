@@ -33,7 +33,8 @@ model_cfg:
     residual_preactivation: true
 
 dataset_cfg:
-     dataset_path : "/mnt/ssd1/datasets/i48/minids"
+     # dataset_path : "/mnt/ssd1/datasets/i48/minids"
+     dataset_path : "/mnt/ssd2/datasets/i48/ds"
      mode: "multi_stack"
      n_channels: 1
      binarize_labels: true
