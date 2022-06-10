@@ -16,8 +16,7 @@ class DataPredictorBase:
         self.to_segmentation = self.config.to_segmentation
         self.in_fpath = in_fpath
 
-        if self.mode == "predict":
-            if self.config.multi_gpu or self.config.pe_multigpu:
+        if self.mode == "predict" and (self.config.multi_gpu or self.config.pe_multigpu):
                 self.multi_gpu = True
         else:
             self.multi_gpu = False
