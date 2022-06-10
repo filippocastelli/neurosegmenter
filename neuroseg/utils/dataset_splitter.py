@@ -111,8 +111,8 @@ class CSVDatasetSplitter:
         self.test_ratio = test_ratio / ratios_sum
         self.val_ratio = val_ratio / ratios_sum
 
-        self.img_list = list(self.dataset_path.joinpath("frames").glob("*.tif"))
-        self.mask_list = list(self.dataset_path.joinpath("masks").glob("*.tif"))
+        self.img_list = sorted(list(self.dataset_path.joinpath("frames").glob("*.tif")))
+        self.mask_list = sorted(list(self.dataset_path.joinpath("masks").glob("*.tif")))
         self.csv_list = [fpath.parent.joinpath(fpath.name + ".csv") for fpath in self.mask_list]
 
         self.split_dict = self.split_dataset()
