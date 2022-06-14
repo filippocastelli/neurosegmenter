@@ -181,7 +181,6 @@ class MultiVolumeDataPredictor2D(DataPredictorBase):
         for idx, volume in enumerate(self.input_data):
             volume_name = self.data_paths[idx].name
 
-            print("Predicting volume {} of {}".format(idx + 1, len(self.data_paths)))
             tiled_predictor = TiledPredictor2D(
                 input_volume=volume,
                 batch_size=self.batch_size,
@@ -199,9 +198,10 @@ class MultiVolumeDataPredictor2D(DataPredictorBase):
 
             tiled_predictors[volume_name] = tiled_predictor
 
-        self.predicted_data = {
-            name: pred.predict() for name, pred in tiled_predictors.items()
-        }
+        self.predicted_data = {}
+        for name, pred in tiled_predictors.items():
+            print("Predicting volume {} of {}".format(idx + 1, len(self.data_paths)))
+            self.predicted_data[name] = pred.predict()
 
         # self.predicted_data = [tiledpredictor.output_volume for tiledpredictor in tiled_predictors]
         return self.predicted_data
