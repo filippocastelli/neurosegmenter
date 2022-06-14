@@ -26,8 +26,8 @@ optimizer_cfg:
 model_cfg:
     model: "resunet2d"
     window_size: [256, 256]
-    unet_depth: 2
-    base_filters: 16
+    unet_depth: 4
+    base_filters: 12
     batch_normalization: true
     transposed_convolution: false
     residual_preactivation: true
@@ -158,7 +158,7 @@ tiled_predictor_cfg:
     n_threads: 1
 
 instance_segmentation_cfg:
-    enable_instance_segmentation: true
+    enable_instance_segmentation: false
     kernel_size: [5,5,5]
     clear_borders: false
     distance_transform_threhsold: 0.2
