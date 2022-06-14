@@ -22,7 +22,8 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "cwd": "${workspaceFolder}/examples",
-            "args": ["-c", "train_spim.yml"]
+            "args": ["-c", "train_spim.yml"],
+            "env": {"LD_LIBRARY_PATH": "/home/castelli/anaconda3/envs/neuroseg_pip/lib"}
         },
         {
             "name": "Python: predict 2d EM",
