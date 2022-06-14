@@ -8,6 +8,7 @@ import scipy
 from skimage.util import view_as_windows
 from tqdm import tqdm
 import multiprocessing
+from prefetch_generator import BackgroundGenerator, background
 
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
 from neuroseg.utils import BatchInspector2D, toargmax
@@ -25,6 +26,25 @@ class ChunkDataPredictor2D(DataPredictorBase):
             raise NotImplementedError("ChunkDataPredictor2D only supports stack output mode")
         super().__init__(config, model, in_fpath=in_fpath)
 
+    def chunkvolgenerator(self, inpf, ranges):
+        for chunk_idx, chunk_range in enumerate(ranges):
+            print("\nLoading chunk {}\n".format(chunk_idx))
+            vol = inpf[chunk_range[0]:chunk_range[1], :, :]
+            vol = np.expand_dims(vol, axis=-1)
+            norm = np.iinfo(vol.dtype).max
+            vol = vol / norm
+
+            if self.config.autocrop:
+                horizontal_crop_range = self._get_autocrop_range(vol)
+            else:
+                horizontal_crop_range = self.config.horizontal_crop_range
+            
+            if horizontal_crop_range is not None:
+                pre_crop_vol_shape = vol.shape
+                vol = vol[:, :, horizontal_crop_range[0]:horizontal_crop_range[1]]
+            yield vol, pre_crop_vol_shape, horizontal_crop_range
+
+
     def predict(self):
         # in this case ChunkDataPredictor2D.predict() handles loading, prediction, and saving
         # chunk_size is the size of the chunks to be processed in parallel
@@ -39,24 +59,20 @@ class ChunkDataPredictor2D(DataPredictorBase):
         data_ranges = self._get_chunk_ranges(
             n_imgs=inpf_shape[0],
             chunk_size=chunk_size)
-        
-        for chunk_idx, chunk_range in enumerate(tqdm(data_ranges)):
-            # load chunk
-            print("Loading chunk {}".format(chunk_idx))
-            vol = inpf[chunk_range[0]:chunk_range[1], :, :]
-            vol = np.expand_dims(vol, axis=-1)
-            norm = np.iinfo(vol.dtype).max
-            vol = vol / norm
 
-            # predict chunk
-            if self.config.autocrop:
-                horizontal_crop_range = self._get_autocrop_range(vol)
-            else:
-                horizontal_crop_range = self.config.horizontal_crop_range
-            
-            if horizontal_crop_range is not None:
-                vol_shape = vol.shape
-                vol = vol[:, :, horizontal_crop_range[0]:horizontal_crop_range[1]]
+
+        # for chunk_idx, chunk_range in enumerate(tqdm(data_ranges)):
+            # load chunk
+            # print("Loading chunk {}".format(chunk_idx))
+            # vol = inpf[chunk_range[0]:chunk_range[1], :, :]
+            # vol = np.expand_dims(vol, axis=-1)
+            # norm = np.iinfo(vol.dtype).max
+            # vol = vol / norm
+
+        for idx, (vol, pre_crop_vol_shape, horizontal_crop_range) in enumerate(tqdm(
+            BackgroundGenerator(self.chunkvolgenerator(inpf, data_ranges)),
+            total=len(data_ranges))):
+            print("\nPredicting chunk {} of {}\n".format(idx, len(data_ranges)))
 
             tiledpredictor = TiledPredictor2D(
                 input_volume=vol,
@@ -75,14 +91,15 @@ class ChunkDataPredictor2D(DataPredictorBase):
 
             predicted_vol = tiledpredictor.predict()
             if horizontal_crop_range is not None:
-                pad = ((0,0), (0,0), (horizontal_crop_range[0], vol_shape[2] - horizontal_crop_range[1]), (0,0))
+                pad = ((0,0), (0,0), (horizontal_crop_range[0], pre_crop_vol_shape[2] - horizontal_crop_range[1]), (0,0))
                 predicted_vol = np.pad(predicted_vol, pad, mode="constant")
 
             # save chunk
             name = self.data_path.stem + ".tif"
             out_fpath = self.output_path.joinpath(name)
 
-            with tifffile.TiffWriter(str(out_fpath), append=True) as tif:
+            print("Appending chunk to {}".format(out_fpath))
+            with tifffile.TiffWriter(str(out_fpath), append=True, bigtiff=True) as tif:
                 for img_plane in vol:
                     tif.write(img_plane)
             # repeat
@@ -97,7 +114,16 @@ class ChunkDataPredictor2D(DataPredictorBase):
         n_chunks = n_imgs // chunk_size
         if n_imgs % chunk_size != 0:
             n_chunks += 1
-        return [(i * chunk_size, (i + 1) * chunk_size) for i in range(n_chunks)]
+
+        ranges = []
+        for i in range(n_chunks):
+            start = i * chunk_size
+            end = (i + 1) * chunk_size
+            if end > n_imgs:
+                end = n_imgs
+            ranges.append((start, end))
+        return ranges
+        # return [(i * chunk_size, (i + 1) * chunk_size) for i in range(n_chunks)]
 
     def _load_volume(self):
         pass
@@ -269,7 +295,7 @@ class TiledPredictor2D:
 
             self.prediction_volume = np.array(res)
         else:
-            for idx, img in enumerate(self.padded_volume):
+            for idx, img in enumerate(tqdm(self.padded_volume)):
                 img_windows = self.get_patch_windows(img=img,
                                                      crop_shape=self.crop_shape,
                                                      step=self.step)
@@ -496,7 +522,7 @@ class TiledPredictor2D:
             ds = ds.with_options(batch_options)
 
         with context():
-            predictions = model.predict(ds).astype(np.float)
+            predictions = model.predict(ds, verbose=0).astype(np.float)
 
         for img_idx, pred_img in enumerate(predictions):
             canvas_index = np.array(np.unravel_index(img_idx, img_windows.shape[:2]))
