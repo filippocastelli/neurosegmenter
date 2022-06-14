@@ -48,6 +48,7 @@ class WandbConfigurator:
             "data_augmentation_seed": self.train_config.da_seed,
             "tiling_mode": self.train_config.tiling_mode,
             "window_overlap": self.train_config.window_overlap,
+            "class_weights": self.train_config.class_weights,
             "notes": self.train_config.notes
         }
 
