@@ -150,7 +150,10 @@ class DataGen2D:
                 transform_fn = self._get_transform_fn(transform_str)
                 transform_cfg = self._get_transform_cfg(transform_str)
 
-                transforms.append(transform_fn(**transform_cfg))
+                try:
+                    transforms.append(transform_fn(**transform_cfg))
+                except TypeError:
+                    raise TypeError(f"{transform_str} received a wrong config: {transform_cfg}")
 
         # clip data values to [0.,1.]
         transforms.append(ClipValueRange(min=0., max=1.))
@@ -285,6 +288,9 @@ class DataGen2D:
             "scale": (0.95, 1.05),
             "border_mode_data": "nearest",
             "random_crop": True,
+            "p_el_per_sample": 1,
+            "p_rot_per_sample": 1,
+            "p_scale_per_sample": 1,
         }
 
         # user-defined options
