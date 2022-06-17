@@ -394,7 +394,9 @@ class TrainConfig(Config):
         self.ground_truth_normalize = self.get_param(self.pe_cfg, "normalize_ground_truth", True)
         self.ground_truth_soft_labels = self.get_param(self.pe_cfg, "soft_labels", self.soft_labels)
         self.padding_mode = self.get_param(self.pe_cfg, "padding_mode", "reflect")
-        self.to_8bit = self.get_param(self.pe_cfg, "to_8bit", False)
+        self.save_8bit = self.get_param(self.pe_cfg, "save_8bit", False)
+        self.save_16bit = self.get_param(self.pe_cfg, "save_16bit", False)
+        self.save_32bit = self.get_param(self.pe_cfg, "save_32bit", False)
 
         return
 
@@ -445,11 +447,13 @@ class PredictConfig(Config):
         self.padding_mode = self.get_param(prediction_cfg, "padding_mode", "reflect")
         self.n_output_classes = self.get_param(prediction_cfg, "n_output_classes", 1)
         self.class_values = self.get_param(prediction_cfg, "class_values", None)
-        self.to_8bit = self.get_param(prediction_cfg, "to_8bit", False)
         self.multi_gpu = self.get_param(prediction_cfg, "multi_gpu", False)
         self.autocrop = self.get_param(prediction_cfg, "autocrop", False)
         self.horizontal_crop_range = self.get_param(prediction_cfg, "horizontal_crop_range", None)
         self.chunk_size = self.get_param(prediction_cfg, "chunk_size", None)
+        self.save_8bit = self.get_param(prediction_cfg, "save_8bit", False)
+        self.save_16bit = self.get_param(prediction_cfg, "save_16bit", False)
+        self.save_32bit = self.get_param(prediction_cfg, "save_32bit", False)
         return
 
     def _gen_paths(self) -> None:
@@ -463,6 +467,5 @@ class PredictConfig(Config):
         self.ground_truth_normalize = self.get_param(self.pe_cfg, "normalize_ground_truth", False)
         self.ground_truth_path = self._decode_path(self.get_param(self.pe_cfg, "ground_truth_path", None))
         self.ground_truth_soft_labels = self.get_param(self.pe_cfg, "soft_labels", False)
-
         # self.ground_truth_normalize = self.get_param(self.pe_cfg, normalize_data)
         return

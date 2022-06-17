@@ -101,7 +101,7 @@ performance_evaluation_cfg:
     add_empty_channel:          true
     enable_curves: false
     padding_mode: "reflect"
-    to_8bit: true
+    save_8bit: true
 
 callbacks_cfg:
     checkpoint:

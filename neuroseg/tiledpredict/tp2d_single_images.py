@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Union
+from typing import Union, Tuple
 from pathlib import Path
 
 from tensorflow.python.keras.models import load_model
@@ -18,7 +18,7 @@ class SingleImagesDataPredictor:
     def __init__(self, config: Union[PredictConfig, TrainConfig], model=None, in_fpath=None):
         self.config = config
         self.mode = self.config.config_type
-        self.to_8bit = config.to_8bit
+        self.to_8bit = config.save_8bit
 
         if in_fpath is None:
             if self.config.config_type == "training":
@@ -138,7 +138,7 @@ class SingleImageTiledPredictor:
         self.predicted_data = self.predict_tiles(tiling_mode=tiling_mode)
         self.predicted_data = self.unpad_image(self.predicted_data, self.paddings)
 
-    def get_padded_img(self) -> (np.ndarray, list):
+    def get_padded_img(self) -> Tuple[np.ndarray, list]:
         """get padded image for window integer division"""
         image_shape = np.array(self.input_img.shape[:2])
 

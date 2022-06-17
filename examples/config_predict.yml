@@ -21,7 +21,7 @@ prediction_cfg:
   mode: "2d"
   n_output_classes: 4
   class_values: [0, 1, 2, 255]
-  to_8bit: true
+  save_8bit: true
 
 output_cfg:
   output_path: "/home/phil/Scrivania/pred_out/"
