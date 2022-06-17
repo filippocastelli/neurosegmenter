@@ -57,6 +57,7 @@ class DataGen2D:
         self.data_augmentation_threads = 1 if self.config.da_single_thread is True else self.config.da_threads
         self.data_augmentation_shuffle = self.config.da_shuffle
         self.data_augmentation_seed = self.config.da_seed
+        np.random.seed(self.data_augmentation_seed)
 
         self.data_dict = {"img": self.frames_paths,
                           "label": self.mask_paths}
