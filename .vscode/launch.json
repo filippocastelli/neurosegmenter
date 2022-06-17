@@ -38,10 +38,12 @@
             "name": "Python: predict 2d zip",
             "type": "python",
             "request": "launch",
-            "program": "predict_zip.py",
+            "program": "predict.py",
             "console": "integratedTerminal",
             "justMyCode": false,
-            "cwd": "${workspaceFolder}/examples"
+            "cwd": "${workspaceFolder}/examples",
+            "args": ["-c", "predict_zip_2d.yml"],
+            "env": {"LD_LIBRARY_PATH": "/home/castelli/anaconda3/envs/neuroseg_pip/lib"}
         },
         {
             "name": "Python: split webknossos dataset",
