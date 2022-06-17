@@ -3,6 +3,9 @@ output_cfg:
   descriptor_path: "/mnt/ssd2/predict_zip/descr"
   enable_wandb_tracking: false
   output_mode: "stack"
+  save_8bit: true
+  save_16bit: true
+  save_32bit: true
 
 tiled_predictor_cfg:
 #  window_overlap: [64, 64]
