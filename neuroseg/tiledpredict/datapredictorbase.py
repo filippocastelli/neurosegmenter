@@ -16,6 +16,13 @@ class DataPredictorBase:
         self.to_segmentation = self.config.to_segmentation
         self.in_fpath = in_fpath
 
+        self.save_8bit = self.config.save_8bit
+        self.save_16bit = self.config.save_16bit
+        self.save_32bit = self.config.save_32bit
+
+        if not (self.save_8bit or self.save_16bit or self.save_32bit):
+            raise Warning("No saving mode selected. Please select at least one.")
+
         if self.mode == "predict" and (self.config.multi_gpu or self.config.pe_multigpu):
                 self.multi_gpu = True
         else:

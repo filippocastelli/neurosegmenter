@@ -150,6 +150,8 @@ def save_volume(volume,
                 clip=True,
                 save_tiff=True,
                 save_8bit=True,
+                save_16bit=False,
+                save_32bit=False,
                 save_pickle=True,
                 append_tiff=False,
                 return_outpaths=False):
@@ -188,6 +190,15 @@ def save_volume(volume,
         vol_8bit = (volume * 255).astype(np.uint8)
         tiff_8bit_path = exp_tiff(vol_8bit, name=fname + "_8bit")
         returns.append(tiff_8bit_path)
+    if save_16bit:
+        vol_16bit = (volume * 65535).astype(np.uint16)
+        tiff_16bit_path = exp_tiff(vol_16bit, name=fname + "_16bit")
+        returns.append(tiff_16bit_path)
+    if save_32bit:
+        vol_32bit = (volume * 4294967295).astype(np.uint32)
+        tiff_32bit_path = exp_tiff(vol_32bit, name=fname + "_32bit")
+        returns.append(tiff_32bit_path)
+    
 
     return returns
 

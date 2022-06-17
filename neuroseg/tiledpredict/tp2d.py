@@ -94,17 +94,52 @@ class ChunkDataPredictor2D(DataPredictorBase):
                 pad = ((0,0), (0,0), (horizontal_crop_range[0], pre_crop_vol_shape[2] - horizontal_crop_range[1]), (0,0))
                 predicted_vol = np.pad(predicted_vol, pad, mode="constant")
 
-            # save chunk
-            name = self.data_path.stem + ".tif"
-            out_fpath = self.output_path.joinpath(name)
+                
+            if self.save_8bit:
+                name = self.data_path.stem + "_8bit.tif"
+                out_path_8bit = self.output_path.joinpath(name)
 
-            print("Appending chunk to {}".format(out_fpath))
-            with tifffile.TiffWriter(str(out_fpath), append=True, bigtiff=True) as tif:
-                for img_plane in vol:
-                    tif.write(img_plane)
+                self._append_volume(vol, out_path_8bit, bitdepth=8)
+            
+            if self.save_16bit:
+                name = self.data_path.stem + "_16bit.tif"
+                out_path_16bit = self.output_path.joinpath(name)
+
+                self._append_volume(vol, out_path_16bit, bitdepth=16)
+            
+            if self.save_32bit:
+                name = self.data_path.stem + "_32bit.tif"
+                out_path_32bit = self.output_path.joinpath(name)
+
+                self._append_volume(vol, out_path_32bit, bitdepth=32)
+            
             # repeat
+        if self.save_32bit:
+            out_fpath = out_path_16bit
+        elif self.save_16bit:
+            out_fpath = out_path_16bit
+        else:
+            out_fpath = out_path_8bit
         self.predicted_data = out_fpath
     
+    def _append_volume(self, vol, out_fpath, bitdepth=16):
+        # input images are supposedly 32-bit float in [0, 1]
+        if bitdepth == 16:
+            vol = vol * np.iinfo(np.uint16).max
+            vol = vol.astype(np.uint16)
+        elif bitdepth == 8:
+            vol = vol * np.iinfo(np.uint8).max
+            vol = vol.astype(np.uint8)
+        elif bitdepth == 32:
+            vol = vol * np.iinfo(np.uint32).max
+            vol = vol.astype(np.uint32)
+        else:
+            raise ValueError("bitdepth must be 8, 16 or 32")
+        with tifffile.TiffWriter(str(out_fpath), append=True, bigtiff=True) as tif:
+            for img_plane in vol:
+                tif.write(img_plane)
+
+
     @staticmethod
     def _get_chunk_ranges(n_imgs: int, chunk_size: int):
         """
