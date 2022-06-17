@@ -420,6 +420,7 @@ class PredictConfig(Config):
         self._gen_paths()
 
         self._parse_performance_evaluation_cfg_additional()
+        self._parse_output_cfg_additional()
 
     def _parse_input_data_cfg(self, data_cfg: dict) -> None:
         self.data_path = self._decode_path(data_cfg["image_path"])
@@ -451,9 +452,6 @@ class PredictConfig(Config):
         self.autocrop = self.get_param(prediction_cfg, "autocrop", False)
         self.horizontal_crop_range = self.get_param(prediction_cfg, "horizontal_crop_range", None)
         self.chunk_size = self.get_param(prediction_cfg, "chunk_size", None)
-        self.save_8bit = self.get_param(prediction_cfg, "save_8bit", False)
-        self.save_16bit = self.get_param(prediction_cfg, "save_16bit", False)
-        self.save_32bit = self.get_param(prediction_cfg, "save_32bit", False)
         return
 
     def _gen_paths(self) -> None:
@@ -468,4 +466,10 @@ class PredictConfig(Config):
         self.ground_truth_path = self._decode_path(self.get_param(self.pe_cfg, "ground_truth_path", None))
         self.ground_truth_soft_labels = self.get_param(self.pe_cfg, "soft_labels", False)
         # self.ground_truth_normalize = self.get_param(self.pe_cfg, normalize_data)
+        return
+
+    def _parse_output_cfg_additional(self) -> None:
+        self.save_8bit = self.get_param(self.output_cfg, "save_8bit", False)
+        self.save_16bit = self.get_param(self.output_cfg, "save_16bit", False)
+        self.save_32bit = self.get_param(self.output_cfg, "save_32bit", True)
         return
