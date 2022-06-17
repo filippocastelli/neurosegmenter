@@ -9,6 +9,7 @@ from neuroseg.utils import load_volume, save_volume, glob_imgs
 from skimage import io as skio
 from neuroseg.config import TrainConfig, PredictConfig
 from skimage.util import view_as_windows
+import scipy
 from tqdm import tqdm
 import tifffile
 
