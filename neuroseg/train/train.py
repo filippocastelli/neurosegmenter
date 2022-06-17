@@ -71,6 +71,7 @@ def train(train_config: TrainConfig):
     wc = WandbConfigurator(train_config)
 
     tf.random.set_seed(train_config.da_seed)
+    
     setup_logger(train_config.logfile_path)
     train_datagen = Datagen(train_config,
                             partition="train",
