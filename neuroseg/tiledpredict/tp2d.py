@@ -115,7 +115,7 @@ class ChunkDataPredictor2D(DataPredictorBase):
             
             # repeat
         if self.save_32bit:
-            out_fpath = out_path_16bit
+            out_fpath = out_path_32bit
         elif self.save_16bit:
             out_fpath = out_path_16bit
         else:
@@ -135,10 +135,9 @@ class ChunkDataPredictor2D(DataPredictorBase):
             vol = vol.astype(np.uint32)
         else:
             raise ValueError("bitdepth must be 8, 16 or 32")
-        with tifffile.TiffWriter(str(out_fpath), append=True, bigtiff=True) as tif:
+        with tifffile.TiffWriter(str(out_fpath), bigtiff=True) as tif:
             for img_plane in vol:
-                tif.write(img_plane)
-
+                tif.write(img_plane, contiguous=True)
 
     @staticmethod
     def _get_chunk_ranges(n_imgs: int, chunk_size: int):
