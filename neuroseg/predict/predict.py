@@ -16,7 +16,7 @@ def predict(predict_config: PredictConfig, in_fpath=None):
     # ev = PerformanceEvaluator(predict_config, dp.predicted_data)
     # performance_dict = ev.measure_dict
     # _ = RunDescriptorLight(predict_config, performance_metrics_dict=performance_dict)
-    if inseg.enable_instance_segmentation:
+    if predict_config.enable_instance_segmentation:
         inseg = InstanceSegmenter(predict_config, dp.predicted_data)
         return dp.predicted_data, inseg.segmented_data_dict, inseg.segmented_data_rgb_dict
     else:
