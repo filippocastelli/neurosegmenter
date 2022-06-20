@@ -6,7 +6,7 @@ DOCKER_REGISTRY=atlante.lens.unifi.it:5000
 
 
 sudo rm -r dist build;
-source ${CONDA_PATH}/bin/activate ${CONDA_PATH}/envs/neuroseg_pip;
+source ${CONDA_PATH}/bin/activate ${CONDA_PATH}/envs/neuroseg_pip
 echo using python
 which python;
 vers=`cat neuroseg/version`;
