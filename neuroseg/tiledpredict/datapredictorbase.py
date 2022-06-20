@@ -210,13 +210,21 @@ class DataPredictorBase:
         :param grad_threshold: threshold for the gradient of the volume
         :return: (start_idx, end_idx)
         """
+        
         # vol is assumed to be [z, y, x, ch]
         if len(vol.shape) == 4:
             vol = np.sum(vol, axis=-1)
             assert len(vol.shape) == 3, "vol.shape = {}".format(vol.shape)
         profile = np.sum(vol, axis=0)
         profile = np.sum(profile, axis=0)
-        gradient = np.gradient(profile)
+        try: # if there are problems in gradient calculation, just return the whole volume
+            gradient = np.gradient(profile)
+        except Exception as e:
+            # make sure the exception is about the gradient
+            # if not, raise the exception
+            if "gradient" not in str(e):
+                raise e
+            return (0, vol.shape[2])
 
         gradient = gradient / gradient.max()
 
