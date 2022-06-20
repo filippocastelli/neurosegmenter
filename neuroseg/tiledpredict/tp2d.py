@@ -24,7 +24,9 @@ class ChunkDataPredictor2D(DataPredictorBase):
             raise NotImplementedError("ChunkDataPredictor2D only supports zetastitcher data mode")
         if config.output_mode != "stack":
             raise NotImplementedError("ChunkDataPredictor2D only supports stack output mode")
+        self.bacgkround_chunk_generator = config.background_chunk_generator
         super().__init__(config, model, in_fpath=in_fpath)
+
 
     def chunkvolgenerator(self, inpf, ranges):
         for chunk_idx, chunk_range in enumerate(ranges):
@@ -69,8 +71,12 @@ class ChunkDataPredictor2D(DataPredictorBase):
             # norm = np.iinfo(vol.dtype).max
             # vol = vol / norm
 
+        if self.bacgkround_chunk_generator:
+            chunk_gen = BackgroundGenerator(self.chunkvolgenerator(inpf, data_ranges))
+        else:
+            chunk_gen = self.chunkvolgenerator(inpf, data_ranges)
         for idx, (vol, pre_crop_vol_shape, horizontal_crop_range) in enumerate(tqdm(
-            BackgroundGenerator(self.chunkvolgenerator(inpf, data_ranges)),
+            chunk_gen,
             total=len(data_ranges))):
             print("\nPredicting chunk {} of {}\n".format(idx, len(data_ranges)))
 

@@ -397,6 +397,7 @@ class TrainConfig(Config):
         self.save_8bit = self.get_param(self.pe_cfg, "save_8bit", False)
         self.save_16bit = self.get_param(self.pe_cfg, "save_16bit", False)
         self.save_32bit = self.get_param(self.pe_cfg, "save_32bit", False)
+        self.background_chunk_generator = self.get_param(self.pe_cfg, "background_chunk_generator", False)
 
         return
 
@@ -452,6 +453,7 @@ class PredictConfig(Config):
         self.autocrop = self.get_param(prediction_cfg, "autocrop", False)
         self.horizontal_crop_range = self.get_param(prediction_cfg, "horizontal_crop_range", None)
         self.chunk_size = self.get_param(prediction_cfg, "chunk_size", None)
+        self.background_chunk_generator = self.get_param(prediction_cfg, "background_chunk_generator", False)
         return
 
     def _gen_paths(self) -> None:
