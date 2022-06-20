@@ -454,6 +454,7 @@ class PredictConfig(Config):
         self.horizontal_crop_range = self.get_param(prediction_cfg, "horizontal_crop_range", None)
         self.chunk_size = self.get_param(prediction_cfg, "chunk_size", None)
         self.background_chunk_generator = self.get_param(prediction_cfg, "background_chunk_generator", False)
+        self.skip_threshold = self.get_param(prediction_cfg, "skip_threshold", None)
         return
 
     def _gen_paths(self) -> None:

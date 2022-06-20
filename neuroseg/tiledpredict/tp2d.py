@@ -25,6 +25,7 @@ class ChunkDataPredictor2D(DataPredictorBase):
         if config.output_mode != "stack":
             raise NotImplementedError("ChunkDataPredictor2D only supports stack output mode")
         self.bacgkround_chunk_generator = config.background_chunk_generator
+        self.skip_threshold = config.skip_threshold
         super().__init__(config, model, in_fpath=in_fpath)
 
 
@@ -100,6 +101,7 @@ class ChunkDataPredictor2D(DataPredictorBase):
                 debug=self.debug,
                 multi_gpu=self.multi_gpu,
                 n_tiling_threads=self.n_tiling_threads,
+                skip_threshold=self.skip_threshold
             )
 
             predicted_vol = tiledpredictor.predict()
@@ -268,6 +270,7 @@ class TiledPredictor2D:
             padding_mode="reflect",
             extra_padding_windows=0,
             tiling_mode="average",
+            skip_threshold=None,
             window_overlap: tuple = None,
             debug: bool = False,
             multi_gpu: bool = False,
@@ -282,6 +285,7 @@ class TiledPredictor2D:
         self.padding_mode = padding_mode
         self.model = model
         self.tiling_mode = tiling_mode
+        self.skip_threshold = skip_threshold
         self.extra_padding_windows = extra_padding_windows
         self.window_overlap = window_overlap
         self.debug = debug
@@ -344,6 +348,11 @@ class TiledPredictor2D:
             self.prediction_volume = np.array(res)
         else:
             for idx, img in enumerate(tqdm(self.padded_volume)):
+                if self.skip_threshold is not None:
+                    if np.mean(img) < self.skip_threshold:
+                        if self.verbose:
+                            print("Skipping slice {}".format(idx))
+                        continue
                 img_windows = self.get_patch_windows(img=img,
                                                      crop_shape=self.crop_shape,
                                                      step=self.step)

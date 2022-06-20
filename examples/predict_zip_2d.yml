@@ -40,6 +40,8 @@ prediction_cfg:
   padding_mode: "reflect"
   autocrop: true
   chunk_size: 2
+  background_chunk_generator: true
+  skip_threshold: 120
 
 instance_segmentation_cfg:
     enable_instance_segmentation: false
