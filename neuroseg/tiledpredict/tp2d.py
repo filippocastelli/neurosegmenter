@@ -39,6 +39,9 @@ class ChunkDataPredictor2D(DataPredictorBase):
             norm = np.iinfo(vol.dtype).max
             vol = vol / norm
 
+            if self.skip_threshold is not None:
+                self.skip_threshold = self.skip_threshold / norm
+
             if self.config.autocrop:
                 horizontal_crop_range = self._get_autocrop_range(vol)
             else:
