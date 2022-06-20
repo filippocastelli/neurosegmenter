@@ -32,6 +32,8 @@ class ChunkDataPredictor2D(DataPredictorBase):
         for chunk_idx, chunk_range in enumerate(ranges):
             print("\nLoading chunk {}\n".format(chunk_idx))
             vol = inpf[chunk_range[0]:chunk_range[1], :, :]
+            if len(vol.shape) == 2: # z dimension is missing
+                vol = np.expand_dims(vol, axis=0)
             vol = np.expand_dims(vol, axis=-1)
             norm = np.iinfo(vol.dtype).max
             vol = vol / norm
@@ -44,6 +46,10 @@ class ChunkDataPredictor2D(DataPredictorBase):
             if horizontal_crop_range is not None:
                 pre_crop_vol_shape = vol.shape
                 vol = vol[:, :, horizontal_crop_range[0]:horizontal_crop_range[1]]
+
+            if len(vol.shape) != 4:
+                raise ValueError("vol must be 4D, something went wrong in chunkvolgenerator")
+
             yield vol, pre_crop_vol_shape, horizontal_crop_range
 
 
@@ -52,6 +58,7 @@ class ChunkDataPredictor2D(DataPredictorBase):
         # chunk_size is the size of the chunks to be processed in parallel
         # chunk_size is None by default, which means that all chunks will be processed in parallel
         inpf = zetastitcher.InputFile(self.data_path)
+        inpf.squeeze=False
         inpf_shape = inpf.shape
 
         chunk_size = self.config.chunk_size
