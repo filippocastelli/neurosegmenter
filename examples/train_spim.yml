@@ -34,7 +34,7 @@ model_cfg:
 
 dataset_cfg:
      # dataset_path : "/mnt/ssd1/datasets/i48/minids"
-     dataset_path : "/mnt/ssd2/datasets/i48/ds"
+     dataset_path : "/mnt/ssd2/datasets/i48/minids"
      mode: "multi_stack"
      n_channels: 1
      binarize_labels: true
@@ -158,10 +158,10 @@ tiled_predictor_cfg:
     n_threads: 1
 
 instance_segmentation_cfg:
-    enable_instance_segmentation: false
-    kernel_size: [5,5,5]
-    clear_borders: false
-    distance_transform_threhsold: 0.2
-    distance_transform_sampling: 5
-    watershed_line: false
-    bg_level: 10
+    enable_instance_segmentation: true
+    # kernel_size: [5,5,5]
+    # clear_borders: false
+    # distance_transform_threhsold: 0.2
+    # distance_transform_sampling: 5
+    # watershed_line: false
+    # bg_level: 10
