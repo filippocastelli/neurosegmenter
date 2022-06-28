@@ -8,6 +8,7 @@ from neuroseg.utils.volume_io import SUPPORTED_STACK_FORMATS
 from neuroseg.utils.volume_io import is_supported_ext
 from neuroseg.utils.volume_io import glob_imgs
 from neuroseg.utils.name_generator import NameGenerator
+from neuroseg.utils.integer_shearing_correct import IntegerShearingCorrect
 
 from neuroseg.utils.to_argmax import toargmax
 
