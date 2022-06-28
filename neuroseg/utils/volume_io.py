@@ -178,7 +178,7 @@ def save_volume(volume,
         # tifffile.imsave(tiff_path, volume.astype(np.float32), photometric="minisblack")
         with tifffile.TiffWriter(str(tiff_path), append=append_tiff) as stack:
             for img_plane in out_volume:
-                stack.write(img_plane)
+                stack.save(img_plane)
 
         return tiff_path
 
