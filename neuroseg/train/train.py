@@ -22,7 +22,7 @@ from neuroseg.performance_eval import PerformanceEvaluator
 from neuroseg.descriptor import RunDescriptorLight
 from neuroseg.config import TrainConfig
 from neuroseg.datagens import DataGen2D, DataGen3D
-from neuroseg.instance_segmentation import InstanceSegmenter
+from neuroseg.instance_segmentation import VoronoiInstanceSegmenter
 
 
 def setup_logger(logfile_path: Path) -> None:
@@ -115,7 +115,7 @@ def train(train_config: TrainConfig):
     if train_config.evaluate_performance:
         dp = DataPredictor(train_config, model)
         ev = PerformanceEvaluator(train_config, dp.predicted_data)
-        inseg = InstanceSegmenter(train_config, dp.predicted_data)
+        inseg = VoronoiInstanceSegmenter(train_config, dp.predicted_data)
         performance_dict = ev.measure_dict
         wc.log_metrics(performance_dict)
     else:

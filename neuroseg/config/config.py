@@ -9,15 +9,13 @@ SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
 
 
 # DESIGN NOTE: tutti i path dovrebbero essere individuati in Config,
-# per ogni modalità (stack, multi_stack, single_images), ogni modalità produrrà i suoi attributi 
+# per ogni modalità (stack, multi_stack, single_images), ogni modalità produrrà i suoi attributi
 # specifici che verranno richiesti differenziatamente nelle classi successive
 # ogni problema legato a glob dei file deve essere ricondotto qui
 
-class Config:
 
-    def __init__(self,
-                 yml_path: Path = None,
-                 cfg_dict: dict = None):
+class Config:
+    def __init__(self, yml_path: Path = None, cfg_dict: dict = None):
 
         if cfg_dict is not None or yml_path is not None:
             if cfg_dict is None:
@@ -38,13 +36,20 @@ class Config:
             self._parse_tiled_predictor_cfg(self.tiled_predictor_cfg)
 
             # performance evaluation parsing
-            self.pe_cfg = self.get_param(self.cfg_dict, "performance_evauation_cfg", None)
-            self.pe_cfg = self.cfg_dict[
-                "performance_evaluation_cfg"] if "performance_evaluation_cfg" in self.cfg_dict else None
+            self.pe_cfg = self.get_param(
+                self.cfg_dict, "performance_evauation_cfg", None
+            )
+            self.pe_cfg = (
+                self.cfg_dict["performance_evaluation_cfg"]
+                if "performance_evaluation_cfg" in self.cfg_dict
+                else None
+            )
             self._parse_performance_evaluation_cfg(self.pe_cfg)
 
             # instance segmentation parsing
-            self.is_cfg = self.get_param(self.cfg_dict, "instance_segmentation_cfg", None)
+            self.is_cfg = self.get_param(
+                self.cfg_dict, "instance_segmentation_cfg", None
+            )
             self._parse_instance_segmentation_cfg(self.is_cfg)
 
             # notes parsing
@@ -61,12 +66,22 @@ class Config:
             return default
 
     def _parse_tiled_predictor_cfg(self, tiled_predictor_cfg: dict) -> None:
-        self.window_overlap = self.get_param(tiled_predictor_cfg, "window_overlap", None)
-        self.extra_padding_windows = self.get_param(tiled_predictor_cfg, "extra_padding_windows", 1)
-        assert type(self.extra_padding_windows) == int, "must have an integer number of extra padding windows"
+        self.window_overlap = self.get_param(
+            tiled_predictor_cfg, "window_overlap", None
+        )
+        self.extra_padding_windows = self.get_param(
+            tiled_predictor_cfg, "extra_padding_windows", 1
+        )
+        assert (
+            type(self.extra_padding_windows) == int
+        ), "must have an integer number of extra padding windows"
         self.tiling_mode = self.get_param(tiled_predictor_cfg, "tiling_mode", "average")
-        self.to_segmentation = self.get_param(tiled_predictor_cfg, "to_segmentation", False)
-        self.n_tiling_threads = self.get_param(tiled_predictor_cfg, "n_threads", cpu_count())
+        self.to_segmentation = self.get_param(
+            tiled_predictor_cfg, "to_segmentation", False
+        )
+        self.n_tiling_threads = self.get_param(
+            tiled_predictor_cfg, "n_threads", cpu_count()
+        )
         return
 
     def _parse_output_cfg(self, out_cfg: dict) -> None:
@@ -85,7 +100,9 @@ class Config:
             self.evaluate_performance = True
             self.pe_window_size = pe_cfg["window_size"]
             self.pe_batch_size = pe_cfg["batch_size"]
-            self.pe_classification_threshold = self.get_param(pe_cfg, "classification_threshold", 0.5)
+            self.pe_classification_threshold = self.get_param(
+                pe_cfg, "classification_threshold", 0.5
+            )
             self.add_empty_channel = self.get_param(pe_cfg, "add_empty_channel", False)
             self.pe_enable_curves = self.get_param(pe_cfg, "enable_curves", False)
             self.pe_multigpu = self.get_param(pe_cfg, "multi_gpu", False)
@@ -105,25 +122,41 @@ class Config:
         return
 
     def _parse_instance_segmentation_cfg(self, instance_segmentation_cfg: dict) -> None:
-        self.enable_instance_segmentation = self.get_param(instance_segmentation_cfg,
-                                                           "enable_instance_segmentation", False)
-        self.instance_segmentation_kernel_size = self.get_param(instance_segmentation_cfg,
-                                                                "kernel_size", (5, 5, 5))
-        self.instance_segmentation_clear_borders = self.get_param(instance_segmentation_cfg,
-                                                                  "clear_borders", False)
-        self.instance_segmentation_distance_transform_threshold = self.get_param(instance_segmentation_cfg,
-                                                                                 "distance_transform_threshold", 0.2)
-        self.instance_segmentation_distance_transform_sampling = self.get_param(instance_segmentation_cfg,
-                                                                                "distance_transform_sampling", 5)
-        self.instance_segmentation_watershed_line = self.get_param(instance_segmentation_cfg,
-                                                                   "watershed_line", False)
-        self.instance_segmentation_bg_level = self.get_param(instance_segmentation_cfg,
-                                                             "bg_level", 10)
+        self.enable_instance_segmentation = self.get_param(
+            instance_segmentation_cfg, "enable_instance_segmentation", False
+        )
+        self.instance_segmentation_kernel_size = self.get_param(
+            instance_segmentation_cfg, "kernel_size", (5, 5, 5)
+        )
+        self.instance_segmentation_clear_borders = self.get_param(
+            instance_segmentation_cfg, "clear_borders", False
+        )
+        self.instance_segmentation_distance_transform_threshold = self.get_param(
+            instance_segmentation_cfg, "distance_transform_threshold", 0.2
+        )
+        self.instance_segmentation_distance_transform_sampling = self.get_param(
+            instance_segmentation_cfg, "distance_transform_sampling", 5
+        )
+        self.instance_segmentation_watershed_line = self.get_param(
+            instance_segmentation_cfg, "watershed_line", False
+        )
+        self.instance_segmentation_bg_level = self.get_param(
+            instance_segmentation_cfg, "bg_level", 10
+        )
+
+        # voronoi segmentation
+        self.instance_segmentation_shearing_correct_delta = int(
+            self.get_param(instance_segmentation_cfg, "shearing_correct_delta", -7)
+        )
+
+        self.instance_segmentation_downscaling_xy_factor = int(
+            self.get_param(instance_segmentation_cfg, "downscaling_xy_factor", 4)
+        )
+
         return
 
     @staticmethod
-    def _joinpath_mkdir(base_path: Path,
-                        name: str) -> Path:
+    def _joinpath_mkdir(base_path: Path, name: str) -> Path:
         npath = base_path.joinpath(name)
         npath.mkdir(exist_ok=True, parents=True)
 
@@ -171,9 +204,7 @@ class Config:
 class TrainConfig(Config):
     """training configuration class"""
 
-    def __init__(self,
-                 yml_path: Path = None,
-                 cfg_dict: dict = None):
+    def __init__(self, yml_path: Path = None, cfg_dict: dict = None):
         super().__init__(yml_path=yml_path, cfg_dict=cfg_dict)
 
         self.config_type = "training"
@@ -208,34 +239,45 @@ class TrainConfig(Config):
 
         self._parse_performance_evaluation_cfg_additional()
 
-    def _parse_training_cfg(self,
-                            training_cfg: dict) -> None:
+    def _parse_training_cfg(self, training_cfg: dict) -> None:
         """parse the training configuration dict"""
         self.training_mode = training_cfg["mode"]
         self.epochs = training_cfg["epochs"]
         self.loss = self.get_param(training_cfg, "loss", "binary_crossentropy")
         self.batch_size = self.get_param(training_cfg, "batch_size", 1)
-        self.track_metrics = self.get_param(training_cfg, "track_metrics",
-                                            ["accuracy", "jaccard_index", "dice_coefficient"])
+        self.track_metrics = self.get_param(
+            training_cfg,
+            "track_metrics",
+            ["accuracy", "jaccard_index", "dice_coefficient"],
+        )
         self.pos_weight = self.get_param(training_cfg, "pos_weight", None)
         self.class_weights = self.get_param(training_cfg, "class_weights", None)
-        self.distribute_strategy = self.get_param(training_cfg, "distribute_strategy", None)
-        self.enable_wandb_tracking = self.get_param(training_cfg, "enable_wandb_tracking", False)
+        self.distribute_strategy = self.get_param(
+            training_cfg, "distribute_strategy", None
+        )
+        self.enable_wandb_tracking = self.get_param(
+            training_cfg, "enable_wandb_tracking", False
+        )
         self.wandb_project = self.get_param(training_cfg, "wandb_project", None)
         self.wandb_entity = self.get_param(training_cfg, "wandb_entity", None)
         return
 
-    def _parse_dataset_cfg(self,
-                           dataset_cfg: dict) -> None:
+    def _parse_dataset_cfg(self, dataset_cfg: dict) -> None:
         """parse the dataset configuration dict"""
         self.dataset_path = self._decode_path(dataset_cfg["dataset_path"])
         self.dataset_mode = dataset_cfg["mode"]
         self.n_channels = dataset_cfg["n_channels"]
         self.soft_labels = self.get_param(dataset_cfg, "soft_labels", False)
         # TODO: deprecate positive_class_vaue and negative_class_value
-        self.positive_class_value = self.get_param(dataset_cfg, "positive_class_value", 255)
-        self.negative_class_value = self.get_param(dataset_cfg, "negative_class_value", 0)
-        self.ignore_last_channel = self.get_param(dataset_cfg, "ignore_last_channel", False)
+        self.positive_class_value = self.get_param(
+            dataset_cfg, "positive_class_value", 255
+        )
+        self.negative_class_value = self.get_param(
+            dataset_cfg, "negative_class_value", 0
+        )
+        self.ignore_last_channel = self.get_param(
+            dataset_cfg, "ignore_last_channel", False
+        )
         self.normalize_inputs = self.get_param(dataset_cfg, "normalize_inputs", True)
         self.normalize_masks = self.get_param(dataset_cfg, "normalize_masks", False)
         self.binarize_labels = self.get_param(dataset_cfg, "binarize_labels", False)
@@ -249,8 +291,7 @@ class TrainConfig(Config):
         self.n_output_classes = 1
         return
 
-    def _parse_model_cfg(self,
-                         model_cfg: dict) -> None:
+    def _parse_model_cfg(self, model_cfg: dict) -> None:
         """parse model configuration dict"""
         if self.training_mode == "2d":
             if model_cfg["model"] == "resunet2d":
@@ -266,8 +307,7 @@ class TrainConfig(Config):
             raise NotImplementedError(self.training_mode)
         return
 
-    def _parse_unet_base(self,
-                         model_cfg: dict) -> None:
+    def _parse_unet_base(self, model_cfg: dict) -> None:
         """parse unet configuration dict"""
 
         self.model = model_cfg["model"]
@@ -313,7 +353,11 @@ class TrainConfig(Config):
         self.da_single_thread = da_cfg["single_thread"]
         self.da_threads = da_cfg["threads"]
         self.da_transform_cfg = da_cfg["transform_cfg"]
-        self.da_transforms = list(self.da_transform_cfg.keys()) if self.da_transform_cfg is not None else None
+        self.da_transforms = (
+            list(self.da_transform_cfg.keys())
+            if self.da_transform_cfg is not None
+            else None
+        )
         return
 
     # > CALLBACK PARSING <
@@ -322,9 +366,15 @@ class TrainConfig(Config):
         return
 
     def _parse_debug_cfg(self, debug_cfg: dict) -> None:
-        self.test_datagen_inspector = self.get_param(debug_cfg, "test_datagen_inspector", False)
-        self.val_datagen_inspector = self.get_param(debug_cfg, "val_datagen_inspector", False)
-        self.train_datagen_inspector = self.get_param(debug_cfg, "train_datagen_inspector", False)
+        self.test_datagen_inspector = self.get_param(
+            debug_cfg, "test_datagen_inspector", False
+        )
+        self.val_datagen_inspector = self.get_param(
+            debug_cfg, "val_datagen_inspector", False
+        )
+        self.train_datagen_inspector = self.get_param(
+            debug_cfg, "train_datagen_inspector", False
+        )
         self.predict_inspector = self.get_param(debug_cfg, "predict_inspector", False)
         return
 
@@ -390,22 +440,28 @@ class TrainConfig(Config):
     def _parse_performance_evaluation_cfg_additional(self) -> None:
         """additional configs for performance evaluation in training mode"""
         self.ground_truth_mode = self.dataset_mode
-        self.ground_truth_path = self.test_paths["masks"] if self.dataset_mode != "h5_dataset" else None
-        self.ground_truth_normalize = self.get_param(self.pe_cfg, "normalize_ground_truth", True)
-        self.ground_truth_soft_labels = self.get_param(self.pe_cfg, "soft_labels", self.soft_labels)
+        self.ground_truth_path = (
+            self.test_paths["masks"] if self.dataset_mode != "h5_dataset" else None
+        )
+        self.ground_truth_normalize = self.get_param(
+            self.pe_cfg, "normalize_ground_truth", True
+        )
+        self.ground_truth_soft_labels = self.get_param(
+            self.pe_cfg, "soft_labels", self.soft_labels
+        )
         self.padding_mode = self.get_param(self.pe_cfg, "padding_mode", "reflect")
         self.save_8bit = self.get_param(self.pe_cfg, "save_8bit", False)
         self.save_16bit = self.get_param(self.pe_cfg, "save_16bit", False)
         self.save_32bit = self.get_param(self.pe_cfg, "save_32bit", False)
-        self.background_chunk_generator = self.get_param(self.pe_cfg, "background_chunk_generator", False)
+        self.background_chunk_generator = self.get_param(
+            self.pe_cfg, "background_chunk_generator", False
+        )
 
         return
 
 
 class PredictConfig(Config):
-    def __init__(self,
-                 yml_path: Path = None,
-                 cfg_dict: dict = None):
+    def __init__(self, yml_path: Path = None, cfg_dict: dict = None):
         super().__init__(yml_path=yml_path, cfg_dict=cfg_dict)
 
         self.config_type = "predict"
@@ -434,7 +490,9 @@ class PredictConfig(Config):
         self.normalize_data = data_cfg["normalize_data"]
         self.n_channels = data_cfg["n_channels"]
         self.channel_names = self.get_param(data_cfg, "channel_names", None)
-        self.ignore_last_channel = self.get_param(data_cfg, "ignore_last_channel", False)
+        self.ignore_last_channel = self.get_param(
+            data_cfg, "ignore_last_channel", False
+        )
         # self.positive_class_value = data_cfg["positive_class_value"]
         # self.negative_class_value = data_cfg["negative_class_value"]
         return
@@ -442,7 +500,9 @@ class PredictConfig(Config):
     def _parse_prediction_cfg(self, prediction_cfg: dict) -> None:
         # self.n_output_classes = prediction_cfg["n_output_classes"]
         self.model_path = self._decode_path(prediction_cfg["model_path"])
-        self.custom_objects_path = self._decode_path(prediction_cfg["custom_objects_path"])
+        self.custom_objects_path = self._decode_path(
+            prediction_cfg["custom_objects_path"]
+        )
         self.prediction_mode = prediction_cfg["mode"]
         self.window_size = prediction_cfg["window_size"]
         self.batch_size = self.get_param(prediction_cfg, "batch_size", 1)
@@ -451,9 +511,13 @@ class PredictConfig(Config):
         self.class_values = self.get_param(prediction_cfg, "class_values", None)
         self.multi_gpu = self.get_param(prediction_cfg, "multi_gpu", False)
         self.autocrop = self.get_param(prediction_cfg, "autocrop", False)
-        self.horizontal_crop_range = self.get_param(prediction_cfg, "horizontal_crop_range", None)
+        self.horizontal_crop_range = self.get_param(
+            prediction_cfg, "horizontal_crop_range", None
+        )
         self.chunk_size = self.get_param(prediction_cfg, "chunk_size", None)
-        self.background_chunk_generator = self.get_param(prediction_cfg, "background_chunk_generator", False)
+        self.background_chunk_generator = self.get_param(
+            prediction_cfg, "background_chunk_generator", False
+        )
         self.skip_threshold = self.get_param(prediction_cfg, "skip_threshold", None)
         return
 
@@ -465,9 +529,15 @@ class PredictConfig(Config):
 
     def _parse_performance_evaluation_cfg_additional(self) -> None:
         self.ground_truth_mode = self.get_param(self.pe_cfg, "data_mode", None)
-        self.ground_truth_normalize = self.get_param(self.pe_cfg, "normalize_ground_truth", False)
-        self.ground_truth_path = self._decode_path(self.get_param(self.pe_cfg, "ground_truth_path", None))
-        self.ground_truth_soft_labels = self.get_param(self.pe_cfg, "soft_labels", False)
+        self.ground_truth_normalize = self.get_param(
+            self.pe_cfg, "normalize_ground_truth", False
+        )
+        self.ground_truth_path = self._decode_path(
+            self.get_param(self.pe_cfg, "ground_truth_path", None)
+        )
+        self.ground_truth_soft_labels = self.get_param(
+            self.pe_cfg, "soft_labels", False
+        )
         # self.ground_truth_normalize = self.get_param(self.pe_cfg, normalize_data)
         return
 
