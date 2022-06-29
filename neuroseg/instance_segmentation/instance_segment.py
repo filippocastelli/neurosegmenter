@@ -1,4 +1,3 @@
-from turtle import Turtle
 from typing import Union, Tuple
 import logging
 from pathlib import Path
