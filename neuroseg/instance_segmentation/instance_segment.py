@@ -1,6 +1,8 @@
+from turtle import Turtle
 from typing import Union, Tuple
 import logging
 from pathlib import Path
+from black import out
 
 import numpy as np
 import skimage.segmentation as skseg
@@ -17,24 +19,31 @@ from neuroseg.utils import IntegerShearingCorrect
 
 class VoronoiInstanceSegmenter:
     def __init__(self,
-        config: Union[TrainConfig, PredictConfig],
-        predicted_data: dict):
-        
-        if config.config_type == "training":
-            data_mode = config.dataset_mode
-        elif config.config_type == "predict":
-            data_mode = config.data_mode
-        else:
-            raise NotImplementedError
+        predicted_data: dict,
+        config: Union[TrainConfig, PredictConfig] = None,
+        output_path: Path = None,
+        shearing_correct_delta: int = -7,
 
-        if data_mode == "zetastitcher":
-            raise NotImplementedError("ZetaStitcher data mode not supported yet.")
-            # TODO: implement chunk-based instance segmentation 
-
+        ):
         self.config = config
-        self.enable_instance_segmentation = config.enable_instance_segmentation
+        if config is not None:
+            if config.config_type == "training" and config is not None:
+                data_mode = config.dataset_mode
+            elif config.config_type == "predict" and config is not None:
+                data_mode = config.data_mode
+            else:
+                raise NotImplementedError
+            if data_mode == "zetastitcher":
+                raise NotImplementedError("ZetaStitcher data mode not supported yet.")
+                # TODO: implement chunk-based instance segmentation 
 
-        self.sharing_correct_delta = config.instance_segmentation_shearing_correct_delta
+            self.enable_instance_segmentation = config.enable_instance_segmentation
+            self.shearing_correct_delta = config.instance_segmentation_shearing_correct_delta
+            self.output_path = self.config.output_path
+        else:
+            self.enable_instance_segmentation = True
+            self.shearing_correct_delta = shearing_correct_delta
+            self.output_path = output_path
 
         devices = cle.available_device_names()
         device = devices[0]
@@ -56,7 +65,7 @@ class VoronoiInstanceSegmenter:
                 else:
                     save_8bit, save_16bit, save_32bit = False, False, True
                 save_volume(segmented_volume,
-                    output_path=self.config.output_path,
+                    output_path=self.output_path,
                     fname=f"{imgname}_segmented",
                     save_tiff=False,
                     save_8bit=save_8bit,
@@ -135,16 +144,17 @@ class InstanceSegmenter:
 
     def __init__(self,
                  config: Union[TrainConfig, PredictConfig],
-                 predicted_data: dict):
-        if config.config_type == 'training':
-            data_mode = config.dataset_mode
-        elif config.config_type == "predict":
-            data_mode = config.data_mode
-        else:
-            raise NotImplementedError(config.config_type)
-        if data_mode == "zetastitcher":
-            raise NotImplementedError("ZetaStitcher data mode not supported yet.")
-            # TODO: implement chunk-based instance segmentation 
+                 predicted_data: dict,):
+        if config is not None: 
+            if config.config_type == 'training':
+                data_mode = config.dataset_mode
+            elif config.config_type == "predict":
+                data_mode = config.data_mode
+            else:
+                raise NotImplementedError(config.config_type)
+            if data_mode == "zetastitcher":
+                raise NotImplementedError("ZetaStitcher data mode not supported yet.")
+                # TODO: implement chunk-based instance segmentation 
 
         self.config = config
         self.enable_instance_segmentation = self.config.enable_instance_segmentation
