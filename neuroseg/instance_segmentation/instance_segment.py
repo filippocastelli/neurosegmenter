@@ -1,7 +1,6 @@
 from typing import Union, Tuple
 import logging
 from pathlib import Path
-from black import out
 
 import numpy as np
 import skimage.segmentation as skseg
