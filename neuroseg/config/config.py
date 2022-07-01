@@ -153,6 +153,14 @@ class Config:
             self.get_param(instance_segmentation_cfg, "downscaling_xy_factor", 4)
         )
 
+        self.instance_segmentation_padding_slices = int(
+            self.get_param(instance_segmentation_cfg, "padding_slices", 0)
+        )
+
+        self.instance_segmentation_block_size = self.get_param(instance_segmentation_cfg, "block_size", None)
+        if self.instance_segmentation_block_size is not None:
+            self.instance_segmentation_block_size = int(self.instance_segmentation_block_size)
+
         return
 
     @staticmethod

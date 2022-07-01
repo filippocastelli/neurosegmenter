@@ -5,6 +5,21 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: instance segmentation",
+            "type": "python",
+            "request": "launch",
+            "program": "voronoi_segment.py",
+            "cwd": "${workspaceFolder}/examples",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "-i",
+                "/mnt/ssd2/inference_spim/asd.tif",
+                "-o",
+                "/mnt/ssd2/inference_spim/out_voronoi"
+            ]
+        },
+        {
             "name": "Python: train 2D EM",
             "type": "python",
             "request": "launch",
@@ -12,7 +27,10 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "cwd": "${workspaceFolder}/examples",
-            "args": ["-c", "epfl_em_2d.yml"]
+            "args": [
+                "-c",
+                "epfl_em_2d.yml"
+            ]
         },
         {
             "name": "Python: train 2D SPIM",
@@ -22,8 +40,13 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "cwd": "${workspaceFolder}/examples",
-            "args": ["-c", "train_spim.yml"],
-            "env": {"LD_LIBRARY_PATH": "/home/castelli/anaconda3/envs/neuroseg_pip/lib"}
+            "args": [
+                "-c",
+                "train_spim.yml"
+            ],
+            "env": {
+                "LD_LIBRARY_PATH": "/home/castelli/anaconda3/envs/neuroseg_pip/lib"
+            }
         },
         {
             "name": "Python: predict 2d EM",
@@ -42,8 +65,13 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "cwd": "${workspaceFolder}/examples",
-            "args": ["-c", "predict_zip_2d.yml"],
-            "env": {"LD_LIBRARY_PATH": "/home/castelli/anaconda3/envs/neuroseg_pip/lib"}
+            "args": [
+                "-c",
+                "predict_zip_2d.yml"
+            ],
+            "env": {
+                "LD_LIBRARY_PATH": "/home/castelli/anaconda3/envs/neuroseg_pip/lib"
+            }
         },
         {
             "name": "Python: split webknossos dataset",
@@ -54,14 +82,23 @@
             "justMyCode": false,
             "cwd": "${workspaceFolder}/neuroseg/utils",
             "args": [
-                "-d", "/mnt/NASoneScratch/castelli/webknossos_downloads/completed",
-                "--train", "0.7",
-                "--test", "0.2",
-                "--val", "0.1",
-                "-m", "normal",
-                "--frame_pattern", "_frame",
-                "--mask_pattern", "_annotation",
-                "-e", "tiff"]
+                "-d",
+                "/mnt/NASoneScratch/castelli/webknossos_downloads/completed",
+                "--train",
+                "0.7",
+                "--test",
+                "0.2",
+                "--val",
+                "0.1",
+                "-m",
+                "normal",
+                "--frame_pattern",
+                "_frame",
+                "--mask_pattern",
+                "_annotation",
+                "-e",
+                "tiff"
+            ]
         }
     ]
 }

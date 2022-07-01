@@ -1,6 +1,7 @@
 from typing import Union, Tuple
 import logging
 from pathlib import Path
+import os
 
 import numpy as np
 import skimage.segmentation as skseg
@@ -10,6 +11,7 @@ import skimage.color as skcolor
 from skimage.filters import threshold_otsu
 from scipy.ndimage import distance_transform_edt
 import pyclesperanto_prototype as cle
+import tifffile
 
 from neuroseg.config import TrainConfig, PredictConfig
 from neuroseg.utils import save_volume
@@ -21,7 +23,9 @@ class VoronoiInstanceSegmenter:
         config: Union[TrainConfig, PredictConfig] = None,
         output_path: Path = None,
         shearing_correct_delta: int = -7,
-
+        block_size: int = None,
+        downscaling_xy_factor: int = 4,
+        padding_slices: int = 10,
         ):
         self.config = config
         if config is not None:
@@ -37,12 +41,18 @@ class VoronoiInstanceSegmenter:
 
             self.enable_instance_segmentation = config.enable_instance_segmentation
             self.shearing_correct_delta = config.instance_segmentation_shearing_correct_delta
+            self.block_size = config.instance_segmentation_block_size
             self.output_path = self.config.output_path
+            self.downscaling_xy_factor = self.config.instance_segmentation_downscaling_xy_factor
+            self.padding_slices = self.config.instance_segmentation_padding_slices
         else:
             self.enable_instance_segmentation = True
             self.shearing_correct_delta = shearing_correct_delta
             self.output_path = output_path
-
+            self.downscaling_xy_factor = downscaling_xy_factor
+            self.padding_slices = padding_slices
+            
+            self.block_size = block_size
         devices = cle.available_device_names()
         device = devices[0]
         print("Using device:", device)
@@ -52,58 +62,162 @@ class VoronoiInstanceSegmenter:
 
             print("Performing instance segmentation...")
             for key, value in self.predicted_data_dict.items():
-                segmented_volume = self.voronoi_segment(np.squeeze(value))
-                self.predicted_data_dict[key] = segmented_volume
                 imgname = Path(key).stem
-                # save_volume(segmented_volume, self.config.output_path / f"{imgname}_segmented")
-                if np.max(value) < 255:
-                    save_8bit, save_16bit, save_32bit = True, False, False
-                elif np.max(value) < 65535:
-                    save_8bit, save_16bit, save_32bit = False, True, False
+                fname = f"{imgname}_segmented.tif"
+                out_fpath = self.output_path.joinpath(fname)
+
+                if out_fpath.exists():
+                    # remove it
+                    os.remove(str(out_fpath))
+                    binarized_path = out_fpath.joinpath(out_fpath.stem+"_binarized.tif")
+                    os.remove(str(binarized_path))
+
+
+                if self.block_size is not None:
+                    self.block_voronoi_segment(
+                        value,
+                        block_size=self.block_size,
+                        out_fpath=out_fpath,
+                        downscaling_xy_factor=downscaling_xy_factor,
+                        padding_slices=padding_slices)
                 else:
-                    save_8bit, save_16bit, save_32bit = False, False, True
-                save_volume(segmented_volume,
-                    output_path=self.output_path,
-                    fname=f"{imgname}_segmented",
-                    save_tiff=False,
-                    save_8bit=save_8bit,
-                    save_16bit=save_16bit,
-                    save_32bit=save_32bit)
+                    segmented_volume = self.voronoi_segment(np.squeeze(value), padding_slices=padding_slices)
+                    self.save_block(out_fpath, segmented_volume.astype(np.uint16))
+
+                #self.predicted_data_dict[key] = segmented_volume
+
+                # seg_volume_max = np.max(segmented_volume)
+                # # save_volume(segmented_volume, self.config.output_path / f"{imgname}_segmented")
+                # if seg_volume_max < 255:
+                #     save_8bit, save_16bit, save_32bit = True, False, False
+                # elif seg_volume_max < 65535:
+                #     save_8bit, save_16bit, save_32bit = False, True, False
+                # else:
+                #     save_8bit, save_16bit, save_32bit = False, False, True
+                # save_volume(segmented_volume,
+                #     output_path=self.output_path,
+                #     fname=f"{imgname}_segmented",
+                #     save_tiff=False,
+                #     save_8bit=save_8bit,
+                #     save_16bit=save_16bit,
+                #     save_32bit=save_32bit)
+
+
     @staticmethod
-    def voronoi_segment(
+    def pad_img(img: np.ndarray, padding_slices: int = 0):
+        if padding_slices > 0:
+            lower_pad = img[:padding_slices][::-1]
+            upper_pad = img[-padding_slices:][::-1]
+            return np.concatenate([lower_pad, img, upper_pad], axis=0)
+        else:
+            return img
+    
+    @staticmethod
+    def unpad_img(img: np.ndarray, padding_slices: int = 0):
+        if padding_slices > 0:
+            return img[padding_slices:-padding_slices]
+        else:
+            return img
+
+    @classmethod
+    def block_voronoi_segment(cls,
         input_img: np.ndarray,
+        out_fpath: Path,
         shearing_correct_delta: int = -7,
-        downscaling_factor_xy: int = 4,
+        downscaling_xy_factor: int = 4,
         spot_detection_sigma: float = 3.,
         outline_sigma: float = 1.,
         threhsold_otsu: bool = True,
         threshold: float = 0.5,
         back_shearing_correct: bool = True,
+        block_size: int = 100,
+        padding_slices: int = 0
         ) -> Tuple[np.ndarray, np.ndarray]:
+        
+        n_imgs = input_img.shape[0]
+        idx_batches = cls.split(list(range(n_imgs)), block_size)
+        n_objects = 0
+        voronoi_out = None
+        for batch_idxs in idx_batches:
+            sub_img = np.squeeze(input_img[batch_idxs[0]:batch_idxs[-1]+1])
+            voronoi_segmented = cls.voronoi_segment(
+                sub_img,
+                shearing_correct_delta=shearing_correct_delta,
+                downscaling_xy_factor=downscaling_xy_factor,
+                spot_detection_sigma=spot_detection_sigma,
+                outline_sigma=outline_sigma,
+                threhsold_otsu=threhsold_otsu,
+                threshold=threshold,
+                back_shearing_correct=back_shearing_correct,
+                padding_slices=padding_slices
+            )
+
+            voronoi_segmented = np.where(voronoi_segmented != 0, voronoi_segmented + n_objects, 0)
+            n_objects = np.max(voronoi_segmented)
+
+            cls.save_block(out_path=out_fpath, block=voronoi_segmented.astype(np.uint16))
+
+        #return voronoi_out
+
+    @staticmethod
+    def split(idx_list, batch_size):
+        return [idx_list[i:i+batch_size] for i in range(0, len(idx_list), batch_size)]
+    
+    @staticmethod
+    def save_block(out_path:Path, block:np.ndarray, save_binarized=True):
+        with tifffile.TiffWriter(str(out_path), bigtiff=True, append=True) as tif:
+            for img_plane in block:
+                img_plane = np.expand_dims(img_plane, axis=-1)
+                tif.write(img_plane, compression="zlib")
+
+        if save_binarized:
+            binarized_fpath = out_path.parent.joinpath(out_path.stem+"_binarized.tif")
+            with tifffile.TiffWriter(str(binarized_fpath), bigtiff=True, append=True) as tif:
+                for img_plane in block:
+                    img_plane = (np.expand_dims(img_plane, axis=-1) > 0).astype(np.uint16)
+                    tif.write(img_plane, compression="zlib")
+
+    @classmethod
+    def voronoi_segment(cls,
+        input_img: np.ndarray,
+        shearing_correct_delta: int = -7,
+        downscaling_xy_factor: int = 4,
+        spot_detection_sigma: float = 3.,
+        outline_sigma: float = 1.,
+        threhsold_otsu: bool = True,
+        threshold: float = 0.5,
+        back_shearing_correct: bool = True,
+        padding_slices: int = 0
+        ) -> np.ndarray:
         """
         Perform voronoi segmentation using PyCLEsperanto
         """
         print("Performing voronoi segmentation...")
 
         # correcting shearing distorsion
+
         shearing_correct = IntegerShearingCorrect(
             delta=shearing_correct_delta)
-
+        input_img = cls.pad_img(input_img, padding_slices)
         corrected_img, data_mask = shearing_correct.forward_correct(arr=input_img)
         corrected_img_gpu = cle.push(corrected_img)
 
-        # max downscaling 
-        reduced_max = skmeas.block_reduce(corrected_img, (1, downscaling_factor_xy, downscaling_factor_xy), np.max)
-        reduced_max_gpu = cle.push(reduced_max)
+        # max downscaling
+        if downscaling_xy_factor in [1, None]:
+            reduced = corrected_img
+            reduced_gpu = corrected_img_gpu
+        else:
+            reduced = skmeas.block_reduce(corrected_img, (1, downscaling_xy_factor, downscaling_xy_factor), np.max)
+            reduced_gpu = cle.push(reduced)
 
         blurred_detection_reduced = cle.gaussian_blur(
-            reduced_max_gpu,
+            reduced_gpu,
             sigma_x=spot_detection_sigma,
             sigma_y=spot_detection_sigma,
             sigma_z=spot_detection_sigma)
 
         detected_spots_reduced = cle.detect_maxima_box(blurred_detection_reduced, radius_x=0, radius_y=0, radius_z=0)
-        blurred_outline_reduced = cle.gaussian_blur(reduced_max_gpu, sigma_x=outline_sigma, sigma_y=outline_sigma, sigma_z=outline_sigma)
+        blurred_outline_reduced = cle.gaussian_blur(reduced_gpu, sigma_x=outline_sigma, sigma_y=outline_sigma, sigma_z=outline_sigma)
         if not threhsold_otsu:
             max_int = np.iinfo(blurred_outline_reduced.dtype).max
             binary_reduced = cle.threshold(blurred_outline_reduced, constant=max_int*threshold)
@@ -113,8 +227,11 @@ class VoronoiInstanceSegmenter:
         selected_spots_reduced = cle.binary_and(binary_reduced, detected_spots_reduced)
         
         # upscaling selected_spots
-        selected_spots = np.zeros_like(corrected_img)
-        selected_spots[:, ::downscaling_factor_xy, ::downscaling_factor_xy] = selected_spots_reduced
+        if downscaling_xy_factor in [1, None]:
+            selected_spots = selected_spots_reduced
+        else:
+            selected_spots = np.zeros_like(corrected_img)
+            selected_spots[:, ::downscaling_xy_factor, ::downscaling_xy_factor] = selected_spots_reduced
 
         blurred_outline = cle.gaussian_blur(
             corrected_img_gpu,
@@ -133,6 +250,7 @@ class VoronoiInstanceSegmenter:
         if back_shearing_correct:
             voronoi_diagram = shearing_correct.inverse_correct(arr=voronoi_diagram)
 
+        voronoi_diagram = cls.unpad_img(voronoi_diagram, padding_slices)
         return voronoi_diagram
 
 
