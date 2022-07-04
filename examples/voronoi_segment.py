@@ -28,17 +28,17 @@ def main():
     #in_img = InputFile(str(input_file))
     #in_img = skio.imread(str(input_file), plugin="pil")
     #in_img = np.random.randint(0, 255, size=(200, 200, 200), dtype=np.uint8)
-    in_img = InputFile(input_file)[2000:2100]
+    in_img = InputFile(input_file)
 
-    skio.imsave(output_path.joinpath(input_file.stem+"sub.tif"),np.expand_dims(in_img, axis=0))
+    #skio.imsave(output_path.joinpath(input_file.stem+"sub.tif"),np.expand_dims(in_img, axis=0))
     data = {input_file.name: in_img}
     seg = VoronoiInstanceSegmenter(
         predicted_data=data,
         output_path=output_path,
         shearing_correct_delta=-7,
-        block_size=50,
+        block_size=60,
         downscaling_xy_factor=None,
-        padding_slices=10
+        padding_slices=5
         )
 
 if __name__ == "__main__":
