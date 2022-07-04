@@ -161,6 +161,7 @@ class Config:
         if self.instance_segmentation_block_size is not None:
             self.instance_segmentation_block_size = int(self.instance_segmentation_block_size)
 
+        self.instance_segmentation_autocrop = self.get_param(instance_segmentation_cfg, "autocrop", False)
         return
 
     @staticmethod

@@ -19,6 +19,7 @@ from tqdm import tqdm
 from neuroseg.config import TrainConfig, PredictConfig
 from neuroseg.utils import save_volume
 from neuroseg.utils import IntegerShearingCorrect
+from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
 
         
 class VoronoiInstanceSegmenter:
@@ -30,6 +31,7 @@ class VoronoiInstanceSegmenter:
         block_size: int = None,
         downscaling_xy_factor: int = 4,
         padding_slices: int = 10,
+        autocrop: bool = True
         ):
         self.config = config
         if config is not None:
@@ -49,12 +51,15 @@ class VoronoiInstanceSegmenter:
             self.output_path = self.config.output_path
             self.downscaling_xy_factor = self.config.instance_segmentation_downscaling_xy_factor
             self.padding_slices = self.config.instance_segmentation_padding_slices
+            self.autocrop = self.config.instance_segmentation_autocrop
+            #self.autocrop = autocrop # TODO: add autocrop config for VoronoiInstanceSegmenter
         else:
             self.enable_instance_segmentation = True
             self.shearing_correct_delta = shearing_correct_delta
             self.output_path = output_path
             self.downscaling_xy_factor = downscaling_xy_factor
             self.padding_slices = padding_slices
+            self.autocrop = autocrop
             
             self.block_size = block_size
         devices = cle.available_device_names()
@@ -66,6 +71,7 @@ class VoronoiInstanceSegmenter:
 
             #print("Performing instance segmentation...")
             for key, value in self.predicted_data_dict.items():
+
                 imgname = Path(key).stem
                 fname = f"{imgname}_segmented.tif"
                 out_fpath = self.output_path.joinpath(fname)
@@ -83,7 +89,8 @@ class VoronoiInstanceSegmenter:
                         block_size=self.block_size,
                         out_fpath=out_fpath,
                         downscaling_xy_factor=downscaling_xy_factor,
-                        padding_slices=padding_slices)
+                        padding_slices=padding_slices,
+                        autocrop=self.autocrop)
                 else:
                     segmented_volume = self.voronoi_segment(np.squeeze(value), padding_slices=padding_slices)
                     self.save_block(out_fpath, segmented_volume.astype(np.uint16))
@@ -123,6 +130,7 @@ class VoronoiInstanceSegmenter:
         else:
             return img
 
+
     @classmethod
     def block_voronoi_segment(cls,
         input_img: np.ndarray,
@@ -135,7 +143,8 @@ class VoronoiInstanceSegmenter:
         threshold: float = 0.5,
         back_shearing_correct: bool = True,
         block_size: int = 100,
-        padding_slices: int = 0
+        padding_slices: int = 0,
+        autocrop: bool = False
         ) -> Tuple[np.ndarray, np.ndarray]:
         
         n_imgs = input_img.shape[0]
@@ -146,6 +155,13 @@ class VoronoiInstanceSegmenter:
         for idx, batch_idxs in enumerate(tqdm(idx_batches)):
             print(f"Voronoi prediction on batch {idx}/{len(idx_batches)}")
             sub_img = np.squeeze(input_img[batch_idxs[0]:batch_idxs[-1]+1])
+
+            if autocrop:
+                autocrop_range = DataPredictorBase._get_autocrop_range(sub_img)
+                pre_crop_sub_img_shape = sub_img.shape
+                sub_img = sub_img[:, :, autocrop_range[0]:autocrop_range[1]]
+                autocrop_pads = ((0,0), (0,0), (autocrop_range[0], pre_crop_sub_img_shape[2]-autocrop_range[1]))
+
             voronoi_segmented = cls.voronoi_segment(
                 sub_img,
                 shearing_correct_delta=shearing_correct_delta,
@@ -155,7 +171,7 @@ class VoronoiInstanceSegmenter:
                 threhsold_otsu=threhsold_otsu,
                 threshold=threshold,
                 back_shearing_correct=True,
-                padding_slices=padding_slices
+                padding_slices=padding_slices,
             )
             voronoi_segmented = np.where(voronoi_segmented != 0, voronoi_segmented + n_objects, 0)
             n_objects = np.max(voronoi_segmented)
@@ -165,6 +181,8 @@ class VoronoiInstanceSegmenter:
                 last_block_pads = [(0,0), (np.abs(shearing_correct_delta),0)]
 
                 first_img_new_block = np.pad(voronoi_segmented[0], new_block_pads)
+                if autocrop:
+                    first_img_new_block = np.pad(first_img_new_block, autocrop_pads[1:])
                 last_img = np.pad(last_img, last_block_pads)
                 # check overlap
                 overlap = np.logical_and(last_img, first_img_new_block)
@@ -200,17 +218,18 @@ class VoronoiInstanceSegmenter:
                 # end = time.time()
                 # time_for = end - st
 
-                v = np.array(list(label_remap.keys()))
-                k = np.array(list(label_remap.values()))
+                if label_remap != {}:
+                    v = np.array(list(label_remap.keys()))
+                    k = np.array(list(label_remap.values()))
 
-                sidx = k.argsort()
-                k = k[sidx]
-                v = v[sidx]
+                    sidx = k.argsort()
+                    k = k[sidx]
+                    v = v[sidx]
 
-                idx = np.searchsorted(k, voronoi_segmented.ravel()).reshape(voronoi_segmented.shape)
-                idx[idx==len(k)]=0
-                mask = k[idx] == voronoi_segmented
-                voronoi_segmented = np.where(mask, v[idx], voronoi_segmented)
+                    idx = np.searchsorted(k, voronoi_segmented.ravel()).reshape(voronoi_segmented.shape)
+                    idx[idx==len(k)]=0
+                    mask = k[idx] == voronoi_segmented
+                    voronoi_segmented = np.where(mask, v[idx], voronoi_segmented)
 
                 # time_vec = time.time() - end
 
@@ -218,6 +237,10 @@ class VoronoiInstanceSegmenter:
                 # print(f"time vec: {time_vec}")
                 #voronoi_segmented = mp_vector(voronoi_segmented)
             last_img = voronoi_segmented[-1]
+
+            if autocrop:
+                voronoi_segmented = np.pad(voronoi_segmented, autocrop_pads)
+                last_img = np.pad(last_img, autocrop_pads[1:])
 
             cls.save_block(out_path=out_fpath, block=voronoi_segmented.astype(np.uint16))
 
@@ -266,7 +289,7 @@ class VoronoiInstanceSegmenter:
         threhsold_otsu: bool = True,
         threshold: float = 0.5,
         back_shearing_correct: bool = True,
-        padding_slices: int = 0
+        padding_slices: int = 0,
         ) -> np.ndarray:
         """
         Perform voronoi segmentation using PyCLEsperanto
@@ -277,8 +300,9 @@ class VoronoiInstanceSegmenter:
 
         shearing_correct = IntegerShearingCorrect(
             delta=shearing_correct_delta)
-        input_img = cls.pad_img(input_img, padding_slices)
+
         corrected_img, data_mask = shearing_correct.forward_correct(arr=input_img)
+        corrected_img = cls.pad_img(corrected_img, padding_slices)
         corrected_img_gpu = cle.push(corrected_img)
 
         # max downscaling

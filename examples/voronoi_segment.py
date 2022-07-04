@@ -38,7 +38,8 @@ def main():
         shearing_correct_delta=-7,
         block_size=60,
         downscaling_xy_factor=None,
-        padding_slices=5
+        padding_slices=5,
+        autocrop=True
         )
 
 if __name__ == "__main__":
