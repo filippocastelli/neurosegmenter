@@ -21,9 +21,18 @@ def main():
         dest="input_file",
         help="input_file")
 
+    parser.add_argument("-b", "--batch_size",
+        type=int,
+        required=False,
+        dest="batch_size",
+        help="batch_size",
+        default=60)
+
     args = parser.parse_args()
     output_path = Path(args.output_path)
     input_file = Path(args.input_file)
+
+    batch_size = args.batch_size
     
     #in_img = InputFile(str(input_file))
     #in_img = skio.imread(str(input_file), plugin="pil")
@@ -36,7 +45,7 @@ def main():
         predicted_data=data,
         output_path=output_path,
         shearing_correct_delta=-7,
-        block_size=60,
+        block_size=args.batch_size,
         downscaling_xy_factor=None,
         padding_slices=5,
         autocrop=True
