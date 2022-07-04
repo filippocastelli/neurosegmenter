@@ -6,7 +6,7 @@ from tensorflow.keras.models import load_model
 
 from neuroseg.config import PredictConfig
 from neuroseg.tiledpredict import DataPredictor
-from neuroseg.instance_segmentation import InstanceSegmenter
+from neuroseg.instance_segmentation import VoronoiInstanceSegmenter
 
 
 def predict(predict_config: PredictConfig, in_fpath=None):
@@ -17,7 +17,7 @@ def predict(predict_config: PredictConfig, in_fpath=None):
     # performance_dict = ev.measure_dict
     # _ = RunDescriptorLight(predict_config, performance_metrics_dict=performance_dict)
     if predict_config.enable_instance_segmentation:
-        inseg = InstanceSegmenter(predict_config, dp.predicted_data)
+        inseg = VoronoiInstanceSegmenter(predict_config, dp.predicted_data)
         return dp.predicted_data, inseg.segmented_data_dict, inseg.segmented_data_rgb_dict
     else:
         return dp.predicted_data
