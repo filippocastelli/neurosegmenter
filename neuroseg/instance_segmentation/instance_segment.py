@@ -2,6 +2,7 @@ from typing import Union, Tuple
 import logging
 from pathlib import Path
 import os
+import time
 
 import numpy as np
 import skimage.segmentation as skseg
@@ -12,11 +13,14 @@ from skimage.filters import threshold_otsu
 from scipy.ndimage import distance_transform_edt
 import pyclesperanto_prototype as cle
 import tifffile
+from tqdm import tqdm
+
 
 from neuroseg.config import TrainConfig, PredictConfig
 from neuroseg.utils import save_volume
 from neuroseg.utils import IntegerShearingCorrect
 
+        
 class VoronoiInstanceSegmenter:
     def __init__(self,
         predicted_data: dict,
@@ -60,7 +64,7 @@ class VoronoiInstanceSegmenter:
         if self.enable_instance_segmentation:
             self.predicted_data_dict = predicted_data
 
-            print("Performing instance segmentation...")
+            #print("Performing instance segmentation...")
             for key, value in self.predicted_data_dict.items():
                 imgname = Path(key).stem
                 fname = f"{imgname}_segmented.tif"
@@ -69,8 +73,8 @@ class VoronoiInstanceSegmenter:
                 if out_fpath.exists():
                     # remove it
                     os.remove(str(out_fpath))
-                    binarized_path = out_fpath.joinpath(out_fpath.stem+"_binarized.tif")
-                    os.remove(str(binarized_path))
+                    #binarized_path = out_fpath.joinpath(out_fpath.stem+"_binarized.tif")
+                    #os.remove(str(binarized_path))
 
 
                 if self.block_size is not None:
@@ -138,7 +142,9 @@ class VoronoiInstanceSegmenter:
         idx_batches = cls.split(list(range(n_imgs)), block_size)
         n_objects = 0
         voronoi_out = None
-        for batch_idxs in idx_batches:
+        last_img = None
+        for idx, batch_idxs in enumerate(tqdm(idx_batches)):
+            print(f"Voronoi prediction on batch {idx}/{len(idx_batches)}")
             sub_img = np.squeeze(input_img[batch_idxs[0]:batch_idxs[-1]+1])
             voronoi_segmented = cls.voronoi_segment(
                 sub_img,
@@ -148,16 +154,89 @@ class VoronoiInstanceSegmenter:
                 outline_sigma=outline_sigma,
                 threhsold_otsu=threhsold_otsu,
                 threshold=threshold,
-                back_shearing_correct=back_shearing_correct,
+                back_shearing_correct=True,
                 padding_slices=padding_slices
             )
-
             voronoi_segmented = np.where(voronoi_segmented != 0, voronoi_segmented + n_objects, 0)
             n_objects = np.max(voronoi_segmented)
+            if last_img is not None:
+                label_remap = {}
+                new_block_pads = [(0,0), (0,np.abs(shearing_correct_delta))]
+                last_block_pads = [(0,0), (np.abs(shearing_correct_delta),0)]
+
+                first_img_new_block = np.pad(voronoi_segmented[0], new_block_pads)
+                last_img = np.pad(last_img, last_block_pads)
+                # check overlap
+                overlap = np.logical_and(last_img, first_img_new_block)
+
+                labels_last_block = np.unique(last_img)
+                # remove background
+                labels_last_block = np.delete(labels_last_block, np.where(labels_last_block==0))
+
+                for label in labels_last_block:
+                    label_mask = last_img == label
+                    overlap = np.logical_and(label_mask, 
+                        first_img_new_block)
+                    overlap_labels_img = np.where(overlap, first_img_new_block, 0)
+
+                    overlapping_labels = np.unique(overlap_labels_img)
+                    overlapping_labels = np.delete(overlapping_labels, np.where(overlapping_labels == 0))
+                    if len(overlapping_labels) > 1:
+                        to_remap = cls.get_largest_label(overlap_labels_img, overlapping_labels)
+                        label_remap[to_remap] = label
+                    elif len(overlapping_labels) == 1:
+                        label_remap[overlapping_labels[0]] = label
+                    else:
+                        pass
+
+                # def mp(entry):
+                #    return label_remap[entry] if entry in label_remap else entry
+                # mp_vector = np.vectorize(mp)
+
+                # voronoi_segmented_cpy = voronoi_segmented.copy()
+                # st = time.time()
+                # for to_remap, label in tqdm(label_remap.items()):
+                #    voronoi_segmented_cpy[voronoi_segmented_cpy==label] = to_remap
+                # end = time.time()
+                # time_for = end - st
+
+                v = np.array(list(label_remap.keys()))
+                k = np.array(list(label_remap.values()))
+
+                sidx = k.argsort()
+                k = k[sidx]
+                v = v[sidx]
+
+                idx = np.searchsorted(k, voronoi_segmented.ravel()).reshape(voronoi_segmented.shape)
+                idx[idx==len(k)]=0
+                mask = k[idx] == voronoi_segmented
+                voronoi_segmented = np.where(mask, v[idx], voronoi_segmented)
+
+                # time_vec = time.time() - end
+
+                # print(f"time for: {time_for}")
+                # print(f"time vec: {time_vec}")
+                #voronoi_segmented = mp_vector(voronoi_segmented)
+            last_img = voronoi_segmented[-1]
 
             cls.save_block(out_path=out_fpath, block=voronoi_segmented.astype(np.uint16))
 
         #return voronoi_out
+
+    @staticmethod
+    def get_largest_label(img, uniques=None):
+        if uniques is None:
+            uniques = np.unique(img)
+        
+        counts = []
+        uniques = np.delete(uniques, np.where(uniques==0))
+        for label in uniques:
+            counts.append(np.count_nonzero(img==label))
+
+        return uniques[np.argmax(counts)]
+        
+
+
 
     @staticmethod
     def split(idx_list, batch_size):
@@ -192,7 +271,7 @@ class VoronoiInstanceSegmenter:
         """
         Perform voronoi segmentation using PyCLEsperanto
         """
-        print("Performing voronoi segmentation...")
+        #print("Performing voronoi segmentation...")
 
         # correcting shearing distorsion
 
@@ -246,11 +325,11 @@ class VoronoiInstanceSegmenter:
             binary = cle.threshold_otsu(blurred_outline)
 
         voronoi_diagram = np.array(cle.masked_voronoi_labeling(selected_spots, binary))
+        voronoi_diagram = cls.unpad_img(voronoi_diagram, padding_slices)
 
         if back_shearing_correct:
             voronoi_diagram = shearing_correct.inverse_correct(arr=voronoi_diagram)
-
-        voronoi_diagram = cls.unpad_img(voronoi_diagram, padding_slices)
+        
         return voronoi_diagram
 
 
