@@ -229,7 +229,13 @@ class DataPredictorBase:
         gradient = gradient / gradient.max()
 
         filtered_grad = np.where(np.abs(gradient) > grad_threshold, gradient, 0)
-        start_idx = np.min(np.nonzero(filtered_grad))
+        nonzero_grad = np.nonzero(filtered_grad)
+
+        # catch the case where the gradient is too low
+        if len(nonzero_grad[0]) == 0:
+            return (0, vol.shape[2])
+
+        start_idx = np.min(nonzero_grad)
         end_idx = len(filtered_grad) - np.min(np.nonzero(np.flip(filtered_grad)))
         
         return start_idx, end_idx
