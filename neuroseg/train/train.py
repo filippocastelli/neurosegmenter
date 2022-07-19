@@ -115,9 +115,10 @@ def train(train_config: TrainConfig):
     if train_config.evaluate_performance:
         dp = DataPredictor(train_config, model)
         ev = PerformanceEvaluator(train_config, dp.predicted_data)
-        inseg = VoronoiInstanceSegmenter(train_config, dp.predicted_data)
+        inseg = VoronoiInstanceSegmenter(config=train_config, predicted_data=dp.predicted_data)
         performance_dict = ev.measure_dict
         wc.log_metrics(performance_dict)
+        wc.log_metrics(ev.metrics)
     else:
         performance_dict = None
 

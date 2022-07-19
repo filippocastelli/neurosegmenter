@@ -23,13 +23,14 @@ class PerformanceMetrics:
                  enable_curves: bool = False):
 
         self.enable_curves = enable_curves
-        self.y_true = np.copy(y_true).astype(np.uint8)
-        self.y_pred = np.copy(y_pred).astype(np.uint8) # AM I RETARDED
+        self.y_true = np.copy(y_true)
+        self.y_pred = np.copy(y_pred)
+        # self.y_pred = np.copy(y_pred).astype(np.uint8) # AM I RETARDED
         self.thr = thr
 
-        self.y_pred_fuzzy = y_pred
         self.y_true_fuzzy = y_true
-
+        self.y_pred_fuzzy = y_pred
+        
         self.fuzzy_intersection = np.sum(self.y_pred_fuzzy.flatten() * self.y_true_fuzzy.flatten())
         self.fuzzy_summation = np.sum(self.y_pred_fuzzy.flatten()) + np.sum(self.y_true_fuzzy.flatten())
         self.fuzzy_union = self.fuzzy_summation - self.fuzzy_intersection
@@ -466,6 +467,7 @@ class MultiVolumePerformanceEvaluator:
 
         self.gt_dict = self._load_gt()
 
+        self.metrics = self._calc_metrics()
         self.measure_dict = self._calc_aggregated_metrics()
 
     def _load_gt(self) -> dict:
@@ -483,6 +485,8 @@ class MultiVolumePerformanceEvaluator:
                                           return_norm=True)
             if self.normalize_ground_truth:
                 gt_volume = gt_volume / norm
+            if self.config.binarize_gt:
+                gt_volume = np.where(gt_volume > 0, 1, 0).astype(gt_volume.dtype)
             gt_dict[volume_name] = gt_volume
 
         return gt_dict
