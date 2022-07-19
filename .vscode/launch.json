@@ -5,6 +5,27 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python: file corrente",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Python: marching cubes",
+            "type": "python",
+            "request": "launch",
+            "program": "marching_cubes_skimage.py",
+            "cwd": "${workspaceFolder}/dev_notebooks",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "LD_LIBRARY_PATH": "/home/castelli/anaconda3/envs/neuroseg_pip/lib",
+                "DISPLAY": "localhost:10.0"
+            }
+        },
+        {
             "name": "Python: instance segmentation",
             "type": "python",
             "request": "launch",
@@ -14,10 +35,15 @@
             "justMyCode": false,
             "args": [
                 "-i",
-                "/mnt/ssd2/inference_spim/asd.tif",
+                "/mnt/ssd2/inference_spim/asd_sub.tif",
                 "-o",
-                "/mnt/ssd2/inference_spim/out_voronoi"
-            ]
+                "/mnt/ssd2/inference_spim/out_voronoi_asd_sub",
+                "-b",
+                "20"
+            ],  
+            "env": {
+                "LD_LIBRARY_PATH": "/home/castelli/anaconda3/envs/neuroseg_pip/lib"
+            }
         },
         {
             "name": "Python: train 2D EM",
