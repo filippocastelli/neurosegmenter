@@ -8,11 +8,6 @@ from neuroseg.utils import NameGenerator
 SUPPORTED_STACK_FORMATS = ["tif", "tiff"]
 
 
-# DESIGN NOTE: tutti i path dovrebbero essere individuati in Config,
-# per ogni modalità (stack, multi_stack, single_images), ogni modalità produrrà i suoi attributi
-# specifici che verranno richiesti differenziatamente nelle classi successive
-# ogni problema legato a glob dei file deve essere ricondotto qui
-
 
 class Config:
     def __init__(self, yml_path: Path = None, cfg_dict: dict = None):
@@ -103,12 +98,14 @@ class Config:
             self.pe_classification_threshold = self.get_param(
                 pe_cfg, "classification_threshold", 0.5
             )
+            self.binarize_gt = self.get_param(pe_cfg, "binarize_gt", False)
             self.add_empty_channel = self.get_param(pe_cfg, "add_empty_channel", False)
             self.pe_enable_curves = self.get_param(pe_cfg, "enable_curves", False)
             self.pe_multigpu = self.get_param(pe_cfg, "multi_gpu", False)
         else:
             self.evaluate_performance = False
             self.pe_multigpu = False
+            self.binarize_gt = False
         return
 
     def _parse_run_name(self) -> None:
@@ -465,6 +462,10 @@ class TrainConfig(Config):
         self.background_chunk_generator = self.get_param(
             self.pe_cfg, "background_chunk_generator", False
         )
+
+        if hasattr(self, "binarize_labels"):
+            if self.binarize_labels is not None:
+                self.binarize_gt = self.binarize_labels
 
         return
 
