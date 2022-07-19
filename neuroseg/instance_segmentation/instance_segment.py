@@ -3,8 +3,12 @@ import logging
 from pathlib import Path
 import os
 import time
+import multiprocessing
+from functools import partial
+import uuid
 
 import numpy as np
+import pandas as pd
 import skimage.segmentation as skseg
 import skimage.morphology as skmorph
 import skimage.measure as skmeas
@@ -14,13 +18,18 @@ from scipy.ndimage import distance_transform_edt
 import pyclesperanto_prototype as cle
 import tifffile
 from tqdm import tqdm
+import pyvista as pv
+import pymeshfix
 
 
 from neuroseg.config import TrainConfig, PredictConfig
 from neuroseg.utils import save_volume
 from neuroseg.utils import IntegerShearingCorrect
+from neuroseg.utils import stats
+from neuroseg.utils import get_bbox
 from neuroseg.tiledpredict.datapredictorbase import DataPredictorBase
 
+_shared_voronoi_stack = None
 
 class VoronoiInstanceSegmenter:
     def __init__(
@@ -33,6 +42,7 @@ class VoronoiInstanceSegmenter:
         downscaling_xy_factor: int = 4,
         padding_slices: int = 10,
         autocrop: bool = True,
+        compute_meshes: bool = True
     ):
         self.config = config
         if config is not None:
@@ -56,6 +66,8 @@ class VoronoiInstanceSegmenter:
             )
             self.padding_slices = self.config.instance_segmentation_padding_slices
             self.autocrop = self.config.instance_segmentation_autocrop
+            # TODO: add compute_meshes to config
+            self.compute_meshes = True
         else:
             self.enable_instance_segmentation = True
             self.shearing_correct_delta = shearing_correct_delta
@@ -63,6 +75,7 @@ class VoronoiInstanceSegmenter:
             self.downscaling_xy_factor = downscaling_xy_factor
             self.padding_slices = padding_slices
             self.autocrop = autocrop
+            self.compute_meshes = compute_meshes
 
             self.block_size = block_size
         devices = cle.available_device_names()
@@ -93,6 +106,8 @@ class VoronoiInstanceSegmenter:
                         downscaling_xy_factor=downscaling_xy_factor,
                         padding_slices=padding_slices,
                         autocrop=self.autocrop,
+                        get_stats=True,
+                        get_meshes=True
                     )
                 else:
                     segmented_volume = self.voronoi_segment(
@@ -131,7 +146,12 @@ class VoronoiInstanceSegmenter:
         threshold: float = 0.5,
         block_size: int = 100,
         padding_slices: int = 0,
-        autocrop: bool = False,
+        autocrop: bool = True,
+        get_stats: bool = True,
+        get_meshes: bool = True,
+        n_meshing_threads: int = None,
+        enable_meshing_multiprocessing: bool = True
+
     ) -> Tuple[np.ndarray, np.ndarray]:
         """ "
         Perform block-based Voronoi Segmentation using PyCLEsperanto.
@@ -141,10 +161,13 @@ class VoronoiInstanceSegmenter:
         n_objects = 0
         voronoi_out = None
         last_img = None
+        global_stats = pd.DataFrame()
         for idx, batch_idxs in enumerate(tqdm(idx_batches)):
             print(f"Voronoi prediction on batch {idx}/{len(idx_batches)}")
             sub_img = np.squeeze(input_img[batch_idxs[0] : batch_idxs[-1] + 1])
-
+            if sub_img.shape == 2:
+                # in this case we have a one-image stack
+                sub_img = np.expand_dims(sub_img, 0)
             if autocrop:
                 autocrop_range = DataPredictorBase._get_autocrop_range(sub_img)
                 pre_crop_sub_img_shape = sub_img.shape
@@ -154,7 +177,13 @@ class VoronoiInstanceSegmenter:
                     (0, 0),
                     (autocrop_range[0], pre_crop_sub_img_shape[2] - autocrop_range[1]),
                 )
+            
+            pre_shearing_correct_shape = sub_img.shape
 
+            # apply forward shearing correction
+            shearing_correct = IntegerShearingCorrect(delta=shearing_correct_delta)
+            sub_img, _ = shearing_correct.forward_correct(arr=sub_img)
+            # performing voronoi segmentation
             voronoi_segmented = cls.voronoi_segment(
                 sub_img,
                 shearing_correct_delta=shearing_correct_delta,
@@ -163,21 +192,29 @@ class VoronoiInstanceSegmenter:
                 outline_sigma=outline_sigma,
                 threhsold_otsu=threhsold_otsu,
                 threshold=threshold,
-                back_shearing_correct=True,
+                enable_shearing_correction=False,
                 padding_slices=padding_slices,
             )
+
             voronoi_segmented = np.where(
                 voronoi_segmented != 0, voronoi_segmented + n_objects, 0
             )
+            
             n_objects = np.max(voronoi_segmented)
+
+            # applying back shearing correction
             if last_img is not None:
                 label_remap = {}
                 new_block_pads = [(0, 0), (0, np.abs(shearing_correct_delta))]
                 last_block_pads = [(0, 0), (np.abs(shearing_correct_delta), 0)]
-
+                
+                # take first match of the new block
+                first_img_new_block = voronoi_segmented[0][:, :pre_crop_sub_img_shape[2]]
+                # pad to fit last image of the last block
                 first_img_new_block = np.pad(voronoi_segmented[0], new_block_pads)
                 if autocrop:
                     first_img_new_block = np.pad(first_img_new_block, autocrop_pads[1:])
+                # pad the last image of the last block
                 last_img = np.pad(last_img, last_block_pads)
                 # check overlap
                 overlap = np.logical_and(last_img, first_img_new_block)
@@ -208,6 +245,8 @@ class VoronoiInstanceSegmenter:
                         pass
 
                 if label_remap != {}:
+                    # fastest way I could find to replace values in a numpy array
+                    # there probably is a better way somewhere
                     v = np.array(list(label_remap.keys()))
                     k = np.array(list(label_remap.values()))
 
@@ -215,25 +254,174 @@ class VoronoiInstanceSegmenter:
                     k = k[sidx]
                     v = v[sidx]
 
-                    idx = np.searchsorted(k, voronoi_segmented.ravel()).reshape(
+                    idx_search = np.searchsorted(k, voronoi_segmented.ravel()).reshape(
                         voronoi_segmented.shape
                     )
-                    idx[idx == len(k)] = 0
-                    mask = k[idx] == voronoi_segmented
-                    voronoi_segmented = np.where(mask, v[idx], voronoi_segmented)
-
+                    idx_search[idx_search == len(k)] = 0
+                    mask = k[idx_search] == voronoi_segmented
+                    voronoi_segmented = np.where(mask, v[idx_search], voronoi_segmented)
+            
+            # assigning last image
             last_img = voronoi_segmented[-1]
+            last_img = last_img[:,-pre_crop_sub_img_shape[2]:]
+
+            if get_stats:
+                stats = pd.DataFrame(cle.statistics_of_labelled_pixels(sub_img, voronoi_segmented))
+                stats.dropna(inplace=True)
+            
+            if get_meshes:
+                stats_meshes = stats.copy()
+                stats_meshes = stats_meshes.loc[stats_meshes.bbox_depth > 2]
+                stats_meshes = stats_meshes.loc[stats_meshes.bbox_width > 4]
+                stats_meshes = stats_meshes.loc[stats_meshes.bbox_height > 4]
+
+                mesh_offset = np.array((batch_idxs[0], 0, 0))
+                _shared_voronoi_stack = voronoi_segmented.copy()
+                gen_mesh_partial = partial(cls.gen_mesh_skimage,
+                    padding=2,
+                    stats=stats,
+                    voronoi_label_img=_shared_voronoi_stack,
+                    mesh_offset=mesh_offset)
+
+                if n_meshing_threads is None:
+                    n_meshing_threads = multiprocessing.cpu_count()
+                
+                results = []
+                mesh_res = []
+
+                if enable_meshing_multiprocessing:
+                    pool = multiprocessing.Pool(n_meshing_threads)
+                    
+                    for label, mesh in tqdm(pool.imap_unordered(gen_mesh_partial, stats.label.values, chunksize=100), total=len(stats)):
+                        results.append((label, mesh))
+                    
+                    mesh_res = [(item[0], item[1]) for item in results if type(item[1]) == pv.PolyData]
+                    pool.close()
+                    pool.join()
+                else:
+                    for df_idx, neuron in tqdm(stats.iterrows(), total=len(stats)):
+                        label, neuron_mesh = gen_mesh_partial(neuron.label)
+                        if type(neuron_mesh) == pv.PolyData:
+                            mesh_res.append((label, neuron_mesh))                        
+                    
+                # neuron_multiblock = pv.MultiBlock()
+
+                # for neuron_mesh in mesh_res:
+                #     neuron_multiblock.append(neuron_mesh)
+
+                # save_pool = multiprocessing.Pool(n_meshing_threads)
+                
+                save_mesh_partial = partial(cls.save_mesh, out_fpath=out_fpath, idx=idx)
+
+                saved_meshes = []
+
+                for mesh_idx, mesh_res_tuple in enumerate(mesh_res):
+                    label, fpath = save_mesh_partial(mesh_res_tuple, mesh_idx)
+                    saved_meshes.append((label, fpath))
+                # for saved_path_tuple in tqdm(save_pool.starmap(save_mesh_partial, zip(mesh_res, range(len(mesh_res))), chunksize=1000), total=len(mesh_res)):
+                #        saved_meshes.append(saved_path_tuple)
+
+                mesh_df = pd.DataFrame(saved_meshes)
+                mesh_df.rename(columns={0: "label", 1: "mesh_path"}, inplace=True)
+                stats = stats.merge(mesh_df, on="label", how="left")
+
+                for label in stats.label.unique():
+                    stats.loc[stats.label == label, 'UUID'] = uuid.uuid4()
+                
+                stats_cpy = stats.copy(deep=True)
+                
+                global_stats =  pd.concat([global_stats, stats_cpy])
+
+
+                # saved_paths = save_pool.starmap(save_mesh, zip(mesh_res, range(len(mesh_res))))
+
+                # multiblock_out_fpath = out_fpath.parent.joinpath(out_fpath.stem + f"_{idx}" + ".vtm")
+                # print("saving multiblock")
+                # neuron_multiblock.save(multiblock_out_fpath)
+                # print("multiblock saved")
 
             if autocrop:
                 voronoi_segmented = np.pad(voronoi_segmented, autocrop_pads)
                 last_img = np.pad(last_img, autocrop_pads[1:])
+            
+            # reversing shearing correction
+            voronoi_segmented = shearing_correct.inverse_correct(voronoi_segmented)
 
             cls.save_block(
                 out_path=out_fpath, block=voronoi_segmented.astype(np.uint16)
             )
 
+        stats_df_out = out_fpath.parent.joinpath(out_fpath.stem+ "_stats.csv")
+        global_stats.to_csv(str(stats_df_out))
         # return voronoi_out
+    @staticmethod
+    def save_mesh(mesh_tuple: Tuple[int, pv.PolyData], mesh_idx: int, out_fpath: Path, idx: int):
+        label, mesh = mesh_tuple
+        mesh_out_dir_path = out_fpath.parent.joinpath("meshes")
+        if not mesh_out_dir_path.exists():
+            mesh_out_dir_path.mkdir(exist_ok=True)
+        mesh_out_fpath = mesh_out_dir_path.joinpath(out_fpath.stem + f"_{idx}_{mesh_idx}" + ".ply")
+        with pv.VtkErrorCatcher(raise_errors=True) as error_catcher:
+            try:
+                mesh.save(mesh_out_fpath)
+            except RuntimeError as e:
+                raise e
+        return label, mesh_out_fpath
 
+
+    @staticmethod
+    def gen_mesh_skimage(
+        label: int,
+        voronoi_label_img: np.ndarray,
+        stats: pd.DataFrame,
+        padding: int = 2,
+        mesh_offset: np.ndarray = np.array([0,0,0])
+        ) -> Tuple[int, pv.PolyData]:
+        label_bbox = get_bbox(cle_df=stats, neuron_label=label, return_vols=False)
+        origin = np.array((
+            label_bbox[0][0]-padding,
+            label_bbox[1][0]-padding,
+            label_bbox[2][0]-padding))
+        if mesh_offset is not None:
+            origin = origin + mesh_offset
+
+        # extract larger img
+        img = voronoi_label_img[
+                label_bbox[0][0]-padding:label_bbox[0][1]+padding,
+                label_bbox[1][0]-padding:label_bbox[1][1]+padding,
+                label_bbox[2][0]-padding:label_bbox[2][1]+padding
+            ].astype(np.uint8)
+
+        img = np.where(img>0, 1, 0).astype(np.uint8)
+
+        if any(np.array(img.shape) < 2):
+            return label, -1
+
+        try:
+            verts, faces_3, normals, values = skmeas.marching_cubes(img)
+        except RuntimeError as e:
+            return label, -1
+        arr3 = np.ones(faces_3.shape[0], dtype=faces_3.dtype) * 3
+        arr3 = np.expand_dims(arr3, axis=-1)
+
+        faces_4 = np.append(arr3, faces_3, axis=1)
+
+        mesh = pv.PolyData(verts, faces_4)
+
+        if not mesh.is_manifold:
+            fixer = pymeshfix.MeshFix(mesh)
+            fixer.repair()
+            mesh = fixer.mesh
+
+            if not mesh.is_manifold:
+                print("Mesh is not manifold after fixing")
+
+        mesh.translate(origin, inplace=True)
+
+        
+        return label, mesh
+
+    
     @staticmethod
     def get_largest_label(img, uniques=None):
         if uniques is None:
@@ -249,9 +437,17 @@ class VoronoiInstanceSegmenter:
     @staticmethod
     def split(idx_list, batch_size):
         """Split a list of indices into batches of size batch_size"""
-        return [
+        split_ls = [
             idx_list[i : i + batch_size] for i in range(0, len(idx_list), batch_size)
         ]
+
+        # we don't want an element of the last element of the list to feel lonely
+        if len(split_ls[-1]) == 1:
+            elem = split_ls[-2][-1]
+            split_ls[-2] = split_ls[-2][:-1]
+            split_ls[-1] = [elem] + split_ls[-1]
+
+        return split_ls
 
     @staticmethod
     def save_block(out_path: Path, block: np.ndarray, save_binarized=True):
@@ -282,16 +478,18 @@ class VoronoiInstanceSegmenter:
         outline_sigma: float = 1.0,
         threhsold_otsu: bool = True,
         threshold: float = 0.5,
-        back_shearing_correct: bool = True,
         padding_slices: int = 0,
+        enable_shearing_correction: bool = True
     ) -> np.ndarray:
         """
         Perform voronoi segmentation using PyCLEsperanto
         """
-
-        # correcting shearing distorsion
-        shearing_correct = IntegerShearingCorrect(delta=shearing_correct_delta)
-        corrected_img, data_mask = shearing_correct.forward_correct(arr=input_img)
+        if enable_shearing_correction:
+            # correcting shearing distorsion
+            shearing_correct = IntegerShearingCorrect(delta=shearing_correct_delta)
+            corrected_img, _ = shearing_correct.forward_correct(arr=input_img)
+        else:
+            corrected_img = input_img
 
         # applying padding to avoid voronoi z-border effects
         corrected_img = cls.pad_img(corrected_img, padding_slices)
@@ -371,7 +569,7 @@ class VoronoiInstanceSegmenter:
         # removing the pads we applied
         voronoi_diagram = cls.unpad_img(voronoi_diagram, padding_slices)
 
-        if back_shearing_correct:
+        if enable_shearing_correction:
             # applying reverse shearing distortion correction
             voronoi_diagram = shearing_correct.inverse_correct(arr=voronoi_diagram)
 
