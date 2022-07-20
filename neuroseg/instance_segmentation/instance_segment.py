@@ -78,11 +78,11 @@ class VoronoiInstanceSegmenter:
             self.compute_meshes = compute_meshes
 
             self.block_size = block_size
-        devices = cle.available_device_names()
-        device = devices[0]
-        print("Using device:", device)
 
         if self.enable_instance_segmentation:
+            devices = cle.available_device_names()
+            device = devices[0]
+            print("Using device:", device)
             self.predicted_data_dict = predicted_data
 
             # print("Performing instance segmentation...")
