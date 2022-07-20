@@ -14,3 +14,5 @@ wandb==0.12.17
 zetastitcher==0.6.0
 prefetch_generator==1.0.1
 pyclesperanto_prototype==0.17.3
+pyvista==0.35.1
+pymeshfix==0.16.1
