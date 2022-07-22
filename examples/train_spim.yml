@@ -158,10 +158,15 @@ tiled_predictor_cfg:
     n_threads: 1
 
 instance_segmentation_cfg:
-    enable_instance_segmentation: false
+    enable_instance_segmentation: true
     # kernel_size: [5,5,5]
     # clear_borders: false
     # distance_transform_threhsold: 0.2
     # distance_transform_sampling: 5
     # watershed_line: false
     # bg_level: 10
+
+instance_performance_evaluation_cfg:
+    max_dist: 25.
+    resolution: [3.6, 0.5, 0.5]
+    shearing_factor: 0

@@ -1,4 +1,6 @@
-from typing import Union, List
+from re import L
+from typing import Union, List, Tuple, Callable
+import uuid
 import numpy as np
 import sklearn.metrics as skmetrics
 import logging
@@ -8,6 +10,7 @@ import csv
 import pickle
 
 from skimage import io as skio
+import networkx as nx
 
 from neuroseg.utils import load_volume, glob_imgs, save_volume
 from neuroseg.config import TrainConfig, PredictConfig
@@ -478,12 +481,13 @@ class MultiVolumePerformanceEvaluator:
 
         gt_dict = {}
         for idx, gt_fpath in enumerate(self.ground_truth_volume_fpaths):
+            label_centers = None
             volume_name = gt_fpath.name
             gt_volume, norm = load_volume(gt_fpath,
                                           ignore_last_channel=False,
                                           data_mode="stack",
                                           return_norm=True)
-            if self.normalize_ground_truth:
+            if self.normalize_ground_truth and not self.config.binarize_gt:
                 gt_volume = gt_volume / norm
             if self.config.binarize_gt:
                 gt_volume = np.where(gt_volume > 0, 1, 0).astype(gt_volume.dtype)
@@ -537,3 +541,110 @@ def PerformanceEvaluator(config: Union[TrainConfig, PredictConfig],
     elif data_mode == "h5_dataset":
         return H5PerformanceEvaluator(config, predict_pathlist=predicted_data)
 
+
+class NodeMetrics:
+    def __init__(
+        self,
+        predicted_centers: Tuple[tuple],
+        ground_truth_centers: Tuple[tuple],
+        resolution: Union[np.ndarray, tuple, list],
+        detection_distance: int = 0.2
+    ):
+        self.predicted_centers = predicted_centers
+        self.ground_truth_centers = ground_truth_centers
+        self.resolution = np.array(resolution)
+        self.detection_distance = detection_distance
+
+        predicted_nodes = np.array(self.predicted_centers)
+        predicted_nodes = predicted_nodes * resolution
+        self.predicted_nodes = [("P-"+str(uuid.uuid4()),tuple(node)) for node in predicted_nodes]
+
+        gt_nodes = np.array(self.ground_truth_centers)
+        gt_nodes = gt_nodes * resolution
+        self.gt_nodes = [("T-"+str(uuid.uuid4()),tuple(node)) for node in gt_nodes]
+
+        self.graph = self._gen_graph(self.predicted_nodes, self.gt_nodes)
+        self.graph = self._populate_edges(
+            graph=self.graph,
+            distance_fn=self._distance,
+            max_dist=self.detection_distance,
+        )
+
+        self.true_positives, self.true_negatives, self.false_positives, self.false_negatives = self.get_confusion_matrix(
+            self.graph,
+            max_dist=self.detection_distance,
+            distance_fn=self._distance
+        )
+
+        self.metrics = self.get_metrics_dict()
+
+
+    def get_metrics_dict(self):
+        tp = len(self.true_positives)
+        tn = len(self.true_negatives)
+        fp = len(self.false_positives)
+        fn = len(self.false_negatives)
+        
+        precision =  tp / (tp + fp)
+        recall = tp / (tp + fn)
+        accuracy = (tp + tn) / (tp + tn + fp + fn)
+        f1 =  2*tp / (2*tp + fp +fn)
+        jaccard = tp / (tp + fn + fp)
+        
+        metrics = {
+            "precision": precision,
+            "recall": recall,
+            "accuracy": accuracy,
+            "f1": f1,
+            "jaccard": jaccard
+        }
+        return metrics
+    
+    @staticmethod
+    def _gen_graph(predicted_nodes: list, gt_nodes: list) -> nx.Graph:
+        graph = nx.Graph()
+
+        graph.add_nodes_from(predicted_nodes, type="predicted")
+        graph.add_nodes_from(gt_nodes, type="ground_truth")
+
+        return graph
+    
+    @staticmethod
+    def _distance(arr_a: np.ndarray, arr_b: np.ndarray):
+        return np.sqrt(sum((arr_a - arr_b)**2))
+
+    @staticmethod
+    def _populate_edges(
+        graph: nx.Graph,
+        distance_fn: Callable[[np.ndarray, np.ndarray], float],
+        max_dist: float,
+        epsilon: float = 1e-4):
+        predicted_nodes_nx = [node for node, data in graph.nodes(data=True) if data["type"] == "predicted"]
+        gt_nodes_nx = [node for node, data in graph.nodes(data=True) if data["type"]=="ground_truth"]
+        
+        graph.remove_edges_from(list(graph.edges()))
+        for node_gt in gt_nodes_nx:
+            for node_pred in predicted_nodes_nx:
+                dist = distance_fn(np.array(node_gt[1]), np.array(node_pred[1]))
+                if dist < max_dist:
+                    w = 1.0/max(epsilon, dist)
+                    graph.add_edge(node_gt, node_pred, weight=w)
+                    
+        return graph
+    
+    @staticmethod
+    def get_confusion_matrix(graph: nx.Graph, max_dist: float, distance_fn: Callable[[np.ndarray, np.ndarray], float]) -> Tuple[list, list, list, list]:
+        matching = nx.algorithms.max_weight_matching(graph, maxcardinality=False)
+        
+        matched_predictions = [node for match in matching for node in match if node[0][0] == "P"]
+        matched_groundtruth = [node for match in matching for node in match if node[0][0] == "T"]
+
+        unmatched_nodes = list(set(graph.nodes) - set(matched_groundtruth) - set(matched_predictions))
+        
+        false_positives = [node for node in unmatched_nodes if node[0][0] == "P"]
+        false_negatives = [node for node in unmatched_nodes if node[0][0] == "T"]
+
+        true_positives = [node for match in matching for node in match if node[0][0] == "P" and distance_fn(np.array(match[0][1]), np.array(match[1][1])) < max_dist / 2]
+        true_negatives = list(set(graph.nodes) - set(false_positives) - set(false_negatives) - set(true_positives))
+
+        return (true_positives, true_negatives, false_positives, false_negatives)

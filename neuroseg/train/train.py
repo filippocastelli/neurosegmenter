@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import Union
 from contextlib import nullcontext
+from traitlets import Instance
 
 import yaml
 
@@ -19,10 +20,12 @@ from neuroseg.datagens import Datagen
 from neuroseg.utils import BatchInspector
 from neuroseg.tiledpredict import DataPredictor
 from neuroseg.performance_eval import PerformanceEvaluator
+from neuroseg.performance_eval import InstanceSegmentationPerformanceEvaluator
 from neuroseg.descriptor import RunDescriptorLight
 from neuroseg.config import TrainConfig
 from neuroseg.datagens import DataGen2D, DataGen3D
 from neuroseg.instance_segmentation import VoronoiInstanceSegmenter
+
 
 
 def setup_logger(logfile_path: Path) -> None:
@@ -114,11 +117,26 @@ def train(train_config: TrainConfig):
 
     if train_config.evaluate_performance:
         dp = DataPredictor(train_config, model)
-        ev = PerformanceEvaluator(train_config, dp.predicted_data)
         inseg = VoronoiInstanceSegmenter(config=train_config, predicted_data=dp.predicted_data)
+        ev = PerformanceEvaluator(train_config, dp.predicted_data)
         performance_dict = ev.measure_dict
-        wc.log_metrics(performance_dict)
-        wc.log_metrics(ev.metrics)
+        instance_performance_ev = InstanceSegmentationPerformanceEvaluator(
+            ground_truth=None,
+            instance_segmentation=inseg.segmented_dict,
+            config=train_config
+        )
+        instance_performance_dict = instance_performance_ev.metrics_dict
+        instance_performance_aggregated_metrics = instance_performance_ev.aggregated_metrics_dict
+
+        voxel_performance_dict = {"voxel_performance_"+ key: val for key, val in performance_dict.items()}
+        voxel_performance_aggregated_dict = {"voxel_performance_aggregated_"+ key: val for key, val in ev.metrics.items()}
+        instance_performance_dict = {"instance_performance_" + key: val for key, val in instance_performance_dict.items()}
+        instance_performance_aggregated_dict = {"instance_performance_aggregated_"+ key: val for key, val in instance_performance_aggregated_metrics.items()}
+        
+        wc.log_metrics(voxel_performance_dict)
+        wc.log_metrics(voxel_performance_aggregated_dict)
+        wc.log_metrics(instance_performance_dict)
+        wc.log_metrics(instance_performance_aggregated_dict)
     else:
         performance_dict = None
 

@@ -78,19 +78,20 @@ class VoronoiInstanceSegmenter:
             self.compute_meshes = compute_meshes
 
             self.block_size = block_size
-
+        
         if self.enable_instance_segmentation:
             devices = cle.available_device_names()
             device = devices[0]
             print("Using device:", device)
             self.predicted_data_dict = predicted_data
-
+            self.segmented_dict = {}
             # print("Performing instance segmentation...")
             for key, value in self.predicted_data_dict.items():
 
                 imgname = Path(key).stem
                 fname = f"{imgname}_segmented.tif"
                 out_fpath = self.output_path.joinpath(fname)
+                self.segmented_dict[imgname] = out_fpath
 
                 if out_fpath.exists():
                     # remove it
@@ -114,6 +115,9 @@ class VoronoiInstanceSegmenter:
                         np.squeeze(value), padding_slices=padding_slices
                     )
                     self.save_block(out_fpath, segmented_volume.astype(np.uint16))
+        else:
+            self.segmented_dict = {}
+
 
     @staticmethod
     def pad_img(img: np.ndarray, padding_slices: int = 0):

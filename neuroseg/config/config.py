@@ -47,6 +47,12 @@ class Config:
             )
             self._parse_instance_segmentation_cfg(self.is_cfg)
 
+            # instance performance evaluation parsing
+            self.inst_pe_cfg = self.get_param(
+                self.cfg_dict, "instance_performance_evaluation_cfg", None
+            )
+            self._parse_instance_performance_evaluation_cfg(self.inst_pe_cfg)
+
             # notes parsing
             self.notes = self.cfg_dict["notes"]
 
@@ -108,6 +114,14 @@ class Config:
             self.binarize_gt = False
         return
 
+    def _parse_instance_performance_evaluation_cfg(self, inst_pe_cfg: dict) -> None:
+        if inst_pe_cfg is not None:
+            self.evaluate_instance_performance = True
+            self.evaluate_instance_performance = self.get_param(inst_pe_cfg, "enable_instance_performance_evaluation", True)
+            self.instance_performance_evaluation_max_dist = self.get_param(inst_pe_cfg, "max_dist", 25.)
+            self.instance_performance_evaluation_resolution = self.get_param(inst_pe_cfg, "resolution", (1., 1., 1.))
+            self.istance_performance_evaluation_shearing_factor = self.get_param(inst_pe_cfg, "shearing_factor", 0)
+            
     def _parse_run_name(self) -> None:
         try:
             run_name = self.cfg_dict["run_name"]
@@ -122,24 +136,24 @@ class Config:
         self.enable_instance_segmentation = self.get_param(
             instance_segmentation_cfg, "enable_instance_segmentation", False
         )
-        self.instance_segmentation_kernel_size = self.get_param(
-            instance_segmentation_cfg, "kernel_size", (5, 5, 5)
-        )
-        self.instance_segmentation_clear_borders = self.get_param(
-            instance_segmentation_cfg, "clear_borders", False
-        )
-        self.instance_segmentation_distance_transform_threshold = self.get_param(
-            instance_segmentation_cfg, "distance_transform_threshold", 0.2
-        )
-        self.instance_segmentation_distance_transform_sampling = self.get_param(
-            instance_segmentation_cfg, "distance_transform_sampling", 5
-        )
-        self.instance_segmentation_watershed_line = self.get_param(
-            instance_segmentation_cfg, "watershed_line", False
-        )
-        self.instance_segmentation_bg_level = self.get_param(
-            instance_segmentation_cfg, "bg_level", 10
-        )
+        # self.instance_segmentation_kernel_size = self.get_param(
+        #     instance_segmentation_cfg, "kernel_size", (5, 5, 5)
+        # )
+        # self.instance_segmentation_clear_borders = self.get_param(
+        #     instance_segmentation_cfg, "clear_borders", False
+        # )
+        # self.instance_segmentation_distance_transform_threshold = self.get_param(
+        #     instance_segmentation_cfg, "distance_transform_threshold", 0.2
+        # )
+        # self.instance_segmentation_distance_transform_sampling = self.get_param(
+        #     instance_segmentation_cfg, "distance_transform_sampling", 5
+        # )
+        # self.instance_segmentation_watershed_line = self.get_param(
+        #     instance_segmentation_cfg, "watershed_line", False
+        # )
+        # self.instance_segmentation_bg_level = self.get_param(
+        #     instance_segmentation_cfg, "bg_level", 10
+        # )
 
         # voronoi segmentation
         self.instance_segmentation_shearing_correct_delta = int(
