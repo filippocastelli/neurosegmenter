@@ -115,12 +115,12 @@ class Config:
         return
 
     def _parse_instance_performance_evaluation_cfg(self, inst_pe_cfg: dict) -> None:
-        if inst_pe_cfg is not None:
-            self.evaluate_instance_performance = True
-            self.evaluate_instance_performance = self.get_param(inst_pe_cfg, "enable_instance_performance_evaluation", True)
-            self.instance_performance_evaluation_max_dist = self.get_param(inst_pe_cfg, "max_dist", 25.)
-            self.instance_performance_evaluation_resolution = self.get_param(inst_pe_cfg, "resolution", (1., 1., 1.))
-            self.istance_performance_evaluation_shearing_factor = self.get_param(inst_pe_cfg, "shearing_factor", 0)
+        
+        self.evaluate_instance_performance = True
+        self.evaluate_instance_performance = self.get_param(inst_pe_cfg, "enable_instance_performance_evaluation", True)
+        self.instance_performance_evaluation_max_dist = self.get_param(inst_pe_cfg, "max_dist", 25.)
+        self.instance_performance_evaluation_resolution = self.get_param(inst_pe_cfg, "resolution", (1., 1., 1.))
+        self.istance_performance_evaluation_shearing_factor = self.get_param(inst_pe_cfg, "shearing_factor", 0)
             
     def _parse_run_name(self) -> None:
         try:
