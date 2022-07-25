@@ -2,7 +2,6 @@ import logging
 from pathlib import Path
 from typing import Union
 from contextlib import nullcontext
-from traitlets import Instance
 
 import yaml
 
