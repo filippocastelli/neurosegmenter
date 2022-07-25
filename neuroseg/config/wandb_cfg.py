@@ -1,6 +1,7 @@
+import neuroseg
 from neuroseg.config import TrainConfig
-import wandb
 
+import wandb
 
 class WandbConfigurator:
 
@@ -49,7 +50,8 @@ class WandbConfigurator:
             "tiling_mode": self.train_config.tiling_mode,
             "window_overlap": self.train_config.window_overlap,
             "class_weights": self.train_config.class_weights,
-            "notes": self.train_config.notes
+            "notes": self.train_config.notes,
+            "vers": neuroseg.__version__
         }
 
     def log_metrics(self, metrics_dict: dict):
