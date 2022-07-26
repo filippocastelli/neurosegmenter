@@ -54,7 +54,11 @@ class WandbConfigurator:
             "vers": neuroseg.__version__
         }
 
-    def log_metrics(self, metrics_dict: dict):
+    def log_metrics(self, metrics_dict: dict, verbose: bool = False):
+        
+        if verbose:
+            print(metrics_dict)
+        
         if self.train_config.enable_wandb_tracking:
             if self.train_config.n_output_classes > 1:
                 class_values = list(metrics_dict.keys())
