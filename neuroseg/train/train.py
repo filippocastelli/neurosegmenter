@@ -14,6 +14,19 @@ from neuroseg.config import (
     WandbConfigurator)
 
 import tensorflow as tf
+from numba import cuda
+
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+  try:
+    # Currently, memory growth needs to be the same across GPUs
+    for gpu in gpus:
+      tf.config.experimental.set_memory_growth(gpu, True)
+    logical_gpus = tf.config.list_logical_devices('GPU')
+    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+  except RuntimeError as e:
+    # Memory growth must be set before GPUs have been initialized
+    print(e)
 
 from neuroseg.datagens import Datagen
 from neuroseg.utils import BatchInspector
@@ -24,6 +37,7 @@ from neuroseg.descriptor import RunDescriptorLight
 from neuroseg.config import TrainConfig
 from neuroseg.datagens import DataGen2D, DataGen3D
 from neuroseg.instance_segmentation import VoronoiInstanceSegmenter
+
 
 
 
@@ -76,7 +90,7 @@ def train(train_config: TrainConfig):
     tf.keras.utils.set_random_seed(train_config.da_seed)
     tf.config.experimental.enable_op_determinism()
 
-    setup_logger(train_config.logfile_path)
+    setup_logger(train_config.logfile_path) 
     train_datagen = Datagen(train_config,
                             partition="train",
                             normalize_inputs=True,
@@ -116,9 +130,14 @@ def train(train_config: TrainConfig):
 
     if train_config.evaluate_performance:
         dp = DataPredictor(train_config, model)
-        inseg = VoronoiInstanceSegmenter(config=train_config, predicted_data=dp.predicted_data)
         ev = PerformanceEvaluator(train_config, dp.predicted_data)
         performance_dict = ev.measure_dict
+
+        # free up gpu memory
+        cuda.select_device(0)
+        cuda.close()
+
+        inseg = VoronoiInstanceSegmenter(config=train_config, predicted_data=dp.predicted_data)
         instance_performance_ev = InstanceSegmentationPerformanceEvaluator(
             ground_truth=None,
             instance_segmentation=inseg.segmented_dict,
@@ -132,10 +151,14 @@ def train(train_config: TrainConfig):
         instance_performance_dict = {"instance_performance_" + key: val for key, val in instance_performance_dict.items()}
         instance_performance_aggregated_dict = {"instance_performance_aggregated_"+ key: val for key, val in instance_performance_aggregated_metrics.items()}
         
-        wc.log_metrics(voxel_performance_dict)
-        wc.log_metrics(voxel_performance_aggregated_dict)
-        wc.log_metrics(instance_performance_dict)
-        wc.log_metrics(instance_performance_aggregated_dict)
+        print("Voxel Metrics:")
+        wc.log_metrics(voxel_performance_dict, verbose=True)
+        print("Voxel Aggregated Metrics:")
+        wc.log_metrics(voxel_performance_aggregated_dict, verbose=True)
+        print("Instance Metrics:")
+        wc.log_metrics(instance_performance_dict, verbose=True)
+        print("Instance Aggregated Metrics:")
+        wc.log_metrics(instance_performance_aggregated_dict, verbose=True)
     else:
         performance_dict = None
 
