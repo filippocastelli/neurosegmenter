@@ -227,7 +227,8 @@ class InstanceSegmentationPerformanceEvaluator:
             stack: np.ndarray,
             resolution: Union[np.ndarray, tuple, list] = (1., 1., 1.)) -> np.ndarray:
         labels = list(np.unique(stack))
-        labels.remove(0) # removing background label
+        if 0 in labels:
+            labels.remove(0) # removing background label
         centers = [np.mean(np.argwhere(stack == label), axis=0) for label in labels]
         centers = np.array(centers) * np.array(resolution)
         return centers
