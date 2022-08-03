@@ -471,7 +471,7 @@ class MultiVolumePerformanceEvaluator:
         self.gt_dict = self._load_gt()
 
         self.metrics = self._calc_metrics()
-        self.measure_dict = self._calc_aggregated_metrics()
+        self.aggregated_metrics = self._calc_aggregated_metrics()
 
     def _load_gt(self) -> dict:
         self.ground_truth_volume_fpaths = glob_imgs(self.ground_truth_path, mode="stack", to_string=False)
