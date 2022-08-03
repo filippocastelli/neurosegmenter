@@ -1,6 +1,9 @@
 import numpy as np
 from typing import Union
 import h5py
+import pathlib
+from pathlib import Path
+import logging
 
 from tensorflow.python.keras.models import load_model
 
@@ -9,116 +12,149 @@ from neuroseg.utils import load_volume, save_volume, glob_imgs
 from neuroseg.config import TrainConfig, PredictConfig
 
 class DataPredictorBase:
-    def __init__(self, config: Union[PredictConfig, TrainConfig], model=None, in_fpath=None):
+
+    def __init__(
+        self,
+        config: Union[PredictConfig, TrainConfig] = None,
+        model=None,
+        mode: str = "predict",
+        in_fpath: Union[str, pathlib.PosixPath] = None,
+        data_mode: str = "multi_stack",
+        output_mode: str = "multi_stack",
+        save_8bit: bool = True,
+        save_16bit: bool = True,
+        save_32bit: bool = True,
+        n_tiling_threads: int = 1,
+        normalize_data: bool = True,
+        window_size: Union[tuple, list, np.ndarray] = (32, 256, 256),
+        batch_size: int = 20,
+        padding_mode: str = "reflect",
+        window_overlap: tuple = (),
+        debug: bool = False,
+        ):
 
         self.config = config
-        self.mode = self.config.config_type
-        self.to_segmentation = self.config.to_segmentation
-        self.in_fpath = in_fpath
-
-        self.save_8bit = self.config.save_8bit
-        self.save_16bit = self.config.save_16bit
-        self.save_32bit = self.config.save_32bit
-
-        if not (self.save_8bit or self.save_16bit or self.save_32bit):
-            raise Warning("No saving mode selected. Choose one in save_8bit, save_16bit, save_32bit")
-
-        if self.mode == "predict" and (self.config.multi_gpu or self.config.pe_multigpu):
-                self.multi_gpu = True
+        self.multi_gpu = False # AUTO SETTING MULTI_GPU TO FALSE - DEPRECTATING MULTIGPU USE
+        
+        if self.config is None:
+            self.mode = mode
+            self.model = model
+            self.in_fpath = Path(in_fpath)
+            self.data_mode = data_mode
+            self.output_mode = output_mode
+            self.save_8bit = save_8bit
+            self.save_16bit = save_16bit
+            self.save_32bit = save_32bit
+            self.n_tiling_threads = n_tiling_threads
+            self.normalize_data = normalize_data
+            self.window_size = window_size
+            self.batch_size = batch_size
+            self.padding_mode = padding_mode
+            self.window_overlap = window_overlap
+            self.debug = debug
         else:
-            self.multi_gpu = False
+            self.mode = self.config.config_type 
+            self.save_8bit = self.config.save_8bit
+            self.save_16bit = self.config.save_16bit
+            self.save_32bit = self.config.save_32bit
+            self.temp_path = self.config.temp_path
+            self.output_path = self.config.output_path
+            self.n_channels = self.config.n_channels
+            self.extra_padding_windows = self.config.extra_padding_windows
+            self.tiling_mode = self.config.tiling_mode
+            self.window_overlap = self.config.window_overlap
+            self.debug = self.config.predict_inspector
+            self.n_tiling_threads = self.config.n_tiling_threads
+            # PARSING PATHS
+            if self.mode == "predict":
+                self.data_mode = self.config.data_mode
+                self.normalize_data = self.config.normalize_data
+                self.window_size = self.config.window_size
+                self.output_mode = self.config.output_mode
+                self.batch_size = self.config.batch_size
+                self.padding_mode = self.config.padding_mode
+                self.n_output_classes = self.config.n_output_classes
+                self.channel_names = None
 
-        self.n_tiling_threads = self.config.n_tiling_threads
-        self._parse_settings()
-        self._parse_paths()
+                if self.data_mode == "single_images":
+                    self.data_path = self.config.data_path
+                elif self.data_mode == "stack":
+                    if self.config.data_path.is_file():
+                        self.data_path = self.config.data_path
+                    elif self.config.data_path.is_dir():
+                        self.data_path = glob_imgs(
+                            self.config.data_path, mode="stack", to_string=True
+                        )[0]
+                    else:
+                        raise ValueError(f"invalid data path {str(self.data_path)}")
+
+                elif self.data_mode == "zetastitcher":
+                    self.data_path = self.config.data_path
+                    self.channel_names = self.config.channel_names
+                    # self.in_fpath overrides config file setting
+
+                    if self.in_fpath is not None:
+                        self.data_path = self.in_fpath
+
+                elif self.data_mode == "multi_stack":
+                    self.data_path = self.config.data_path
+                    # raise NotImplementedError(self.data_mode)
+                else:
+                    raise NotImplementedError(self.data_mode)
+                self.model_path = self.config.model_path
+
+            elif self.mode == "training":
+                self.data_mode = self.config.dataset_mode
+                self.normalize_data = self.config.normalize_inputs
+                self.output_mode = self.config.output_mode
+                self.window_size = self.config.window_size
+                self.batch_size = self.config.batch_size
+                self.padding_mode = "reflect"
+                self.n_output_classes = self.config.n_output_classes
+                if self.data_mode == "single_images":
+                    self.data_path = self.config.test_paths["frames"]
+                elif self.data_mode == "stack":
+                    # data_path must point to a file
+                    self.data_path = glob_imgs(
+                        self.config.test_paths["frames"], mode="stack", to_string=True
+                    )[0]
+                elif self.data_mode == "h5_dataset":
+                    self.data_path = self.config.path_dict["test"]
+                elif self.data_mode == "multi_stack":
+                    self.data_path = self.config.test_paths["frames"]
+                    # raise NotImplementedError(self.data_mode)
+                else:
+                    raise NotImplementedError(self.data_mode)
+        
+        self.prediction_model = load_model(
+            filepath=str(self.model_path),
+            compile=False
+        ) if model is None else model
         self._load_volume()
-        self.prediction_model = self._load_model() if model is None else model
         self.predict()
         self._save_volume()
 
-    def _parse_paths(self):
-        if self.mode == "predict":
-            self.channel_names = None
-            if self.data_mode == "single_images":
-                self.data_path = self.config.data_path
-            elif self.data_mode == "stack":
-                if self.config.data_path.is_file():
-                    self.data_path = self.config.data_path
-                elif self.config.data_path.is_dir():
-                    self.data_path = glob_imgs(
-                        self.config.data_path, mode="stack", to_string=True
-                    )[0]
-                else:
-                    raise ValueError(f"invalid data path {str(self.data_path)}")
+    def _load_volume(self):
+        if self.data_mode in ["single_images", "stack", "zetastitcher"]:
+            self.input_data = self._load_single_volume(
+                data_path=self.data_path, n_channels=self.n_channels, data_mode=self.data_mode, channel_names=self.channel_names
+            )
+        elif self.data_mode == "h5_dataset":
+            logging.warn("H5 dataset deprecated")
+            h5file = h5py.File(str(self.data_path), "r")
+            self.input_data = h5file["data"]
 
-            elif self.data_mode == "zetastitcher":
-                self.data_path = self.config.data_path
-                self.channel_names = self.config.channel_names
-                # self.in_fpath overrides config file setting
+        elif self.data_mode == "multi_stack":
+            self.data_paths = glob_imgs(self.data_path, mode="stack")
+            loaded_vols = []
+            for data_fpath in self.data_paths:
+                loaded_vols.append(
+                    self._load_single_volume(data_fpath, self.n_channels, "stack")
+                )
 
-                if self.in_fpath is not None:
-                    self.data_path = self.in_fpath
-
-            elif self.data_mode == "multi_stack":
-                self.data_path = self.config.data_path
-                # raise NotImplementedError(self.data_mode)
-            else:
-                raise NotImplementedError(self.data_mode)
-            self.model_path = self.config.model_path
-
-        elif self.mode == "training":
-            if self.data_mode == "single_images":
-                self.data_path = self.config.test_paths["frames"]
-            elif self.data_mode == "stack":
-                # data_path must point to a file
-                self.data_path = glob_imgs(
-                    self.config.test_paths["frames"], mode="stack", to_string=True
-                )[0]
-            elif self.data_mode == "h5_dataset":
-                self.data_path = self.config.path_dict["test"]
-            elif self.data_mode == "multi_stack":
-                self.data_path = self.config.test_paths["frames"]
-                # raise NotImplementedError(self.data_mode)
-            else:
-                raise NotImplementedError(self.data_mode)
-
-        self.temp_path = self.config.temp_path
-        self.output_path = self.config.output_path
-
-    def _parse_settings(self):
-        if self.mode == "predict":
-            self.data_mode = self.config.data_mode
-            self.normalize_data = self.config.normalize_data
-            self.window_size = self.config.window_size
-            self.output_mode = self.config.output_mode
-            self.batch_size = self.config.batch_size
-            # self.chunk_size = self.config.chunk_size
-            self.padding_mode = self.config.padding_mode
-            self.n_output_classes = self.config.n_output_classes
-            # self.keep_tmp = self.config.keep_tmp
-        elif self.mode == "training":
-            # self.data_mode = self.config.ground_truth_mode
-            self.data_mode = self.config.dataset_mode
-            self.normalize_data = self.config.normalize_inputs
-            self.output_mode = self.config.output_mode
-            self.window_size = self.config.window_size
-            self.batch_size = self.config.batch_size
-            # self.chunk_size = self.config.pe_chunk_size
-            self.padding_mode = "reflect"
-            # self.keep_tmp = False
-            self.n_output_classes = self.config.n_output_classes
-        self.n_channels = self.config.n_channels
-        self.extra_padding_windows = self.config.extra_padding_windows
-        self.tiling_mode = self.config.tiling_mode
-        self.window_overlap = self.config.window_overlap
-        self.debug = self.config.predict_inspector
-
-    def _load_model(self):
-        return load_model(filepath=str(self.model_path), compile=False)
-
-    # @staticmethod
-    # def _glob_dir(dir_path):
-    #     paths = [str(imgpath) for imgpath in sorted(dir_path.glob("*.*")) if ]
+            self.input_data = loaded_vols
+        else:
+            raise NotImplementedError(self.data_mode)
 
     @staticmethod
     def _load_single_volume(data_path, n_channels, data_mode, normalize_data=True, channel_names=None):
@@ -135,35 +171,6 @@ class DataPredictorBase:
             vol = vol / max_norm
 
         return vol
-
-    def _load_volume(self):
-        if self.data_mode in ["single_images", "stack", "zetastitcher"]:
-            self.input_data = self._load_single_volume(
-                data_path=self.data_path, n_channels=self.n_channels, data_mode=self.data_mode, channel_names=self.channel_names
-            )
-        elif self.data_mode == "h5_dataset":
-            h5file = h5py.File(str(self.data_path), "r")
-            # n_vols = len(h5file["data"])
-            # loaded_vols = []
-            # for vol_idx in range(n_vols):
-            #     vol = h5file["data"][vol_idx, 0, ...]
-            #     if self.normalize_data:
-            #         norm = np.iinfo(vol.dtype).max
-            #         vol = vol / norm
-            #     loaded_vols.append(vol)
-            self.input_data = h5file["data"]
-
-        elif self.data_mode == "multi_stack":
-            self.data_paths = glob_imgs(self.data_path, mode="stack")
-            loaded_vols = []
-            for data_fpath in self.data_paths:
-                loaded_vols.append(
-                    self._load_single_volume(data_fpath, self.n_channels, "stack")
-                )
-
-            self.input_data = loaded_vols
-        else:
-            raise NotImplementedError(self.data_mode)
 
     def _save_volume(self):
         if self.output_mode == "single_images":
