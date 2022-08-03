@@ -226,8 +226,8 @@ class DataPredictor2D(DataPredictorBase):
 
 
 class MultiVolumeDataPredictor2D(DataPredictorBase):
-    def __init__(self, config, model=None):
-        super().__init__(config, model)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def predict(self):
         tiled_predictors = {}
