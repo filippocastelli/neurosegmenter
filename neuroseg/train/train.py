@@ -131,7 +131,6 @@ def train(train_config: TrainConfig):
     if train_config.evaluate_performance:
         dp = DataPredictor(train_config, model)
         ev = PerformanceEvaluator(train_config, dp.predicted_data)
-        performance_dict = ev.measure_dict
 
         # free up gpu memory
         cuda.select_device(0)
@@ -146,8 +145,8 @@ def train(train_config: TrainConfig):
         instance_performance_dict = instance_performance_ev.metrics_dict
         instance_performance_aggregated_metrics = instance_performance_ev.aggregated_metrics_dict
 
-        voxel_performance_dict = {"voxel_performance_"+ key: val for key, val in performance_dict.items()}
-        voxel_performance_aggregated_dict = {"voxel_performance_aggregated_"+ key: val for key, val in ev.metrics.items()}
+        voxel_performance_dict = {"voxel_performance_"+ key: val for key, val in ev.metrics.items()}
+        voxel_performance_aggregated_dict = {"voxel_performance_aggregated_"+ key: val for key, val in ev.aggregated_metrics.items()}
         instance_performance_dict = {"instance_performance_" + key: val for key, val in instance_performance_dict.items()}
         instance_performance_aggregated_dict = {"instance_performance_aggregated_"+ key: val for key, val in instance_performance_aggregated_metrics.items()}
         
@@ -162,8 +161,8 @@ def train(train_config: TrainConfig):
     else:
         performance_dict = None
 
-    _ = RunDescriptorLight(train_config,
-                           performance_metrics_dict=performance_dict,
-                           model_history_dict=model_history)
+    # _ = RunDescriptorLight(train_config,
+    #                        performance_metrics_dict=performance_dict,
+    #                        model_history_dict=model_history)
 
-    return model, model_history, performance_dict
+    # return model, model_history, performance_dict
