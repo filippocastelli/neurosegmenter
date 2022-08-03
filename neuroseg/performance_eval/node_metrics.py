@@ -27,11 +27,13 @@ class NodeMetrics:
         self.detection_distance = detection_distance
 
         predicted_nodes = np.array(self.predicted_centers)
-        predicted_nodes = predicted_nodes * resolution
+        if predicted_nodes.shape != (0,):
+            predicted_nodes = predicted_nodes * resolution
         self.predicted_nodes = [("P-"+str(uuid.uuid4()),tuple(node)) for node in predicted_nodes]
 
         gt_nodes = np.array(self.ground_truth_centers)
-        gt_nodes = gt_nodes * resolution
+        if gt_nodes.shape != (0,):
+            gt_nodes = gt_nodes * resolution
         self.gt_nodes = [("T-"+str(uuid.uuid4()),tuple(node)) for node in gt_nodes]
 
         self.graph = self._gen_graph(self.predicted_nodes, self.gt_nodes)
@@ -56,11 +58,12 @@ class NodeMetrics:
         fp = len(self.false_positives)
         fn = len(self.false_negatives)
         
-        precision =  tp / (tp + fp)
-        recall = tp / (tp + fn)
-        accuracy = (tp + tn) / (tp + tn + fp + fn)
-        f1 =  2*tp / (2*tp + fp +fn)
-        jaccard = tp / (tp + fn + fp)
+
+        precision =  tp / (tp + fp) if tp + fp > 0 else 0.
+        recall = tp / (tp + fn) if tp + fn > 0 else 0.
+        accuracy = (tp + tn) / (tp + tn + fp + fn) if tp + tn + fp + fn > 0 else 0.
+        f1 =  2*tp / (2*tp + fp +fn) if tp + fp + fn > 0 else 0.
+        jaccard = tp / (tp + fn + fp) if tp + fp + fn > 0 else 0.
         
         metrics = {
             "precision": precision,
