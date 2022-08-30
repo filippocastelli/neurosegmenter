@@ -89,7 +89,8 @@ def load_volume(imgpath,
         return norm
 
     if data_mode == "stack":
-        vol = skio.imread(str(imgpath), plugin="pil")
+        vol = zetastitcher.InputFile(imgpath).whole()
+        #vol = skio.imread(str(imgpath), plugin="pil")
         if return_norm:
             norm = get_norm(vol)
             return postprocess_vol(vol), norm
@@ -131,7 +132,8 @@ def load_volume(imgpath,
         img_paths = glob_if_needed(imgpath)
         vols_list = []
         for vol_path in img_paths:
-            vol = skio.imread(vol_path, plugin="pil")
+            #vol = skio.imread(vol_path, plugin="pil")
+            vol = zetastitcher.InputFile(vol_path).whole()
             vol = postprocess_vol(vol)
             vols_list.append(vol)
 

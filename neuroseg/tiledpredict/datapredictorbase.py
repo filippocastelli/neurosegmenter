@@ -5,7 +5,7 @@ import pathlib
 from pathlib import Path
 import logging
 
-from tensorflow.python.keras.models import load_model
+from tensorflow.keras.models import load_model
 
 from neuroseg.utils import load_volume, save_volume, glob_imgs
 # from neuroseg.config.config import SUPPORTED_STACK_FORMATS
@@ -19,18 +19,23 @@ class DataPredictorBase:
         model=None,
         mode: str = "predict",
         in_fpath: Union[str, pathlib.PosixPath] = None,
+        out_path: Path = None,
         data_mode: str = "multi_stack",
         output_mode: str = "multi_stack",
+        n_channels: int = 1,
         save_8bit: bool = True,
         save_16bit: bool = True,
         save_32bit: bool = True,
         n_tiling_threads: int = 1,
+        tiling_mode: str = "drop_borders",
         normalize_data: bool = True,
         window_size: Union[tuple, list, np.ndarray] = (32, 256, 256),
         batch_size: int = 20,
         padding_mode: str = "reflect",
-        window_overlap: tuple = (),
+        window_overlap: tuple = None,
+        extra_padding_windows: int = 2,
         debug: bool = False,
+        n_output_classes: int = 1, # to be deprecated sometime in the future
         ):
 
         self.config = config
@@ -40,6 +45,7 @@ class DataPredictorBase:
             self.mode = mode
             self.model = model
             self.in_fpath = Path(in_fpath)
+            self.data_path = self.in_fpath
             self.data_mode = data_mode
             self.output_mode = output_mode
             self.save_8bit = save_8bit
@@ -52,6 +58,11 @@ class DataPredictorBase:
             self.padding_mode = padding_mode
             self.window_overlap = window_overlap
             self.debug = debug
+            self.n_channels = n_channels
+            self.n_output_classes = n_output_classes
+            self.extra_padding_windows = extra_padding_windows
+            self.tiling_mode = tiling_mode
+            self.output_path = self.in_fpath if out_path is None else out_path
         else:
             self.mode = self.config.config_type 
             self.save_8bit = self.config.save_8bit
@@ -149,7 +160,11 @@ class DataPredictorBase:
             loaded_vols = []
             for data_fpath in self.data_paths:
                 loaded_vols.append(
-                    self._load_single_volume(data_fpath, self.n_channels, "stack")
+                    self._load_single_volume(
+                        data_fpath,
+                        self.n_channels,
+                        "stack",
+                        normalize_data=self.normalize_data)
                 )
 
             self.input_data = loaded_vols
