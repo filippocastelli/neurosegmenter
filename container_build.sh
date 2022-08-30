@@ -29,12 +29,14 @@ python setup.py bdist_wheel;
 echo Building container ${container_name_reg};
 sudo nvidia-docker build -t ${container_name_reg} -f ${DOCKERFILE} .;
 
-echo Building container ${container_name_reg_opencl};
-sudo nvidia-docker build -t ${container_name_reg_opencl} -f ${DOCKERFILE_OPENCL} .;
+#echo Building container ${container_name_reg_opencl};
+#sudo nvidia-docker build -t ${container_name_reg_opencl} -f ${DOCKERFILE_OPENCL} .;
 
 if $enable_push; then
     echo "enabling tunnel...";
     sshuttle -r castelli@atlante.lens.unifi.it -x liquid.lens.unifi.it 150.217.0.0/16 150.217.157.89 -D;
     sudo nvidia-docker push ${container_name_reg};
-    sudo nvidia-docker push ${container_name_reg_opencl};
+    #sudo nvidia-docker push ${container_name_reg_opencl};
 fi
+
+pkill -f sshuttle
