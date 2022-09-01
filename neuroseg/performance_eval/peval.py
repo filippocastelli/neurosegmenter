@@ -244,6 +244,18 @@ class PerformanceMetrics:
 
 class SingleVolumePerformanceEvaluator:
 
+    def __init__(
+        self,
+        config: Union[PredictConfig, TrainConfig] = None,
+        predicted_data: np.ndarray = None,
+        gt_array: np.ndarray = None,
+        mode: str = "predict",
+        ground_truth_path: Path = None,
+        ground_truth_mode: str = "stack",
+        normalize_ground_truth: bool = False,
+        classification_threshold: float = .5,
+    ):
+        pass
     def __init__(self,
                  config: Union[PredictConfig, TrainConfig],
                  predicted_data: np.ndarray = None,

@@ -39,6 +39,7 @@ class IntegerShearingCorrect:
             raise ValueError('Direction of shearing must be specified')
 
         return corrected_shape
+        
 
     def forward_correct(self, arr:np.ndarray):
         arr_shape = arr.shape
@@ -46,30 +47,34 @@ class IntegerShearingCorrect:
         corrected_arr = np.zeros(self.corrected_shape, dtype=arr.dtype)
         mask = np.zeros(self.corrected_shape, dtype=bool)
         for z in range(arr_shape[0]):
-            if self.direction == 'x':
-                if self.delta > 0:
-                    x_start = z * self.delta
-                    x_end = x_start + arr_shape[2]
-                else:
-                    x_end = self.corrected_shape[2] + z * self.delta
-                    x_start = x_end - arr_shape[2]
-
-                corrected_arr[z, :, x_start:x_end] = arr[z, :, :]
-                mask[z, :, x_start:x_end] = True
-
-            elif self.direction == 'y':
-                if self.delta > 0:
-                    y_start = z * self.delta
-                    y_end = y_start + arr_shape[1]
-                else:
-                    y_end = self.corrected_shape[1] + z * self.delta
-                    y_start = y_end - arr_shape[1]
-
-                corrected_arr[z, y_start:y_end, :] = arr[z, :, :]
-                mask[z, y_start:y_end, :] = True
-            else:
-                raise ValueError('Direction of shearing must be specified')
+            y_start, y_end, x_start, x_end = self._get_forward_slicing_idxs(z, arr_shape)
+            corrected_arr[z, y_start:y_end, x_start:x_end] = arr[z, :, :]
+            mask[z, y_start:y_end, x_start:x_end] = True
         return corrected_arr, mask
+
+
+    def _get_forward_slicing_idxs(self, arr_idx: int, arr_shape: tuple):
+        if self.direction == 'x':
+            if self.delta > 0:
+                x_start = arr_idx * self.delta
+                x_end = x_start + arr_shape[2]
+            else:
+                x_end = self.corrected_shape[2] + arr_idx * self.delta
+                x_start = x_end - arr_shape[2]
+
+            return 0, None, x_start, x_end
+
+        elif self.direction == 'y':
+            if self.delta > 0:
+                y_start = arr_idx * self.delta
+                y_end = y_start + arr_shape[1]
+            else:
+                y_end = self.corrected_shape[1] + arr_idx * self.delta
+                y_start = y_end - arr_shape[1]
+
+            return y_start, y_end, 0, None
+        else:
+            raise ValueError('Direction of shearing must be specified')
 
     def inverse_correct(self, arr=None):
         arr_shape = arr.shape
@@ -77,24 +82,27 @@ class IntegerShearingCorrect:
         corrected_arr = np.zeros(self.corrected_shape, dtype=arr.dtype)
         mask = np.zeros(self.corrected_shape, dtype=bool)
         for z in range(arr_shape[0]):
-            if self.direction == "x":
-                if self.delta > 0:
-                    x_start = z * self.delta
-                    x_end = x_start + self.corrected_shape[2]
-                else:
-                    x_end = arr_shape[2] + z * self.delta
-                    x_start = x_end - self.corrected_shape[2]
-                corrected_arr[z, :, :] = arr[z, :, x_start:x_end]
-                mask[z, :, :] = True
-            elif self.direction == "y":
-                if self.delta > 0:
-                    y_start = z * self.delta
-                    y_end = y_start + self.corrected_shape[1]
-                else:
-                    y_end = arr_shape[1] + z * self.delta
-                    y_start = y_end - self.corrected_shape[1]
-                self.corrected_arr[z, :, :] = arr[z, y_start:y_end, :]
-                mask[z, :, :] = True
-            else:
-                raise ValueError('Direction of shearing must be specified')
+            y_start, y_end, x_start, x_end = self._get_inverse_slicing_idxs(z, arr_shape)
+            corrected_arr[z, :, :] = arr[z, y_start:y_end, x_start:x_end]
         return corrected_arr
+
+    def _get_inverse_slicing_idxs(self, arr_idx: int, arr_shape: tuple):
+        if self.direction == "x":
+            if self.delta > 0:
+                x_start = arr_idx * self.delta
+                x_end = x_start + self.corrected_shape[2]
+            else:
+                x_end = arr_shape[2] + arr_idx * self.delta
+                x_start = x_end - self.corrected_shape[2]
+            return 0, None, x_start, x_end
+
+        elif self.direction == "y":
+            if self.delta > 0:
+                y_start = arr_idx * self.delta
+                y_end = y_start + self.corrected_shape[1]
+            else:
+                y_end = arr_shape[1] + arr_idx * self.delta
+                y_start = y_end - self.corrected_shape[1]
+            return y_start, y_end, 0, None
+        else:
+            raise ValueError('Direction of shearing must be specified')
