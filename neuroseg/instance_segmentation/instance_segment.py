@@ -183,7 +183,6 @@ class VoronoiInstanceSegmenter:
                 )
             
             pre_shearing_correct_shape = sub_img.shape
-
             # apply forward shearing correction
             shearing_correct = IntegerShearingCorrect(delta=shearing_correct_delta)
             sub_img, _ = shearing_correct.forward_correct(arr=sub_img)
@@ -212,14 +211,21 @@ class VoronoiInstanceSegmenter:
                 new_block_pads = [(0, 0), (0, np.abs(shearing_correct_delta))]
                 last_block_pads = [(0, 0), (np.abs(shearing_correct_delta), 0)]
                 
+                #fuck it
+                first_img_new_block = shearing_correct.inverse_correct(voronoi_segmented)[0]
                 # take first match of the new block
-                first_img_new_block = voronoi_segmented[0][:, :pre_crop_sub_img_shape[2]]
-                # pad to fit last image of the last block
-                first_img_new_block = np.pad(voronoi_segmented[0], new_block_pads)
+                #ys, ye, xs, xe = shearing_correct._get_inverse_slicing_idxs(0, voronoi_segmented.shape)
+                #first_img_new_block = voronoi_segmented[0, ys:ye, xs:xe]
+                
                 if autocrop:
                     first_img_new_block = np.pad(first_img_new_block, autocrop_pads[1:])
+
+                # pad to fit last image of the last block
+                first_img_new_block = np.pad(first_img_new_block, new_block_pads)
+
                 # pad the last image of the last block
                 last_img = np.pad(last_img, last_block_pads)
+
                 # check overlap
                 overlap = np.logical_and(last_img, first_img_new_block)
 
@@ -266,8 +272,6 @@ class VoronoiInstanceSegmenter:
                     voronoi_segmented = np.where(mask, v[idx_search], voronoi_segmented)
             
             # assigning last image
-            last_img = voronoi_segmented[-1]
-            last_img = last_img[:,-pre_crop_sub_img_shape[2]:]
 
             if get_stats:
                 stats = pd.DataFrame(cle.statistics_of_labelled_pixels(sub_img, voronoi_segmented))
@@ -279,7 +283,8 @@ class VoronoiInstanceSegmenter:
                 stats_meshes = stats_meshes.loc[stats_meshes.bbox_width > 4]
                 stats_meshes = stats_meshes.loc[stats_meshes.bbox_height > 4]
 
-                mesh_offset = np.array((batch_idxs[0], 0, 0))
+                # missing a shearing correction component
+                mesh_offset = np.array((batch_idxs[0], 0, batch_idxs[0]*shearing_correct_delta))
                 _shared_voronoi_stack = voronoi_segmented.copy()
                 gen_mesh_partial = partial(cls.gen_mesh_skimage,
                     padding=2,
@@ -346,10 +351,10 @@ class VoronoiInstanceSegmenter:
 
             if autocrop:
                 voronoi_segmented = np.pad(voronoi_segmented, autocrop_pads)
-                last_img = np.pad(last_img, autocrop_pads[1:])
             
             # reversing shearing correction
             voronoi_segmented = shearing_correct.inverse_correct(voronoi_segmented)
+            last_img = voronoi_segmented[-1]
 
             cls.save_block(
                 out_path=out_fpath, block=voronoi_segmented.astype(np.uint16)
