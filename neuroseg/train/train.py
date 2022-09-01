@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from typing import Union
 from contextlib import nullcontext
+import gc
 
 import yaml
 
@@ -14,7 +15,7 @@ from neuroseg.config import (
     WandbConfigurator)
 
 import tensorflow as tf
-from numba import cuda
+#from numba import cuda
 
 gpus = tf.config.list_physical_devices('GPU')
 if gpus:
@@ -25,7 +26,6 @@ if gpus:
     logical_gpus = tf.config.list_logical_devices('GPU')
     print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
   except RuntimeError as e:
-    # Memory growth must be set before GPUs have been initialized
     print(e)
 
 from neuroseg.datagens import Datagen
@@ -37,7 +37,6 @@ from neuroseg.descriptor import RunDescriptorLight
 from neuroseg.config import TrainConfig
 from neuroseg.datagens import DataGen2D, DataGen3D
 from neuroseg.instance_segmentation import VoronoiInstanceSegmenter
-
 
 
 
@@ -133,9 +132,12 @@ def train(train_config: TrainConfig):
         ev = PerformanceEvaluator(train_config, dp.predicted_data)
 
         # free up gpu memory
-        cuda.select_device(0)
-        cuda.close()
+        #cuda.select_device(0)
+        #cuda.close()
 
+        del model
+        gc.collect()
+        
         inseg = VoronoiInstanceSegmenter(config=train_config, predicted_data=dp.predicted_data)
         instance_performance_ev = InstanceSegmentationPerformanceEvaluator(
             ground_truth=None,
