@@ -64,6 +64,7 @@ class DataPredictorBase:
             self.tiling_mode = tiling_mode
             self.output_path = self.in_fpath if out_path is None else out_path
         else:
+            self.in_fpath = None
             self.mode = self.config.config_type 
             self.save_8bit = self.config.save_8bit
             self.save_16bit = self.config.save_16bit
