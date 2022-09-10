@@ -10,6 +10,7 @@ from neuroseg.utils.volume_io import glob_imgs
 from neuroseg.utils.name_generator import NameGenerator
 from neuroseg.utils.integer_shearing_correct import IntegerShearingCorrect
 from neuroseg.utils.multipagetiff import MultiPageTIFF
+from neuroseg.utils.autocropper import AutoCropper
 
 from neuroseg.utils.to_argmax import toargmax
 from neuroseg.utils.stats import get_bbox
