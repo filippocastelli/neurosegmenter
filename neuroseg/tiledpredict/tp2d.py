@@ -22,8 +22,8 @@ class ChunkDataPredictor2D(DataPredictorBase):
             raise NotImplementedError("ChunkDataPredictor2D only supports predict mode")
         if config.data_mode != "zetastitcher":
             raise NotImplementedError("ChunkDataPredictor2D only supports zetastitcher data mode")
-        if config.output_mode != "stack":
-            raise NotImplementedError("ChunkDataPredictor2D only supports stack output mode")
+        if config.output_mode not in ["stack", "single_images"]:
+            raise NotImplementedError("ChunkDataPredictor2D only supports stack and single_images output modes")
         self.bacgkround_chunk_generator = config.background_chunk_generator
         self.skip_threshold = config.skip_threshold
         super().__init__(config, model, in_fpath=in_fpath)
@@ -114,22 +114,31 @@ class ChunkDataPredictor2D(DataPredictorBase):
 
                 
             if self.save_8bit:
-                name = self.data_path.stem + "_8bit.tif"
+                if self.config.output_mode == "stack":
+                    name = self.data_path.stem + "_8bit.tif"
+                elif self.config.output_mode == "single_images":
+                    name = self.data_path.stem + "_8bit"
                 out_path_8bit = self.output_path.joinpath(name)
 
-                self._append_volume(predicted_vol, out_path_8bit, bitdepth=8)
+                self._save_part_volume(predicted_vol, out_path_8bit, bitdepth=8)
             
             if self.save_16bit:
-                name = self.data_path.stem + "_16bit.tif"
+                if self.config.output_mode == "stack":
+                    name = self.data_path.stem + "_16bit.tif"
+                elif self.config.output_mode == "single_images":
+                    name = self.data_path.stem + "_16bit"
                 out_path_16bit = self.output_path.joinpath(name)
 
-                self._append_volume(predicted_vol, out_path_16bit, bitdepth=16)
+                self._save_part_volume(predicted_vol, out_path_16bit, bitdepth=16)
             
             if self.save_32bit:
-                name = self.data_path.stem + "_32bit.tif"
+                if self.config.output_mode == "stack":
+                    name = self.data_path.stem + "_32bit.tif"
+                elif self.config.output_mode == "single_images":
+                    name = self.data_path.stem + "_32bit"
                 out_path_32bit = self.output_path.joinpath(name)
 
-                self._append_volume(predicted_vol, out_path_32bit, bitdepth=32)
+                self._save_part_volume(predicted_vol, out_path_32bit, bitdepth=32)
             
             # repeat
         if self.save_32bit:
@@ -140,7 +149,11 @@ class ChunkDataPredictor2D(DataPredictorBase):
             out_fpath = out_path_8bit
         self.predicted_data = out_fpath
     
-    def _append_volume(self, vol, out_fpath, bitdepth=16):
+    def _save_part_volume(self, vol, out_fpath, bitdepth=16):
+
+        if self.config.output_mode == 'single_images' and not out_fpath.exists():
+            out_fpath.mkdir(parents=True, exist_ok=True)
+
         # input images are supposedly 32-bit float in [0, 1]
         if bitdepth == 16:
             vol = vol * np.iinfo(np.uint16).max
@@ -153,10 +166,26 @@ class ChunkDataPredictor2D(DataPredictorBase):
             vol = vol.astype(np.uint32)
         else:
             raise ValueError("bitdepth must be 8, 16 or 32")
-        with tifffile.TiffWriter(str(out_fpath), bigtiff=True, append=True) as tif:
+
+        if self.config.output_mode == "single_images":
+            tiff_imgs = list(out_fpath.glob("*.tif"))
+            if len(tiff_imgs) == 0:
+                idx = 0
+            else:
+                idx = len(tiff_imgs)
             for img_plane in vol:
-                img_plane = np.expand_dims(img_plane, axis=0)
-                tif.write(img_plane, compression="zlib")
+                idx += 1
+                img_fpath = out_fpath.joinpath("{}.tif".format(str(idx).zfill(10)))
+                with tifffile.TiffWriter(str(img_fpath), bigtiff=True, append=False) as tif:
+                    img_plane = np.expand_dims(img_plane, axis=0)
+                    tif.save(img_plane, compression="zlib")
+        elif self.config.output_mode == "stack":      
+            with tifffile.TiffWriter(str(out_fpath), bigtiff=True, append=True) as tif:
+                for img_plane in vol:
+                    img_plane = np.expand_dims(img_plane, axis=0)
+                    tif.write(img_plane, compression="zlib")
+        else:
+            raise NotImplementedError("output_mode {} not implemented".format(self.config.output_mode))
 
     @staticmethod
     def _get_chunk_ranges(n_imgs: int, chunk_size: int):
