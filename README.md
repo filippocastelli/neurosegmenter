@@ -1,4 +1,4 @@
-# neuroseg
+# neurosegmenter
 
 ### creating an Anaconda env
 Can use the provided yml env configurator to build a ready-to-use anaconda environment.
